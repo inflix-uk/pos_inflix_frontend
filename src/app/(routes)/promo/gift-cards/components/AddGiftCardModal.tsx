@@ -1,0 +1,208 @@
+"use client";
+
+import React, { useState } from "react";
+import { X } from "lucide-react";
+import { GiftCard } from "../types";
+
+interface AddGiftCardModalProps {
+ open: boolean;
+ onClose: () => void;
+ onAdd: (giftCard: Omit<GiftCard, "id">) => void;
+}
+
+const avatarColors = [
+ "bg-blue-100",
+ "bg-red-100",
+ "bg-green-100",
+ "bg-yellow-100",
+ "bg-neutral-100",
+ "bg-neutral-100",
+ "bg-neutral-100",
+ "bg-orange-100",
+];
+
+export const AddGiftCardModal: React.FC<AddGiftCardModalProps> = ({
+ open,
+ onClose,
+ onAdd,
+}) => {
+ const [formData, setFormData] = useState({
+ giftCard: "",
+ customerName: "",
+ issuedDate: "",
+ expiryDate: "",
+ amount: 0,
+ balance: 0,
+ status: "Active" as "Active" | "Redeemed" | "Expired",
+ });
+
+ const handleChange = (field: string, value: string | number) => {
+ setFormData((prev) => ({ ...prev, [field]: value }));
+ };
+
+ const handleSubmit = (e: React.FormEvent) => {
+ e.preventDefault();
+ const randomColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
+ const newGiftCard: Omit<GiftCard, "id"> = {
+ giftCard: formData.giftCard.toUpperCase(),
+ customer: {
+ name: formData.customerName,
+ avatar: "user",
+ color: randomColor,
+ },
+ issuedDate: new Date(formData.issuedDate).toLocaleDateString("en-GB", {
+ day: "2-digit",
+ month: "short",
+ year: "numeric",
+ }),
+ expiryDate: new Date(formData.expiryDate).toLocaleDateString("en-GB", {
+ day: "2-digit",
+ month: "short",
+ year: "numeric",
+ }),
+ amount: formData.amount,
+ balance: formData.balance || formData.amount,
+ status: formData.status,
+ };
+ onAdd(newGiftCard);
+ setFormData({
+ giftCard: "",
+ customerName: "",
+ issuedDate: "",
+ expiryDate: "",
+ amount: 0,
+ balance: 0,
+ status: "Active",
+ });
+ };
+
+ if (!open) return null;
+
+ return (
+ <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+ <div className="bg-white rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
+ <div className="flex items-center justify-between p-6 border-b border-gray-200">
+  <h2 className="text-xl font-semibold text-gray-900">Add Gift Card</h2>
+  <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+  <X size={24} />
+  </button>
+ </div>
+
+ <form onSubmit={handleSubmit} className="p-6 space-y-4">
+  <div className="grid grid-cols-2 gap-4">
+  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+  Gift Card Code
+  </label>
+  <input
+  type="text"
+  value={formData.giftCard}
+  onChange={(e) => handleChange("giftCard", e.target.value.toUpperCase())}
+  placeholder="GFT1111"
+  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+  required
+  />
+  </div>
+  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+  Customer Name
+  </label>
+  <input
+  type="text"
+  value={formData.customerName}
+  onChange={(e) => handleChange("customerName", e.target.value)}
+  placeholder="John Doe"
+  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+  required
+  />
+  </div>
+  </div>
+
+  <div className="grid grid-cols-2 gap-4">
+  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+  Issued Date
+  </label>
+  <input
+  type="date"
+  value={formData.issuedDate}
+  onChange={(e) => handleChange("issuedDate", e.target.value)}
+  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+  required
+  />
+  </div>
+  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+  Expiry Date
+  </label>
+  <input
+  type="date"
+  value={formData.expiryDate}
+  onChange={(e) => handleChange("expiryDate", e.target.value)}
+  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+  required
+  />
+  </div>
+  </div>
+
+  <div className="grid grid-cols-2 gap-4">
+  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+  Amount ($)
+  </label>
+  <input
+  type="number"
+  value={formData.amount}
+  onChange={(e) => handleChange("amount", parseFloat(e.target.value) || 0)}
+  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+  min="0"
+  required
+  />
+  </div>
+  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+  Balance ($)
+  </label>
+  <input
+  type="number"
+  value={formData.balance}
+  onChange={(e) => handleChange("balance", parseFloat(e.target.value) || 0)}
+  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+  min="0"
+  />
+  </div>
+  </div>
+
+  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+  <select
+  value={formData.status}
+  onChange={(e) => handleChange("status", e.target.value)}
+  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+  >
+  <option value="Active">Active</option>
+  <option value="Redeemed">Redeemed</option>
+  <option value="Expired">Expired</option>
+  </select>
+  </div>
+
+  <div className="flex justify-end gap-3 pt-4">
+  <button
+  type="button"
+  onClick={onClose}
+  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+  >
+  Cancel
+  </button>
+  <button
+  type="submit"
+  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+  >
+  Add Gift Card
+  </button>
+  </div>
+ </form>
+ </div>
+ </div>
+ );
+};

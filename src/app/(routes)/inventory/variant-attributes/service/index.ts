@@ -1,0 +1,1 @@
+export { variantAttributeApi } from "./variantAttributeApi";

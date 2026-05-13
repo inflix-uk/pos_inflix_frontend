@@ -1,0 +1,53 @@
+"use client";
+
+import React from "react";
+import { Trash2 } from "lucide-react";
+import { DeleteConfirmModalProps } from "../types";
+
+export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
+ isOpen,
+ onClose,
+ onConfirm,
+ isLoading = false,
+}) => {
+ if (!isOpen) return null;
+
+ return (
+ <div className="fixed inset-0 z-50 flex items-center justify-center">
+ <div
+ className="absolute inset-0 bg-black/50"
+ aria-hidden
+ />
+ <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-4">
+ <div className="flex items-center gap-2.5 mb-3">
+  <div className="p-1.5 bg-red-100 rounded-full">
+  <Trash2 className="h-5 w-5 text-red-500" />
+  </div>
+  <h3 className="text-sm font-semibold text-gray-800">Reset Settings</h3>
+ </div>
+ <p className="text-sm text-gray-600 mb-4">
+  Are you sure you want to reset all notes & terms settings to their default values? This action cannot be
+  undone.
+ </p>
+ <div className="flex justify-end gap-2">
+  <button
+  type="button"
+  onClick={onClose}
+  disabled={isLoading}
+  className="px-3 py-2 border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 font-medium rounded-lg transition-colors disabled:opacity-70"
+  >
+  Cancel
+  </button>
+  <button
+  type="button"
+  onClick={onConfirm}
+  disabled={isLoading}
+  className="px-3 py-2 bg-red-500 hover:bg-red-600 text-sm text-white font-medium rounded-lg transition-colors disabled:opacity-70"
+  >
+  {isLoading ? "Resetting..." : "Reset"}
+  </button>
+ </div>
+ </div>
+ </div>
+ );
+};

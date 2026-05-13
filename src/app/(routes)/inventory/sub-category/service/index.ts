@@ -1,0 +1,1 @@
+export { subCategoryApi } from "./subCategoryApi";

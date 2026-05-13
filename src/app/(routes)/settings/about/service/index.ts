@@ -1,0 +1,1 @@
+export { aboutSettingsApi } from "./aboutSettingsApi";

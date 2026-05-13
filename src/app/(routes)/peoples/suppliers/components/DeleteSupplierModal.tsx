@@ -1,0 +1,81 @@
+"use client";
+
+import React from "react";
+import { X, AlertTriangle } from "lucide-react";
+import { Supplier } from "../types";
+
+interface DeleteSupplierModalProps {
+ open: boolean;
+ supplier: Supplier | null;
+ onClose: () => void;
+ onDelete: (id: string) => void;
+ isLoading: boolean;
+}
+
+export const DeleteSupplierModal: React.FC<DeleteSupplierModalProps> = ({
+ open,
+ supplier,
+ onClose,
+ onDelete,
+ isLoading,
+}) => {
+ const handleDelete = () => {
+ if (supplier?._id) {
+ onDelete(supplier._id);
+ }
+ };
+
+ if (!open || !supplier) return null;
+
+ return (
+ <div className="fixed inset-0 z-50 flex items-center justify-center">
+ <div className="absolute inset-0 bg-black/20" aria-hidden />
+ <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+ <div className="flex items-center justify-between p-6 border-b border-gray-200">
+  <h2 className="text-xl font-semibold text-gray-900">Delete Supplier</h2>
+  <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+  <X size={20} />
+  </button>
+ </div>
+
+ <div className="p-6">
+  <div className="flex items-center gap-4 mb-4">
+  <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+  <AlertTriangle className="text-red-600" size={24} />
+  </div>
+  <div>
+  <p className="text-gray-900 font-medium">
+  Are you sure you want to delete this supplier?
+  </p>
+  <p className="text-gray-600 text-sm mt-1">
+  Supplier: <span className="font-medium">{supplier.name}</span>
+  </p>
+  </div>
+  </div>
+
+  <p className="text-sm text-gray-500 mb-6">
+  This action cannot be undone. If this supplier has linked products,
+  deletion will be blocked.
+  </p>
+
+  <div className="flex justify-end gap-3">
+  <button
+  type="button"
+  onClick={onClose}
+  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
+  >
+  Cancel
+  </button>
+  <button
+  onClick={handleDelete}
+  disabled={isLoading}
+  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+  >
+  {isLoading ? "Deleting..." : "Delete Supplier"}
+  </button>
+  </div>
+ </div>
+ </div>
+ </div>
+ );
+};

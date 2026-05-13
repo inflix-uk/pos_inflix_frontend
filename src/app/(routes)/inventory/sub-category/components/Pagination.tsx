@@ -1,0 +1,105 @@
+"use client";
+
+import React from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+interface PaginationProps {
+ currentPage: number;
+ totalPages: number;
+ rowsPerPage: number;
+ onPageChange: (page: number) => void;
+ onRowsPerPageChange: (rows: number) => void;
+}
+
+export const Pagination: React.FC<PaginationProps> = ({
+ currentPage,
+ totalPages,
+ rowsPerPage,
+ onPageChange,
+ onRowsPerPageChange,
+}) => {
+ const getPageNumbers = () => {
+ const pages = [];
+ const maxPagesToShow = 5;
+
+ if (totalPages <= maxPagesToShow) {
+ for (let i = 1; i <= totalPages; i++) {
+ pages.push(i);
+ }
+ } else {
+ if (currentPage <= 3) {
+ for (let i = 1; i <= 4; i++) pages.push(i);
+ pages.push(-1);
+ pages.push(totalPages);
+ } else if (currentPage >= totalPages - 2) {
+ pages.push(1);
+ pages.push(-1);
+ for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+ } else {
+ pages.push(1);
+ pages.push(-1);
+ for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+ pages.push(-1);
+ pages.push(totalPages);
+ }
+ }
+
+ return pages;
+ };
+
+ return (
+ <div className="px-6 py-4 border-t border-gray-200">
+ <div className="flex items-center justify-between">
+ <div className="flex items-center gap-2">
+  <span className="text-sm text-gray-700">Rows Per Page</span>
+  <select
+  value={rowsPerPage}
+  onChange={(e) => onRowsPerPageChange(Number(e.target.value))}
+  className="border border-gray-300 rounded px-3 py-1 text-sm"
+  >
+  <option value={5}>5</option>
+  <option value={10}>10</option>
+  <option value={20}>20</option>
+  <option value={50}>50</option>
+  </select>
+  <span className="text-sm text-gray-700 ml-4">Entries</span>
+ </div>
+ <div className="flex items-center gap-2">
+  <button
+  onClick={() => onPageChange(currentPage - 1)}
+  disabled={currentPage === 1}
+  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+  <ChevronLeft size={16} />
+  </button>
+  {getPageNumbers().map((pageNumber, index) =>
+  pageNumber === -1 ? (
+  <span key={`ellipsis-${index}`} className="px-2 text-gray-400">
+  ...
+  </span>
+  ) : (
+  <button
+  key={pageNumber}
+  onClick={() => onPageChange(pageNumber)}
+  className={`w-8 h-8 rounded-lg text-sm font-medium ${
+   currentPage === pageNumber
+   ? "bg-orange-500 text-white"
+   : "text-gray-600 hover:bg-gray-100"
+  }`}
+  >
+  {pageNumber}
+  </button>
+  )
+  )}
+  <button
+  onClick={() => onPageChange(currentPage + 1)}
+  disabled={currentPage === totalPages || totalPages === 0}
+  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+  <ChevronRight size={16} />
+  </button>
+ </div>
+ </div>
+ </div>
+ );
+};

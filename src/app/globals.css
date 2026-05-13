@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+:root {
+  /* Floating UI layers: dropdowns above tables/modals */
+  --z-dropdown-overlay: 9990;
+  --z-dropdown-menu: 9991;
+  --z-modal-overlay: 9998;
+  --z-modal: 9999;
+  /* Primary brand: #0052cc (replaces orange globally via theme override) */
+  --color-primary: #0052cc;
+  --color-primary-hover: #0041a3;
+  --color-primary-active: #003680;
+  --color-primary-foreground: #ffffff;
+  --color-primary-ring: #2684ff;
+  --color-primary-muted: #e6f0ff;
+  --color-primary-muted-hover: #cce0ff;
+  --color-primary-muted-foreground: #0041a3;
+  /* Dropdown/menu text contrast: semantic tokens for all menus */
+  --menu-foreground: #111827;
+  --menu-muted-foreground: #4b5563;
+  --menu-destructive: #b91c1c;
+  /* Table cell text contrast: normal values readable, secondary still visible */
+  --table-cell-foreground: #111827;
+  --table-cell-muted: #4b5563;
+  --table-header-foreground: #1f2937;
+}
+
+@theme inline {
+  /* Map orange-* utilities to semantic theme tokens (switch via data-theme on <html>) */
+  --color-orange-50: var(--color-primary-muted);
+  --color-orange-100: var(--color-primary-muted-hover);
+  --color-orange-200: var(--color-primary-muted-hover);
+  --color-orange-300: var(--color-primary-ring);
+  --color-orange-400: var(--color-primary);
+  --color-orange-500: var(--color-primary);
+  --color-orange-600: var(--color-primary-hover);
+  --color-orange-700: var(--color-primary-active);
+  --color-orange-800: var(--color-primary-active);
+  --color-orange-900: var(--color-primary-active);
+}
+
+/* Theme overrides: set data-theme on <html> to switch. Blue is default (:root). */
+[data-theme="emerald"] {
+  --color-primary: #047857;
+  --color-primary-hover: #065f46;
+  --color-primary-active: #064e3b;
+  --color-primary-foreground: #ffffff;
+  --color-primary-ring: #10b981;
+  --color-primary-muted: #d1fae5;
+  --color-primary-muted-hover: #a7f3d0;
+  --color-primary-muted-foreground: #065f46;
+}
+[data-theme="violet"] {
+  --color-primary: #6d28d9;
+  --color-primary-hover: #5b21b6;
+  --color-primary-active: #4c1d95;
+  --color-primary-foreground: #ffffff;
+  --color-primary-ring: #8b5cf6;
+  --color-primary-muted: #ede9fe;
+  --color-primary-muted-hover: #ddd6fe;
+  --color-primary-muted-foreground: #5b21b6;
+}
+
+/* Touch-friendly: smooth momentum scroll on iOS and avoid 300ms tap delay on tappable elements */
+@layer utilities {
+  .touch-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Dropdown/menu text contrast: ensure readable foreground everywhere (row actions, selects, popovers) */
+[role="menu"] {
+  color: var(--menu-foreground);
+}
+[role="menu"] button:not(:disabled):not(.text-red-600):not(.text-red-700),
+[role="menu"] a:not([aria-disabled="true"]):not(.text-red-600):not(.text-red-700) {
+  color: var(--menu-foreground) !important;
+}
+[role="menu"] button:disabled,
+[role="menu"] a[aria-disabled="true"] {
+  color: var(--menu-muted-foreground) !important;
+  opacity: 0.85;
+}
+[role="menu"] button.text-red-600,
+[role="menu"] button.text-red-700,
+[role="menu"] a.text-red-600,
+[role="menu"] a.text-red-700 {
+  color: var(--menu-destructive) !important;
+}
+[role="menu"] svg {
+  color: currentColor;
+}
+
+/* Table text contrast: normal cell values always readable (no faded read-only content) */
+table td {
+  color: var(--table-cell-foreground);
+}
+table th {
+  color: var(--table-header-foreground);
+}
+table td.text-gray-500,
+table td.text-gray-600,
+table td .text-gray-400,
+table td .text-gray-500,
+table td .text-gray-600 {
+  color: var(--table-cell-muted) !important;
+}
+
+/*
+ * Tailwind v4 + Turbopack dev can emit default --color-orange-* in @layer theme after our @theme inline,
+ * so buttons stay literal orange. Unlayered :root overrides win over layered theme and follow
+ * --color-primary (and [data-theme] primary overrides) for runtime theme switching.
+ */
+:root {
+  --color-orange-50: var(--color-primary-muted);
+  --color-orange-100: var(--color-primary-muted-hover);
+  --color-orange-200: var(--color-primary-muted-hover);
+  --color-orange-300: var(--color-primary-ring);
+  --color-orange-400: var(--color-primary);
+  --color-orange-500: var(--color-primary);
+  --color-orange-600: var(--color-primary-hover);
+  --color-orange-700: var(--color-primary-active);
+  --color-orange-800: var(--color-primary-active);
+  --color-orange-900: var(--color-primary-active);
+}
