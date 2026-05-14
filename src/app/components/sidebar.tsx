@@ -387,12 +387,30 @@ export function Sidebar() {
     const mq = window.matchMedia("(max-width: 1279px)");
     const apply = () => {
       if (userTogglledRef.current) return;
+      if (pathname === "/create-sales") return; // create-sales forces collapsed
       setCollapsed(mq.matches);
     };
     apply();
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
-  }, []);
+  }, [pathname]);
+
+  // /create-sales needs the extra width — force the sidebar collapsed while on
+  // that route, and restore the prior state when leaving.
+  const preCreateSalesCollapsedRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (pathname === "/create-sales") {
+      if (preCreateSalesCollapsedRef.current === null) {
+        preCreateSalesCollapsedRef.current = collapsed;
+      }
+      if (!collapsed) setCollapsedState(true);
+    } else if (preCreateSalesCollapsedRef.current !== null) {
+      const prior = preCreateSalesCollapsedRef.current;
+      preCreateSalesCollapsedRef.current = null;
+      setCollapsedState(prior);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   // Toggle sidebar on mobile
   const toggleMobileSidebar = () => {
