@@ -46,8 +46,32 @@ import { usePlatformAuth } from "@/contexts/PlatformAuthContext";
 import { NAV_CONFIG, type NavItem } from "@/lib/route-permissions";
 
 const SIDEBAR_SECTIONS_STORAGE_KEY = "sidebar-sections-expanded";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "sidebar-collapsed-state";
 /** Main stays open so Dashboard / Create Sales are always one click away. */
 const MAIN_SECTION_LABEL = "Main";
+
+type StoredCollapsed = { collapsed: boolean; userToggled: boolean };
+
+function getStoredCollapsed(): StoredCollapsed | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredCollapsed>;
+    if (typeof parsed.collapsed !== "boolean" || typeof parsed.userToggled !== "boolean") return null;
+    return { collapsed: parsed.collapsed, userToggled: parsed.userToggled };
+  } catch {
+    return null;
+  }
+}
+
+function saveCollapsedState(state: StoredCollapsed): void {
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+}
 
 function getStoredExpandedSections(): string[] {
   if (typeof window === "undefined") return ["Main"];
@@ -162,8 +186,20 @@ const sidebarShellClass =
   "h-full flex flex-col bg-white bg-gradient-to-b from-slate-50 via-white to-orange-50";
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsedState] = useState(false);
   const userTogglledRef = useRef(false);
+
+  useEffect(() => {
+    const stored = getStoredCollapsed();
+    if (stored) {
+      userTogglledRef.current = stored.userToggled;
+      if (stored.userToggled) setCollapsedState(stored.collapsed);
+    }
+  }, []);
+
+  const setCollapsed = (next: boolean) => {
+    setCollapsedState(next);
+  };
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
   const [expandedSections, setExpandedSectionsState] = useState<Set<string>>(() => new Set(getStoredExpandedSections()));
@@ -366,7 +402,9 @@ export function Sidebar() {
   // Toggle sidebar collapse
   const toggleCollapse = () => {
     userTogglledRef.current = true;
-    setCollapsed(!collapsed);
+    const next = !collapsed;
+    setCollapsed(next);
+    saveCollapsedState({ collapsed: next, userToggled: true });
   };
 
   const isSectionExpanded = (label: string) => {
