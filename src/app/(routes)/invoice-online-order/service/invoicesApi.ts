@@ -27,6 +27,7 @@ export type InvoiceRecord = SaleRecord & {
  taxName?: string;
  taxRate?: number;
  taxType?: "percentage" | "flat" | "";
+ status?: "active" | "voided" | string;
 };
 
 export interface GetInvoicesResponse {
@@ -35,10 +36,10 @@ export interface GetInvoicesResponse {
  meta?: { page: number; limit: number; total: number };
 }
 
-export interface CreateInvoicePayload extends CreateSalePayload {
+export type CreateInvoicePayload = CreateSalePayload & {
  /** Tax category ObjectId from `/api/settings/taxes/active`. Backend resolves rate/type. */
  taxId?: string | null;
-}
+};
 
 export const invoicesApi = {
  getInvoices: async (params?: {
