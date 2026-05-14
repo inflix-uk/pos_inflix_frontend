@@ -51,6 +51,10 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   // Sales
   "/sales-online-orders": ["sale.view"],
   "/sales-online-orders/edit": ["sale.view", "sale.edit"],
+
+  // Invoices (own flow, mirrors sales but gated by invoice.* perms)
+  "/create-invoice": ["invoice.create"],
+  "/invoice-online-order": ["invoice.view"],
   "/sales-return": ["return.create", "refund.issue", "sale.view"],
   "/sales-return/start": ["return.create", "refund.issue", "sale.view"],
 
@@ -198,6 +202,13 @@ export const NAV_CONFIG: NavSection[] = [
     items: [
       { title: "Sales", path: "/sales-online-orders", icon: Grid, requiredPermsAnyOf: ["sale.view"] },
       { title: "Sales Return", path: "/sales-return", icon: FileText, requiredPermsAnyOf: ["return.create", "refund.issue", "sale.view"] },
+    ],
+  },
+  {
+    label: "Invoices",
+    items: [
+      { title: "Create Invoice", path: "/create-invoice", icon: PlusSquare, requiredPermsAnyOf: ["invoice.create"], featureKey: "invoices" },
+      { title: "Invoices", path: "/invoice-online-order", icon: Receipt, requiredPermsAnyOf: ["invoice.view"], featureKey: "invoices" },
     ],
   },
   {

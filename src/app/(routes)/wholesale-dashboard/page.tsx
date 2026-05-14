@@ -23,6 +23,7 @@ import {
  EmptyCartQuickActions,
  CustomerContextStrip,
 } from "./components";
+import { useOrderWriter } from "./components/OrderWriterContext";
 import type { CartLineItem } from "../sales-dashboard/types";
 import { salesApi, formatAddressForInvoice } from "../sales-dashboard/service/salesApi";
 import { customerApi } from "../peoples/customers/service/customerApi";
@@ -160,6 +161,7 @@ type SaleForPrint = {
 
 
 const Page = () => {
+ const orderWriter = useOrderWriter();
  const [manualItemModalOpen, setManualItemModalOpen] = useState(false);
  const [bulkDrawerOpen, setBulkDrawerOpen] = useState(false);
  const [selectedCustomer, setSelectedCustomerState] = useState<AccountForSale | null>(null);
@@ -193,7 +195,7 @@ const Page = () => {
  const controller = new AbortController();
  const timer = window.setTimeout(async () => {
   try {
-  const res = await salesApi.checkReference(raw, controller.signal);
+  const res = await orderWriter.checkReference(raw, controller.signal);
   if (seq !== refCheckSeqRef.current) return;
   if (!res.success) { setRefStatus("idle"); return; }
   if (!res.data.valid) { setRefStatus("invalid"); return; }
@@ -206,7 +208,7 @@ const Page = () => {
   window.clearTimeout(timer);
   controller.abort();
  };
- }, [customReference]);
+ }, [customReference, orderWriter]);
 
  useEffect(() => {
  if (typeof window === "undefined") return;
@@ -1232,7 +1234,7 @@ const Page = () => {
    return;
   }
   try {
-   const check = await salesApi.checkReference(trimmedRef);
+   const check = await orderWriter.checkReference(trimmedRef);
    if (check.success && check.data.valid && check.data.exists) {
    setRefStatus("taken");
    showMessage("error", `Invoice number "${trimmedRef}" is already in use.`);
@@ -1285,7 +1287,7 @@ const Page = () => {
   ...(trimmedRef ? { reference: trimmedRef } : {}),
   ...(selectedLocationId ? { locationId: selectedLocationId } : {}),
   };
-  const result = await salesApi.createSale(payload);
+  const result = await orderWriter.createSale(payload);
   const createOrderMs = Math.round(performance.now() - createOrderStart);
   if (process.env.NODE_ENV === "development") {
   console.info("[Create Order]", createOrderMs, "ms", result.success ? "success" : "failed");

@@ -358,8 +358,25 @@ export const useAddPurchase = () => {
     const t = c.itemType ?? "";
     return t === "non-serial" || t === "both";
    });
-   setTypes(forSerial.map((c) => ({ _id: c._id, name: c.name })));
-   setTypesForNonSerial(forNonSerial.map((c) => ({ _id: c._id, name: c.name })));
+   // Pin "mobile" first, then "tablets"/"tablet", preserve original order for the rest
+   const priorityRank = (name: string): number => {
+    const n = name.trim().toLowerCase();
+    if (n.startsWith("mobile")) return 0;
+    if (n.startsWith("tablet")) return 1;
+    return 2;
+   };
+   const sortByPriority = (arr: { _id: string; name: string }[]) =>
+    arr
+     .map((c, i) => ({ c, i }))
+     .sort((a, b) => {
+      const ra = priorityRank(a.c.name);
+      const rb = priorityRank(b.c.name);
+      if (ra !== rb) return ra - rb;
+      return a.i - b.i;
+     })
+     .map(({ c }) => c);
+   setTypes(sortByPriority(forSerial.map((c) => ({ _id: c._id, name: c.name }))));
+   setTypesForNonSerial(sortByPriority(forNonSerial.map((c) => ({ _id: c._id, name: c.name }))));
    setOptionsError((p) => ({ ...p, categories: false }));
   } catch (error) {
    console.error("Failed to fetch categories:", error);
@@ -1104,26 +1121,8 @@ export const useAddPurchase = () => {
    specsSummary: buildSpecsSummary(),
   };
   setSavedItems((prev) => [...prev, entry]);
-  // Reset the form so the next item starts blank — keep only parcel-level defaults (sendTo, tax).
-  setItemData((prev) => ({
-   sendTo: prev.sendTo,
-   taxCategory: prev.taxCategory,
-   type: "",
-   make: "",
-   grade: "",
-   brand: "",
-   brandModel: "",
-   capacity: "",
-   colour: "",
-   variantValues: {},
-   rawVariantValues: undefined,
-   purchasePrice: "",
-   salePrice: "",
-   multiIMEIs: "",
-   note: "",
-  }));
-  setCategoryVariantAttributesImei([]);
-  categoryIdImeiRef.current = "";
+  // Keep filled fields so the next batch can reuse them — only clear the IMEI list that was just added.
+  setItemData((prev) => ({ ...prev, multiIMEIs: "" }));
   setSubmitMessage({ type: "", text: "" });
  };
 
@@ -1222,28 +1221,8 @@ export const useAddPurchase = () => {
    specsSummary: buildOtherSpecsSummary(),
   };
   setSavedOtherItems((prev) => [...prev, entry]);
-  // Reset the form so the next non-serial item starts blank — keep only parcel-level defaults (sendTo, tax).
-  setOtherItemData((prev) => ({
-   name: "",
-   barcode: "",
-   sendTo: prev.sendTo,
-   taxCategory: prev.taxCategory,
-   type: "",
-   make: "",
-   grade: "",
-   brand: "",
-   brandModel: "",
-   capacity: "",
-   colour: "",
-   variantValues: {},
-   rawVariantValues: undefined,
-   purchasePrice: "",
-   salePrice: "",
-   quantity: "0",
-   note: "",
-  }));
-  setCategoryVariantAttributesOther([]);
-  categoryIdOtherRef.current = "";
+  // Keep filled fields so the next non-serial item can reuse them — only clear barcode (must be unique) and reset quantity.
+  setOtherItemData((prev) => ({ ...prev, barcode: "", quantity: "0" }));
   setSubmitMessage({ type: "", text: "" });
  };
 

@@ -5,6 +5,7 @@ import { Minus, Plus, Trash2, ShoppingCart, CreditCard } from "lucide-react";
 import type { CartLineItem } from "../types";
 import { useAppCurrency } from "@/lib/app-currency-context";
 import { HelpTip } from "@/components/HelpTip";
+import { useCartTaxSlot } from "./CartTaxSlotContext";
 
 interface CartPanelProps {
  title?: string;
@@ -647,6 +648,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
  showItemsSummaryAndDetail = false,
  categoryVariantSlugOrderByCategoryId,
 }) => {
+ const taxSlot = useCartTaxSlot();
  const { formatMoney, currencySymbol } = useAppCurrency();
  const canPay = items.length > 0 && !payDisabled;
  const isWholesale = accent === "blue";
@@ -790,6 +792,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
   <span className="text-gray-600">Subtotal</span>
   <span className="font-medium">{formatMoney(subtotal)}</span>
   </div>
+  {taxSlot}
   {tax > 0 && (
   <div className="flex justify-between text-sm">
   <span className="text-gray-600">Tax</span>
