@@ -13,6 +13,7 @@ export interface GeneralSettingsData {
  defaultSalesAccountId: string | null;
  defaultAccount?: { _id: string; name: string };
  retailModeEnabled?: boolean;
+ allowNegativeStock?: boolean;
  updatedAtUtc?: string;
 }
 
@@ -52,6 +53,21 @@ export async function updateSalesMode(body: {
  message?: string;
 }> {
  const res = await fetch(`${API_URL}/api/settings/general/sales-mode`, {
+  method: "PUT",
+  headers: getAuthHeaders(),
+  body: JSON.stringify(body),
+ });
+ return res.json();
+}
+
+export async function updateNegativeStock(body: {
+ allowNegativeStock: boolean;
+}): Promise<{
+ success: boolean;
+ data?: GeneralSettingsData;
+ message?: string;
+}> {
+ const res = await fetch(`${API_URL}/api/settings/general/negative-stock`, {
   method: "PUT",
   headers: getAuthHeaders(),
   body: JSON.stringify(body),

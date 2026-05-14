@@ -1,0 +1,675 @@
+"use client";
+
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import Link from "next/link";
+import {
+ Search,
+ Plus,
+ RefreshCw,
+ Loader2,
+ Receipt,
+ AlertTriangle,
+ ChevronLeft,
+ ChevronRight,
+ Eye,
+ Printer,
+ Download,
+ FileText,
+ Trash2,
+ X,
+ MoreVertical,
+} from "lucide-react";
+import { invoicesApi, type InvoiceRecord } from "./service/invoicesApi";
+import { formatDateTimeLondon } from "@/lib/dateUtils";
+import { downloadInvoiceA4, printInvoiceA4, printReceipt80mm, type SaleForPrint } from "@/lib/invoicePrint";
+import { usePermissions } from "@/hooks/usePermissions";
+
+const formatMoney = (n: number) =>
+ new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2 }).format(n);
+
+const typeBadge = (type: string) => {
+ const cls =
+  type === "wholesale"
+   ? "bg-blue-100 text-blue-700"
+   : type === "repair"
+   ? "bg-neutral-100 text-neutral-800"
+   : "bg-emerald-100 text-emerald-700";
+ const label = type === "wholesale" ? "Wholesale" : type === "repair" ? "Repair" : "Retail";
+ return (
+  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${cls}`}>{label}</span>
+ );
+};
+
+const statusBadge = (status: string) =>
+ status === "voided" ? (
+  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700">
+   Voided
+  </span>
+ ) : (
+  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+   Active
+  </span>
+ );
+
+const PAGE_SIZE = 25;
+
+function invoiceToPrintable(inv: InvoiceRecord): SaleForPrint {
+ return {
+  _id: inv._id,
+  reference: inv.reference,
+  type: (inv.type as "wholesale" | "retail" | "repair") ?? "wholesale",
+  createdAt: inv.createdAt,
+  customerName: inv.customerName,
+  items: (inv.items || []).map((i) => ({
+   name: i.name,
+   sku: i.sku,
+   price: typeof i.price === "number" ? i.price : Number(i.price) || 0,
+   quantity: i.quantity,
+   unit: i.unit,
+   serialNumbers: i.serialNumbers,
+   serialColours: (i as unknown as { serialColours?: Record<string, string> }).serialColours,
+   grade: i.grade,
+   brand: i.brand,
+   colour: i.colour,
+   brandModel: i.brandModel,
+   capacity: i.capacity,
+  })),
+  subtotal: inv.subtotal,
+  tax: inv.tax,
+  discount: inv.discount,
+  discountType: inv.discountType,
+  discountValue: inv.discountValue,
+  total: inv.total,
+  paymentMethod: inv.paymentMethod,
+ };
+}
+
+type RowAction = {
+ key: string;
+ label: string;
+ icon: React.ReactNode;
+ onClick: () => void;
+ disabled?: boolean;
+ destructive?: boolean;
+};
+
+function ActionsMenu({ items }: { items: RowAction[] }) {
+ const [open, setOpen] = React.useState(false);
+ const [pos, setPos] = React.useState<{ top: number; right: number } | null>(null);
+ const triggerRef = React.useRef<HTMLButtonElement>(null);
+ const menuRef = React.useRef<HTMLDivElement>(null);
+
+ React.useEffect(() => {
+  if (!open) return;
+  const onDocClick = (e: MouseEvent) => {
+   if (
+    menuRef.current &&
+    !menuRef.current.contains(e.target as Node) &&
+    triggerRef.current &&
+    !triggerRef.current.contains(e.target as Node)
+   ) {
+    setOpen(false);
+   }
+  };
+  const onKey = (e: KeyboardEvent) => {
+   if (e.key === "Escape") setOpen(false);
+  };
+  document.addEventListener("mousedown", onDocClick);
+  document.addEventListener("keydown", onKey);
+  return () => {
+   document.removeEventListener("mousedown", onDocClick);
+   document.removeEventListener("keydown", onKey);
+  };
+ }, [open]);
+
+ const toggle = () => {
+  const next = !open;
+  if (next && triggerRef.current) {
+   const rect = triggerRef.current.getBoundingClientRect();
+   setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+  }
+  setOpen(next);
+ };
+
+ return (
+  <>
+   <button
+    ref={triggerRef}
+    type="button"
+    onClick={toggle}
+    aria-label="Actions"
+    aria-haspopup="menu"
+    aria-expanded={open}
+    className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+   >
+    <MoreVertical className="w-4 h-4" />
+   </button>
+   {open && pos && (
+    <div
+     ref={menuRef}
+     role="menu"
+     style={{ position: "fixed", top: pos.top, right: pos.right, zIndex: 50 }}
+     className="min-w-[180px] bg-white border border-gray-200 rounded-lg shadow-lg py-1"
+    >
+     {items.map((it) => (
+      <button
+       key={it.key}
+       role="menuitem"
+       type="button"
+       disabled={it.disabled}
+       onClick={() => {
+        if (it.disabled) return;
+        setOpen(false);
+        it.onClick();
+       }}
+       className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+        it.destructive
+         ? "text-red-700 hover:bg-red-50"
+         : "text-gray-700 hover:bg-gray-50"
+       }`}
+      >
+       <span className="w-4 h-4 inline-flex items-center justify-center">{it.icon}</span>
+       <span>{it.label}</span>
+      </button>
+     ))}
+    </div>
+   )}
+  </>
+ );
+}
+
+export default function InvoiceOnlineOrderPage() {
+ const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+ const [loading, setLoading] = useState(true);
+ const [error, setError] = useState<string | null>(null);
+ const [search, setSearch] = useState("");
+ const [debouncedSearch, setDebouncedSearch] = useState("");
+ const [page, setPage] = useState(1);
+ const [total, setTotal] = useState(0);
+ const [statusFilter, setStatusFilter] = useState<"active" | "voided" | "all">("active");
+ const [viewInvoice, setViewInvoice] = useState<InvoiceRecord | null>(null);
+ const [voidTarget, setVoidTarget] = useState<InvoiceRecord | null>(null);
+ const [voidReason, setVoidReason] = useState("");
+ const [voiding, setVoiding] = useState(false);
+ const [actionError, setActionError] = useState<string | null>(null);
+ const { can } = usePermissions();
+ const canEdit = can("invoice.edit");
+ const canVoid = can("invoice.void");
+
+ useEffect(() => {
+  const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+  return () => clearTimeout(t);
+ }, [search]);
+
+ useEffect(() => {
+  setPage(1);
+ }, [debouncedSearch, statusFilter]);
+
+ const load = useCallback(async () => {
+  setLoading(true);
+  setError(null);
+  try {
+   const res = await invoicesApi.getInvoices({
+    page,
+    limit: PAGE_SIZE,
+    status: statusFilter,
+    search: debouncedSearch || undefined,
+   });
+   if (res.success) {
+    setInvoices(res.data || []);
+    setTotal(res.meta?.total ?? (res.data?.length ?? 0));
+   } else {
+    setInvoices([]);
+    setTotal(0);
+   }
+  } catch (e) {
+   setError(e instanceof Error ? e.message : "Failed to load invoices");
+   setInvoices([]);
+  } finally {
+   setLoading(false);
+  }
+ }, [page, statusFilter, debouncedSearch]);
+
+ useEffect(() => {
+  load();
+ }, [load]);
+
+ const handlePrintA4 = useCallback(async (inv: InvoiceRecord) => {
+  try {
+   await printInvoiceA4(invoiceToPrintable(inv));
+  } catch (e) {
+   setActionError(e instanceof Error ? e.message : "Print failed");
+  }
+ }, []);
+
+ const handleDownload = useCallback(async (inv: InvoiceRecord) => {
+  try {
+   await downloadInvoiceA4(invoiceToPrintable(inv));
+  } catch (e) {
+   setActionError(e instanceof Error ? e.message : "Download failed");
+  }
+ }, []);
+
+ const handlePrintReceipt = useCallback(async (inv: InvoiceRecord) => {
+  try {
+   await printReceipt80mm(invoiceToPrintable(inv));
+  } catch (e) {
+   setActionError(e instanceof Error ? e.message : "Receipt print failed");
+  }
+ }, []);
+
+ const handleConfirmVoid = useCallback(async () => {
+  if (!voidTarget) return;
+  setVoiding(true);
+  setActionError(null);
+  try {
+   await invoicesApi.voidInvoice(voidTarget._id, voidReason.trim() || undefined);
+   setVoidTarget(null);
+   setVoidReason("");
+   load();
+  } catch (e) {
+   setActionError(e instanceof Error ? e.message : "Failed to void invoice");
+  } finally {
+   setVoiding(false);
+  }
+ }, [voidTarget, voidReason, load]);
+
+ const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+ const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+ const rangeEnd = Math.min(total, page * PAGE_SIZE);
+
+ const headerRight = useMemo(
+  () => (
+   <div className="flex items-center gap-2">
+    <button
+     type="button"
+     onClick={load}
+     disabled={loading}
+     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm text-gray-700 disabled:opacity-50"
+    >
+     <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+     Refresh
+    </button>
+    <Link
+     href="/create-invoice"
+     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium"
+    >
+     <Plus className="w-4 h-4" />
+     New Invoice
+    </Link>
+   </div>
+  ),
+  [load, loading],
+ );
+
+ return (
+  <div className="min-h-screen bg-gray-50">
+   <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-4">
+    <div className="flex items-start justify-between flex-wrap gap-3">
+     <div className="flex items-center gap-2.5">
+      <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
+       <Receipt className="w-5 h-5" />
+      </div>
+      <div>
+       <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Invoices</h1>
+       <p className="text-xs text-gray-500">Invoices created in the invoice flow — reference series <code className="font-mono">INVC-######</code></p>
+      </div>
+     </div>
+     {headerRight}
+    </div>
+
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+     <div className="p-3 sm:p-4 border-b border-gray-200 flex flex-wrap items-center gap-2">
+      <div className="relative flex-1 min-w-[200px]">
+       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+       <input
+        type="search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search by reference or customer name…"
+        className="w-full pl-8 pr-3 py-2 rounded-lg border border-gray-300 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+       />
+      </div>
+      <select
+       value={statusFilter}
+       onChange={(e) => setStatusFilter(e.target.value as "active" | "voided" | "all")}
+       className="rounded-lg border border-gray-300 px-2.5 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+      >
+       <option value="active">Active</option>
+       <option value="voided">Voided</option>
+       <option value="all">All</option>
+      </select>
+     </div>
+
+     {error && (
+      <div className="m-3 sm:m-4 flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
+       <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+       <span>{error}</span>
+      </div>
+     )}
+
+     <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+       <thead>
+        <tr className="bg-gray-50 border-b border-gray-200 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+         <th className="px-3 sm:px-4 py-2.5">Reference</th>
+         <th className="px-3 sm:px-4 py-2.5">Date</th>
+         <th className="px-3 sm:px-4 py-2.5">Customer</th>
+         <th className="px-3 sm:px-4 py-2.5">Type</th>
+         <th className="px-3 sm:px-4 py-2.5">Tax</th>
+         <th className="px-3 sm:px-4 py-2.5 text-right">Total</th>
+         <th className="px-3 sm:px-4 py-2.5">Status</th>
+         <th className="px-3 sm:px-4 py-2.5 text-right">Actions</th>
+        </tr>
+       </thead>
+       <tbody>
+        {loading ? (
+         Array.from({ length: 6 }).map((_, i) => (
+          <tr key={i} className="border-b border-gray-100">
+           {Array.from({ length: 8 }).map((__, j) => (
+            <td key={j} className="px-3 sm:px-4 py-3">
+             <div className="h-4 w-full max-w-[120px] bg-gray-200 rounded animate-pulse" />
+            </td>
+           ))}
+          </tr>
+         ))
+        ) : invoices.length === 0 ? (
+         <tr>
+          <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-500">
+           <Receipt className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+           No invoices found.{" "}
+           <Link href="/create-invoice" className="text-blue-600 hover:underline font-medium">
+            Create the first one.
+           </Link>
+          </td>
+         </tr>
+        ) : (
+         invoices.map((inv) => {
+          const taxLabel = (inv as unknown as { taxName?: string; taxRate?: number; taxType?: string }).taxName;
+          const taxRate = (inv as unknown as { taxRate?: number }).taxRate ?? 0;
+          const taxType = (inv as unknown as { taxType?: string }).taxType ?? "";
+          return (
+           <tr key={inv._id} className="border-b border-gray-100 hover:bg-gray-50">
+            <td className="px-3 sm:px-4 py-3 font-mono text-xs font-semibold text-gray-800">{inv.reference}</td>
+            <td className="px-3 sm:px-4 py-3 text-gray-600">{formatDateTimeLondon(inv.createdAt)}</td>
+            <td className="px-3 sm:px-4 py-3 text-gray-800">{inv.customerName || "—"}</td>
+            <td className="px-3 sm:px-4 py-3">{typeBadge(inv.type)}</td>
+            <td className="px-3 sm:px-4 py-3 text-xs text-gray-600">
+             {taxLabel ? (
+              <span>
+               {taxLabel} <span className="text-gray-400">({taxType === "percentage" ? `${taxRate}%` : `£${taxRate}`})</span>
+              </span>
+             ) : (
+              <span className="text-gray-400">—</span>
+             )}
+            </td>
+            <td className="px-3 sm:px-4 py-3 text-right font-semibold text-gray-900">{formatMoney(inv.total)}</td>
+            <td className="px-3 sm:px-4 py-3">{statusBadge(inv.status || "active")}</td>
+            <td className="px-3 sm:px-4 py-3">
+             <div className="flex justify-end">
+              <ActionsMenu
+               items={[
+                { key: "view", label: "View", icon: <Eye className="w-4 h-4" />, onClick: () => setViewInvoice(inv) },
+                { key: "print", label: "Print invoice (A4)", icon: <Printer className="w-4 h-4" />, onClick: () => handlePrintA4(inv) },
+                { key: "download", label: "Download PDF", icon: <Download className="w-4 h-4" />, onClick: () => handleDownload(inv) },
+                { key: "receipt", label: "Print receipt (80mm)", icon: <FileText className="w-4 h-4" />, onClick: () => handlePrintReceipt(inv) },
+                {
+                 key: "void",
+                 label: inv.status === "voided" ? "Already voided" : "Void invoice",
+                 icon: <Trash2 className="w-4 h-4" />,
+                 destructive: true,
+                 disabled: !canVoid || inv.status === "voided",
+                 onClick: () => {
+                  setActionError(null);
+                  setVoidReason("");
+                  setVoidTarget(inv);
+                 },
+                },
+               ]}
+              />
+             </div>
+            </td>
+           </tr>
+          );
+         })
+        )}
+       </tbody>
+      </table>
+     </div>
+
+     <div className="px-3 sm:px-4 py-3 border-t border-gray-200 flex items-center justify-between flex-wrap gap-2 text-xs text-gray-600">
+      <div>
+       {loading ? (
+        <span className="inline-flex items-center gap-1">
+         <Loader2 className="w-3 h-3 animate-spin" />
+         Loading…
+        </span>
+       ) : (
+        <span>
+         Showing <b>{rangeStart}</b>–<b>{rangeEnd}</b> of <b>{total}</b>
+        </span>
+       )}
+      </div>
+      <div className="inline-flex items-center gap-1">
+       <button
+        type="button"
+        disabled={page <= 1}
+        onClick={() => setPage((p) => Math.max(1, p - 1))}
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+       >
+        <ChevronLeft className="w-3.5 h-3.5" />
+        Prev
+       </button>
+       <span className="px-2">
+        Page <b>{page}</b> / {totalPages}
+       </span>
+       <button
+        type="button"
+        disabled={page >= totalPages}
+        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+       >
+        Next
+        <ChevronRight className="w-3.5 h-3.5" />
+       </button>
+      </div>
+     </div>
+    </div>
+   </div>
+
+   {actionError && (
+    <div className="fixed bottom-4 right-4 z-50 max-w-sm flex items-start gap-2 p-3 rounded-lg bg-red-600 text-white shadow-lg">
+     <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+     <span className="text-sm flex-1">{actionError}</span>
+     <button onClick={() => setActionError(null)} className="p-0.5 hover:bg-red-700 rounded">
+      <X className="w-3.5 h-3.5" />
+     </button>
+    </div>
+   )}
+
+   {viewInvoice && (
+    <ViewInvoiceModal invoice={viewInvoice} onClose={() => setViewInvoice(null)} canEdit={canEdit} />
+   )}
+
+   {voidTarget && (
+    <VoidInvoiceModal
+     invoice={voidTarget}
+     reason={voidReason}
+     onReasonChange={setVoidReason}
+     loading={voiding}
+     onCancel={() => {
+      setVoidTarget(null);
+      setVoidReason("");
+     }}
+     onConfirm={handleConfirmVoid}
+    />
+   )}
+  </div>
+ );
+}
+
+function ViewInvoiceModal({
+ invoice,
+ onClose,
+ canEdit,
+}: {
+ invoice: InvoiceRecord;
+ onClose: () => void;
+ canEdit: boolean;
+}) {
+ const taxName = (invoice as unknown as { taxName?: string }).taxName;
+ const taxRate = (invoice as unknown as { taxRate?: number }).taxRate ?? 0;
+ const taxType = (invoice as unknown as { taxType?: string }).taxType ?? "";
+ return (
+  <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/40 p-4 overflow-auto">
+   <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl my-8">
+    <div className="flex items-center justify-between p-4 border-b border-gray-200">
+     <div>
+      <h3 className="text-base font-semibold text-gray-900">
+       Invoice <span className="font-mono">{invoice.reference}</span>
+      </h3>
+      <p className="text-xs text-gray-500">{formatDateTimeLondon(invoice.createdAt)}</p>
+     </div>
+     <button onClick={onClose} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600">
+      <X className="w-4 h-4" />
+     </button>
+    </div>
+    <div className="p-4 space-y-3 text-sm">
+     <div className="grid grid-cols-2 gap-3">
+      <div>
+       <p className="text-xs text-gray-500">Customer</p>
+       <p className="font-medium text-gray-900">{invoice.customerName || "—"}</p>
+      </div>
+      <div>
+       <p className="text-xs text-gray-500">Status</p>
+       <p>{statusBadge(invoice.status || "active")}</p>
+      </div>
+      <div>
+       <p className="text-xs text-gray-500">Type</p>
+       <p>{typeBadge(invoice.type)}</p>
+      </div>
+      <div>
+       <p className="text-xs text-gray-500">Tax</p>
+       <p className="text-gray-900">
+        {taxName ? `${taxName} (${taxType === "percentage" ? `${taxRate}%` : `£${taxRate}`})` : "—"}
+       </p>
+      </div>
+     </div>
+     <div className="border rounded-lg overflow-hidden">
+      <table className="w-full text-sm">
+       <thead className="bg-gray-50 text-[11px] uppercase text-gray-500">
+        <tr>
+         <th className="px-3 py-2 text-left">Item</th>
+         <th className="px-3 py-2 text-right">Qty</th>
+         <th className="px-3 py-2 text-right">Price</th>
+        </tr>
+       </thead>
+       <tbody>
+        {(invoice.items || []).map((it, idx) => (
+         <tr key={idx} className="border-t border-gray-100">
+          <td className="px-3 py-2">
+           <div className="font-medium text-gray-900">{it.name}</div>
+           {it.serialNumbers && it.serialNumbers.length > 0 && (
+            <div className="text-[11px] font-mono text-gray-500">{it.serialNumbers.join(", ")}</div>
+           )}
+          </td>
+          <td className="px-3 py-2 text-right">{it.quantity}</td>
+          <td className="px-3 py-2 text-right">
+           {new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(Number(it.price) || 0)}
+          </td>
+         </tr>
+        ))}
+       </tbody>
+      </table>
+     </div>
+     <div className="border-t pt-3 space-y-1 text-right">
+      <div className="text-xs text-gray-600">
+       Subtotal: <span className="font-medium text-gray-900">{formatMoney(invoice.subtotal)}</span>
+      </div>
+      {invoice.tax > 0 && (
+       <div className="text-xs text-gray-600">
+        Tax: <span className="font-medium text-gray-900">{formatMoney(invoice.tax)}</span>
+       </div>
+      )}
+      {invoice.discount > 0 && (
+       <div className="text-xs text-gray-600">
+        Discount: <span className="font-medium text-gray-900">-{formatMoney(invoice.discount)}</span>
+       </div>
+      )}
+      <div className="text-base font-bold text-gray-900">
+       Total: <span className="text-blue-700">{formatMoney(invoice.total)}</span>
+      </div>
+     </div>
+    </div>
+    <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2 bg-gray-50 rounded-b-xl">
+     {canEdit && <span className="text-xs text-gray-400 mr-auto">Edit endpoint live at PUT /api/invoices/{invoice._id}</span>}
+     <button onClick={onClose} className="px-3 py-1.5 rounded-md border border-gray-300 text-sm hover:bg-white">
+      Close
+     </button>
+    </div>
+   </div>
+  </div>
+ );
+}
+
+function VoidInvoiceModal({
+ invoice,
+ reason,
+ onReasonChange,
+ loading,
+ onCancel,
+ onConfirm,
+}: {
+ invoice: InvoiceRecord;
+ reason: string;
+ onReasonChange: (v: string) => void;
+ loading: boolean;
+ onCancel: () => void;
+ onConfirm: () => void;
+}) {
+ return (
+  <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+   <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+    <div className="p-4 border-b border-gray-200">
+     <h3 className="text-base font-semibold text-gray-900 inline-flex items-center gap-2">
+      <Trash2 className="w-4 h-4 text-red-600" />
+      Void invoice <span className="font-mono">{invoice.reference}</span>?
+     </h3>
+    </div>
+    <div className="p-4 space-y-3 text-sm">
+     <p className="text-gray-600">
+      The invoice will be marked as voided but remains in the system for audit. Total{" "}
+      <b>{formatMoney(invoice.total)}</b> for {invoice.customerName || "—"}.
+     </p>
+     <label className="block">
+      <span className="text-xs font-medium text-gray-600 uppercase">Reason (optional)</span>
+      <textarea
+       value={reason}
+       onChange={(e) => onReasonChange(e.target.value)}
+       rows={2}
+       className="mt-1 w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+       placeholder="Why is this being voided?"
+      />
+     </label>
+    </div>
+    <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2 bg-gray-50 rounded-b-xl">
+     <button
+      onClick={onCancel}
+      disabled={loading}
+      className="px-3 py-1.5 rounded-md border border-gray-300 text-sm hover:bg-white disabled:opacity-50"
+     >
+      Cancel
+     </button>
+     <button
+      onClick={onConfirm}
+      disabled={loading}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50"
+     >
+      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+      Void invoice
+     </button>
+    </div>
+   </div>
+  </div>
+ );
+}

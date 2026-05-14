@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { SlidersHorizontal, ArrowLeft, Package, Palette, Check, ShoppingBag, Loader2, Trash2 } from "lucide-react";
+import { SlidersHorizontal, ArrowLeft, Package, Palette, Check, ShoppingBag, Loader2, Trash2, AlertTriangle } from "lucide-react";
 import { useAppCurrency, type CurrencyCode } from "@/lib/app-currency-context";
 import { useTheme } from "@/contexts/ThemeContext";
 import { THEMES } from "@/lib/theme";
 import { usePermissions } from "@/hooks/usePermissions";
 import { getInventorySettings, updateInventorySettings } from "./service/inventorySettingsApi";
-import { getGeneralSettings, updateSalesMode } from "../sales/service/generalSettingsApi";
+import { getGeneralSettings, updateSalesMode, updateNegativeStock } from "../sales/service/generalSettingsApi";
 
 const GeneralSettingsPage = () => {
  const { currencyCode, setCurrency, currencies } = useAppCurrency();
@@ -25,6 +25,9 @@ const GeneralSettingsPage = () => {
  const [salesModeLoading, setSalesModeLoading] = useState(true);
  const [salesModeSaving, setSalesModeSaving] = useState(false);
  const [salesModeMessage, setSalesModeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+ const [allowNegativeStock, setAllowNegativeStock] = useState(false);
+ const [negStockSaving, setNegStockSaving] = useState(false);
+ const [negStockMessage, setNegStockMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
  useEffect(() => {
  setSelected(currencyCode);
@@ -41,12 +44,42 @@ const GeneralSettingsPage = () => {
  useEffect(() => {
  getGeneralSettings()
  .then((res) => {
- if (res.success && res.data && typeof res.data.retailModeEnabled === "boolean") {
+ if (res.success && res.data) {
+  if (typeof res.data.retailModeEnabled === "boolean") {
   setRetailModeEnabled(res.data.retailModeEnabled);
+  }
+  if (typeof res.data.allowNegativeStock === "boolean") {
+  setAllowNegativeStock(res.data.allowNegativeStock);
+  }
  }
  })
  .finally(() => setSalesModeLoading(false));
  }, []);
+
+ const handleNegativeStockToggle = useCallback(async (value: boolean) => {
+ if (!canManageSalesMode) return;
+ setNegStockSaving(true);
+ setNegStockMessage(null);
+ try {
+ const res = await updateNegativeStock({ allowNegativeStock: value });
+ if (res.success && res.data) {
+ setAllowNegativeStock(!!res.data.allowNegativeStock);
+ setNegStockMessage({
+  type: "success",
+  text: value
+  ? "Negative stock allowed — non-IMEI items can be sold below zero."
+  : "Negative stock blocked — sales fail when stock would go below zero.",
+ });
+ setTimeout(() => setNegStockMessage(null), 4000);
+ } else {
+ setNegStockMessage({ type: "error", text: res.message || "Could not update setting." });
+ }
+ } catch {
+ setNegStockMessage({ type: "error", text: "Could not update setting." });
+ } finally {
+ setNegStockSaving(false);
+ }
+ }, [canManageSalesMode]);
 
  const handleSalesModeToggle = useCallback(async (value: boolean) => {
  if (!canManageSalesMode) return;
@@ -295,6 +328,73 @@ const GeneralSettingsPage = () => {
   Turn off to keep each purchase&apos;s price independent.
   </p>
   </div>
+ </div>
+
+ {/* Row 2.5: Negative stock allowance */}
+ <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+  <h2 className="text-lg font-medium text-gray-800 mb-2 flex items-center gap-2">
+  <AlertTriangle className="h-5 w-5 text-orange-500" />
+  Negative stock on Create Sales
+  </h2>
+  <p className="text-sm text-gray-500 mb-4">
+  Controls whether <strong>non-IMEI (quantity-based)</strong> products can be sold when stock would drop below zero.
+  When <strong>off</strong>, the sale is blocked with an &quot;Insufficient stock&quot; error.
+  When <strong>on</strong>, the sale completes and the stock count goes negative.
+  IMEI/serialized products are unaffected.
+  </p>
+  {negStockMessage && (
+  <div
+  className={`mb-4 px-3 py-2 rounded-lg text-sm ${
+  negStockMessage.type === "success" ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
+  }`}
+  >
+  {negStockMessage.text}
+  </div>
+  )}
+  {salesModeLoading ? (
+  <div className="flex items-center gap-2 text-gray-500 py-2">
+  <Loader2 className="h-5 w-5 animate-spin" /> Loading…
+  </div>
+  ) : (
+  <div className="flex flex-col gap-3">
+  <div className="flex items-center gap-3">
+  <span className={`text-sm font-medium ${!allowNegativeStock ? "text-gray-900" : "text-gray-500"}`}>
+  Block (recommended)
+  </span>
+  <button
+  type="button"
+  role="switch"
+  aria-checked={allowNegativeStock}
+  disabled={!canManageSalesMode || negStockSaving}
+  onClick={() => canManageSalesMode && handleNegativeStockToggle(!allowNegativeStock)}
+  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+  allowNegativeStock ? "bg-orange-500" : "bg-gray-200"
+  }`}
+  >
+  <span
+  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+   allowNegativeStock ? "translate-x-5" : "translate-x-1"
+  }`}
+  />
+  </button>
+  <span className={`text-sm font-medium ${allowNegativeStock ? "text-gray-900" : "text-gray-500"}`}>
+  Allow negative
+  </span>
+  </div>
+  <div className="flex items-center gap-2 text-sm text-gray-500">
+  {negStockSaving && (
+  <>
+   <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+  </>
+  )}
+  {!canManageSalesMode && (
+  <span className="text-neutral-800 bg-neutral-50 px-2 py-1 rounded-md">
+   Only users with <span className="font-medium">settings.manage</span> can change this.
+  </span>
+  )}
+  </div>
+  </div>
+  )}
  </div>
 
  {/* Row 3: Theme full width */}

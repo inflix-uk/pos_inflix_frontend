@@ -104,6 +104,29 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  });
  const [defaultBankName, setDefaultBankName] = useState<string>("");
  const [error, setError] = useState<string | null>(null);
+ const [submitting, setSubmitting] = useState(false);
+
+ // Reset the submit lock whenever the modal opens (parent re-opened it) or closes.
+ useEffect(() => {
+ setSubmitting(false);
+ }, [open]);
+
+ // Once a sale has been created (parent passes saleForPrint), drop the lock so
+ // the user can hit Done / Print without the button looking disabled.
+ useEffect(() => {
+ if (saleForPrint) setSubmitting(false);
+ }, [saleForPrint]);
+
+ const guardedComplete = (details: WholesalePaymentDetails) => {
+ if (submitting) return; // double-click / repeated tap guard
+ setSubmitting(true);
+ try {
+  onComplete(details);
+ } catch (err) {
+  setSubmitting(false);
+  throw err;
+ }
+ };
 
  const discountInput = parseAmount(discount);
  const previousBalanceNum = Math.max(0, previousBalance);
@@ -240,7 +263,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  setError(`Payment total ${formatMoney(paidNow)} cannot exceed Amount Due ${formatMoney(due)}. Use Refund or Store credit below.`);
  return;
  }
- onComplete(buildDetails());
+ guardedComplete(buildDetails());
  };
 
  const handleRefund = () => {
@@ -258,7 +281,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  const sum = cappedPayments.cash + cappedPayments.card + cappedPayments.bank;
  const diff = Math.round((due - sum) * 100) / 100;
  if (diff !== 0) cappedPayments.cash = Math.round((cappedPayments.cash + diff) * 100) / 100;
- onComplete(buildDetails(cappedPayments));
+ guardedComplete(buildDetails(cappedPayments));
  };
 
  const handleRefundFrom = (method: MethodId) => {
@@ -294,7 +317,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  const sum = cappedPayments.cash + cappedPayments.card + cappedPayments.bank;
  const diff = Math.round((dueRounded - sum) * 100) / 100;
  if (Math.abs(diff) > 0.01) cappedPayments.cash = Math.round((cappedPayments.cash + diff) * 100) / 100;
- onComplete(buildDetails(cappedPayments));
+ guardedComplete(buildDetails(cappedPayments));
  };
 
  const handleStoreCredit = () => {
@@ -726,10 +749,10 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   <button
   type="button"
   onClick={handleCreateSales}
-  disabled={overpayment > 0 || (retailMode && remaining > 0.01)}
+  disabled={submitting || overpayment > 0 || (retailMode && remaining > 0.01)}
   className="flex-1 min-h-[52px] py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 active:bg-blue-800 touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
   >
-  {primaryButtonLabel}
+  {submitting ? "Saving…" : primaryButtonLabel}
   </button>
  </div>
  </div>

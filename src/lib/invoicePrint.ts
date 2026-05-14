@@ -556,10 +556,10 @@ export async function buildInvoicePdf(
     y += 2;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(io.fontTablePt);
+    const totalQty = sale.items.reduce((s, i) => s + i.quantity, 0);
     doc.text("Grand total", left, y);
-    doc.text(`${sale.items.reduce((s, i) => s + i.quantity, 0)} items · ${formatMoney(sale.subtotal)}`, right, y, {
-      align: "right",
-    });
+    doc.text(String(totalQty), colQty, y);
+    doc.text(formatMoney(sale.subtotal), right, y, { align: "right" });
     y += 8;
     doc.setFont("helvetica", "normal");
   }
