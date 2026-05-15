@@ -56,7 +56,7 @@ export const AddManualItemModal: React.FC<AddManualItemModalProps> = ({
   className="text-lg font-semibold text-gray-900 flex items-center gap-2"
   >
   <PackagePlus className="h-5 w-5 text-orange-500" />
-  Add manual item
+  Add MISC item
   </h2>
   <button
   onClick={onClose}

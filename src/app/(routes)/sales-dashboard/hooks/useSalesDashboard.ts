@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useProducts } from "@/lib/products-context";
 import type { CartLineItem, POSProduct, PaymentMethod } from "../types";
 import { salesApi } from "../service/salesApi";
 import { printInvoiceA4 } from "@/lib/invoicePrint";
+import { useCartTaxConfig } from "../components/CartTaxSlotContext";
 
 const parsePrice = (priceStr: string): number => {
  const num = parseFloat(priceStr.replace(/[^0-9.-]/g, ""));
@@ -161,6 +162,9 @@ export const useSalesDashboard = (options?: {
  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
  const [message, setMessage] = useState<{ type: "success" | "error"; text: string }>({ type: "success", text: "" });
+ // Idempotency key for the current checkout — same id reused on retry so a network glitch
+ // does not create a duplicate or trigger "Serial already sold". Rotated after a successful sale.
+ const retailRequestIdRef = useRef<string>("");
 
  // Persist cart to draft storage (if enabled). Do not hydrate here — wholesale page moves session into Drafts list on load.
  useEffect(() => {
@@ -754,8 +758,12 @@ export const useSalesDashboard = (options?: {
   return cart.reduce((sum, i) => sum + parsePrice(i.price) * i.quantity, 0);
  }, [cart]);
 
- const taxRate = 0;
- const tax = subtotal * taxRate;
+ const taxConfig = useCartTaxConfig();
+ const tax = useMemo(() => {
+  if (!taxConfig || !taxConfig.rate) return 0;
+  if (taxConfig.type === "percentage") return Math.round(subtotal * (taxConfig.rate / 100) * 100) / 100;
+  return Math.round(taxConfig.rate * 100) / 100;
+ }, [subtotal, taxConfig]);
  const total = subtotal + tax;
 
  /** Add product to cart by scanned or typed SKU/barcode. Checks local list first, then Product API by SKU/barcode. */
@@ -834,6 +842,12 @@ export const useSalesDashboard = (options?: {
    brandModel: i.brandModel,
    capacity: i.capacity,
   }));
+  if (!retailRequestIdRef.current) {
+   retailRequestIdRef.current =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+     ? crypto.randomUUID()
+     : `cr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  }
   const payload = {
    type: "retail" as const,
    items,
@@ -841,10 +855,12 @@ export const useSalesDashboard = (options?: {
    tax,
    total,
    paymentMethod,
+   clientRequestId: retailRequestIdRef.current,
    ...(locationId ? { locationId } : {}),
   };
   const result = await salesApi.createSale(payload);
   setPaymentModalOpen(false);
+  if (result.success) retailRequestIdRef.current = "";
   setCart([]);
   if (result.success) {
    showMessage("success", result.data?.reference ? `Sale saved: ${result.data.reference}` : "Sale completed");

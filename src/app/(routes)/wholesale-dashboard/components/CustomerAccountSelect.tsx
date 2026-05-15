@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useImperativeHandle, useRef, useCallback, forwardRef } from "react";
+import { createPortal } from "react-dom";
 import { User, ChevronDown, Loader2, RefreshCw, UserPlus } from "lucide-react";
 import type { Customer } from "../../peoples/customers/types";
 import type { Supplier } from "../../peoples/suppliers/types";
@@ -75,6 +76,22 @@ const CustomerAccountSelectComponent: React.ForwardRefRenderFunction<
  const [error, setError] = useState<string | null>(null);
  const [open, setOpen] = useState(false);
  const [search, setSearch] = useState("");
+ const triggerRef = useRef<HTMLButtonElement>(null);
+ const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+ useEffect(() => {
+ if (!open) return;
+ const update = () => {
+  const r = triggerRef.current?.getBoundingClientRect();
+  if (r) setMenuPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 240) });
+ };
+ update();
+ window.addEventListener("resize", update);
+ window.addEventListener("scroll", update, true);
+ return () => {
+  window.removeEventListener("resize", update);
+  window.removeEventListener("scroll", update, true);
+ };
+ }, [open]);
 
  // Single shared fetch helper — used by initial load, imperative refetch, and dropdown open.
  // Hits one combined endpoint (was two parallel calls). Pass `fresh:true` to bypass server cache.
@@ -142,10 +159,11 @@ const CustomerAccountSelectComponent: React.ForwardRefRenderFunction<
  </div>
  )}
  <button
+ ref={triggerRef}
  type="button"
  onClick={handleOpenDropdown}
  className={`w-full flex items-center gap-2 border text-left bg-white touch-manipulation transition-colors ${
-  compact ? "px-3 py-2 min-h-[40px] rounded-lg text-sm" : "px-4 py-3 min-h-[44px] rounded-xl"
+  compact ? "px-2.5 h-8 @[420px]:h-9 @[420px]:px-3 @[768px]:h-10 rounded-lg text-xs @[420px]:text-sm" : "px-4 py-3 min-h-[44px] rounded-xl"
  } ${
   value
   ? "border-gray-300 text-gray-900 hover:border-gray-400"
@@ -156,9 +174,9 @@ const CustomerAccountSelectComponent: React.ForwardRefRenderFunction<
  aria-label={value ? `Customer: ${value.name}` : placeholder}
  >
  {loading ? (
-  <Loader2 className="h-5 w-5 animate-spin text-gray-400 flex-shrink-0" />
+  <Loader2 className={`${compact ? "h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4" : "h-5 w-5"} animate-spin text-gray-400 flex-shrink-0`} />
  ) : (
-  <User className="h-5 w-5 text-gray-500 flex-shrink-0" />
+  <User className={`${compact ? "h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4" : "h-5 w-5"} text-gray-500 flex-shrink-0`} />
  )}
  <span className="flex-1 truncate">
   {value
@@ -171,7 +189,7 @@ const CustomerAccountSelectComponent: React.ForwardRefRenderFunction<
   : placeholder}
  </span>
  <ChevronDown
-  className={`h-5 w-5 text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+  className={`${compact ? "h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4" : "h-5 w-5"} text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
  />
  </button>
 
@@ -188,16 +206,17 @@ const CustomerAccountSelectComponent: React.ForwardRefRenderFunction<
  </div>
  )}
 
- {open && (
+ {open && menuPos && typeof document !== "undefined" && createPortal(
  <>
   <div
-  className="fixed inset-0 z-40"
+  className="fixed inset-0 z-[60]"
   aria-hidden
   onClick={() => setOpen(false)}
   />
   <div
   role="listbox"
-  className="absolute z-50 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg max-h-[520px] overflow-hidden flex flex-col"
+  style={{ position: "fixed", top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+  className="z-[61] rounded-xl border border-gray-200 bg-white shadow-lg max-h-[60vh] overflow-hidden flex flex-col"
   >
   <div className="p-2 border-b border-gray-100">
   <input
@@ -250,7 +269,8 @@ const CustomerAccountSelectComponent: React.ForwardRefRenderFunction<
   )}
   </ul>
   </div>
- </>
+ </>,
+ document.body
  )}
  </div>
  );

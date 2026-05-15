@@ -32,6 +32,10 @@ interface CartPanelProps {
  showItemsSummaryAndDetail?: boolean;
  /** Category _id → ordered variant attribute slugs (Items Summary column order) */
  categoryVariantSlugOrderByCategoryId?: Record<string, string[]>;
+ /** Retail/POS look: oversized TOTAL display + big Pay button (Eposnow-inspired). */
+ prominentTotals?: boolean;
+ /** Optional "Hold" action (save current cart as a draft). Renders DELETE | HOLD | PAY bar when set in prominent mode. */
+ onHold?: () => void;
 }
 
 const parsePriceDisplay = (priceStr: string): string => {
@@ -443,47 +447,47 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
  if (collapsible) {
  return (
  <li
- className={`rounded-xl border shadow-sm overflow-hidden ${
+ className={`rounded-lg border shadow-sm overflow-hidden ${
   isSerialLine
-  ? "border-l-[4px] border-l-orange-500 border-y border-r border-gray-200 bg-neutral-50"
+  ? "border-l-[3px] border-l-orange-500 border-y border-r border-gray-200 bg-neutral-50"
   : "bg-white border border-gray-200"
  }`}
  >
- <div className="p-3 flex items-center justify-between gap-3">
+ <div className="p-1.5 @[480px]/cp:p-2 flex items-center justify-between gap-2">
   <div className="min-w-0 flex-1">
-  <p className="text-sm font-medium text-gray-900 truncate min-w-0">
+  <p className="text-[11px] @[480px]/cp:text-xs font-medium text-gray-900 truncate min-w-0">
   {item.name}
   </p>
   </div>
-  <div className="grid grid-cols-[minmax(0,1fr)_90px_100px_90px_40px] gap-2 items-center flex-shrink-0 min-w-0">
+  <div className="grid grid-cols-[minmax(0,1fr)_72px_80px_72px_28px] gap-1.5 items-center flex-shrink-0 min-w-0">
   <div className="min-w-0 flex items-center justify-start">
   {item.serialNumbers && item.serialNumbers.length > 0 && (
-  <span className={`font-mono text-xs font-semibold rounded-md px-2 py-1 truncate max-w-full block ${accent === "blue" ? "bg-blue-50 border border-blue-200 text-blue-900" : "bg-gray-100 border border-gray-200 text-gray-900"}`} title={item.serialNumbers.join(", ")}>
+  <span className={`font-mono text-[10px] font-semibold rounded px-1.5 py-0.5 truncate max-w-full block ${accent === "blue" ? "bg-blue-50 border border-blue-200 text-blue-900" : "bg-gray-100 border border-gray-200 text-gray-900"}`} title={item.serialNumbers.join(", ")}>
    {item.serialNumbers.length > 1 ? `${item.serialNumbers[0]} (+${item.serialNumbers.length - 1} more)` : item.serialNumbers[0]}
   </span>
   )}
   </div>
   <div className="flex justify-center">
   {item.serialNumbers && item.serialNumbers.length > 0 ? (
-  <span className="text-xs font-semibold text-gray-500 tabular-nums">×{item.quantity}</span>
+  <span className="text-[11px] font-semibold text-gray-500 tabular-nums">×{item.quantity}</span>
   ) : (
   <div className="flex items-center gap-0 rounded-md border border-gray-200 bg-gray-50 p-0.5">
    <button
    type="button"
    onClick={() => onUpdateQty(item.sku, -1)}
-   className="min-w-[32px] min-h-[32px] rounded flex items-center justify-center hover:bg-white text-gray-600 touch-manipulation"
+   className="min-w-[24px] min-h-[24px] rounded flex items-center justify-center hover:bg-white text-gray-600 touch-manipulation"
    aria-label="Decrease quantity"
    >
-   <Minus className="h-4 w-4" />
+   <Minus className="h-3 w-3" />
    </button>
-   <span className="min-w-[1.25rem] text-center text-sm font-semibold tabular-nums">{item.quantity}</span>
+   <span className="min-w-[1rem] text-center text-[11px] font-semibold tabular-nums">{item.quantity}</span>
    <button
    type="button"
    onClick={() => onUpdateQty(item.sku, 1)}
-   className="min-w-[32px] min-h-[32px] rounded flex items-center justify-center hover:bg-white text-gray-600 touch-manipulation"
+   className="min-w-[24px] min-h-[24px] rounded flex items-center justify-center hover:bg-white text-gray-600 touch-manipulation"
    aria-label="Increase quantity"
    >
-   <Plus className="h-4 w-4" />
+   <Plus className="h-3 w-3" />
    </button>
   </div>
   )}
@@ -492,7 +496,7 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
   <span>
   <span className="sr-only">Unit price</span>
   <span className="inline-flex items-center rounded border border-gray-300 bg-gray-50 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 w-full min-w-0">
-   <span className="pl-1.5 text-gray-500 text-xs shrink-0">{currencySymbol}</span>
+   <span className="pl-1 text-gray-500 text-[10px] shrink-0">{currencySymbol}</span>
    <input
    type="text"
    inputMode="decimal"
@@ -503,24 +507,24 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
    }}
    onBlur={commitPrice}
    onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-   className="w-full min-w-0 py-1 pr-1 text-sm font-bold bg-transparent border-0 focus:ring-0 focus:outline-none tabular-nums"
+   className="w-full min-w-0 py-0.5 pr-1 text-[11px] font-bold bg-transparent border-0 focus:ring-0 focus:outline-none tabular-nums"
    aria-label="Unit price"
    />
   </span>
   </span>
   ) : (
-  <span className="text-sm text-gray-500 tabular-nums">{item.price}</span>
+  <span className="text-[11px] text-gray-500 tabular-nums">{item.price}</span>
   )}
-  <span className={`text-sm font-bold tabular-nums text-right ${lineTotalClass}`}>
+  <span className={`text-[11px] font-bold tabular-nums text-right ${lineTotalClass}`}>
   {formatMoney(lineTotal)}
   </span>
   <button
   type="button"
   onClick={() => onRemove(item.sku, item.serialNumbers?.[0])}
-  className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 touch-manipulation justify-self-center"
+  className="p-1 rounded text-red-600 hover:bg-red-50 touch-manipulation justify-self-center"
   aria-label={`Remove ${item.name}`}
   >
-  <Trash2 className="h-4 w-4" />
+  <Trash2 className="h-3.5 w-3.5" />
   </button>
   </div>
  </div>
@@ -647,6 +651,8 @@ export const CartPanel: React.FC<CartPanelProps> = ({
  primaryButtonLabel,
  showItemsSummaryAndDetail = false,
  categoryVariantSlugOrderByCategoryId,
+ prominentTotals = false,
+ onHold,
 }) => {
  const taxSlot = useCartTaxSlot();
  const { formatMoney, currencySymbol } = useAppCurrency();
@@ -658,7 +664,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
  const totalColorClass = isWholesale ? "text-blue-600" : "text-orange-600";
  const showCartTitleRow = Boolean(title?.trim());
  return (
- <div className="flex flex-col h-full bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+ <div className="@container/cp flex flex-col h-full bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
  {showCartTitleRow && (
  <div className="p-4 sm:p-5 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
   <h2 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -677,7 +683,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
  </div>
  )}
  {/* Retail: cart lines only. Wholesale: Items Summary + IMEI Detail + editable lines */}
- <div className={`flex-1 overflow-y-auto touch-scroll min-h-0 ${showItemsSummaryAndDetail ? "p-2.5 sm:p-3 space-y-3" : "p-4 sm:p-5"}`}>
+ <div className={`flex-1 overflow-y-auto touch-scroll min-h-0 ${showItemsSummaryAndDetail ? "p-2.5 sm:p-3 space-y-3" : prominentTotals ? "p-1.5 @[480px]/cp:p-2" : "p-4 sm:p-5"}`}>
  {items.length === 0 ? (
   <div className="flex flex-col items-center justify-center py-10 text-gray-500">
   <ShoppingCart className="h-12 w-12 mb-3 opacity-50" />
@@ -766,7 +772,17 @@ export const CartPanel: React.FC<CartPanelProps> = ({
   })()}
   </>
  ) : (
-  <ul className="space-y-3">
+  <>
+  {prominentTotals && (
+  <div className="grid grid-cols-[minmax(0,1fr)_72px_80px_72px_28px] gap-1.5 items-center px-1.5 @[480px]/cp:px-2 pb-1 mb-1.5 border-b border-slate-200">
+   <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Product</span>
+   <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 text-center">Qty</span>
+   <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 text-right">Each</span>
+   <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 text-right">Total</span>
+   <span />
+  </div>
+  )}
+  <ul className={prominentTotals ? "space-y-1" : "space-y-3"}>
   {items.map((item, index) => (
   <CartLineRow
   key={item.serialNumbers?.[0] ? `${item.sku}-${item.serialNumbers[0]}` : `${item.sku}-${index}`}
@@ -781,28 +797,59 @@ export const CartPanel: React.FC<CartPanelProps> = ({
   />
   ))}
   </ul>
+  </>
  )}
  </div>
 
  {/* Totals & Pay */}
- <div className={`border-t border-gray-200 bg-gray-50 space-y-1.5 ${showItemsSummaryAndDetail ? "p-2.5 sm:p-3" : "p-4 sm:p-5 space-y-2"}`}>
+ <div className={`border-t border-gray-200 ${prominentTotals ? "bg-white" : "bg-gray-50"} space-y-1.5 ${showItemsSummaryAndDetail ? "p-2.5 sm:p-3" : "p-4 sm:p-5 space-y-2"}`}>
  {items.length > 0 && (
   <>
-  <div className="flex justify-between text-sm">
-  <span className="text-gray-600">Subtotal</span>
-  <span className="font-medium">{formatMoney(subtotal)}</span>
-  </div>
-  {taxSlot}
-  {tax > 0 && (
-  <div className="flex justify-between text-sm">
-  <span className="text-gray-600">Tax</span>
-  <span className="font-medium">{formatMoney(tax)}</span>
-  </div>
+  {prominentTotals ? (
+   <>
+   <div className="rounded-md bg-white border border-slate-200 p-2 @[480px]/cp:p-3 mb-0.5">
+   <div className="grid grid-cols-[1fr_auto_1fr_auto] gap-x-3 gap-y-1.5 items-center">
+    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Items</span>
+    <span className="text-sm @[480px]/cp:text-base font-bold tabular-nums text-slate-900 text-right">{items.reduce((s, i) => s + i.quantity, 0)}</span>
+    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Total</span>
+    <span className="text-sm @[480px]/cp:text-base @[768px]/cp:text-lg font-bold tabular-nums text-slate-900 text-right">{formatMoney(subtotal)}</span>
+
+    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Total Discount</span>
+    <span className="text-sm @[480px]/cp:text-base font-bold tabular-nums text-slate-900 text-right">{formatMoney(Math.max(0, subtotal - total + tax))}</span>
+    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Due</span>
+    <span className={`text-sm @[480px]/cp:text-base @[768px]/cp:text-lg font-bold tabular-nums text-right ${total > 0 ? "text-red-600" : "text-slate-900"}`}>{formatMoney(total)}</span>
+
+    {tax > 0 && (
+    <>
+     <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">&nbsp;</span>
+     <span />
+     <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Tax</span>
+     <span className="text-xs @[480px]/cp:text-sm font-semibold tabular-nums text-slate-700 text-right">{formatMoney(tax)}</span>
+    </>
+    )}
+   </div>
+   </div>
+   {taxSlot}
+   </>
+  ) : (
+   <>
+   <div className="flex justify-between text-sm">
+   <span className="text-gray-600">Subtotal</span>
+   <span className="font-medium">{formatMoney(subtotal)}</span>
+   </div>
+   {taxSlot}
+   {tax > 0 && (
+   <div className="flex justify-between text-sm">
+    <span className="text-gray-600">Tax</span>
+    <span className="font-medium">{formatMoney(tax)}</span>
+   </div>
+   )}
+   <div className="flex justify-between text-base font-bold pt-2 border-t border-gray-200">
+   <span>Total</span>
+   <span className={totalColorClass}>{formatMoney(total)}</span>
+   </div>
+   </>
   )}
-  <div className="flex justify-between text-base font-bold pt-2 border-t border-gray-200">
-  <span>Total</span>
-  <span className={totalColorClass}>{formatMoney(total)}</span>
-  </div>
   </>
  )}
  {payDisabled && payDisabledLabel && (
@@ -810,14 +857,44 @@ export const CartPanel: React.FC<CartPanelProps> = ({
   {payDisabledLabel}
   </p>
  )}
+ {prominentTotals ? (
+  <div className="grid grid-cols-3 gap-1 @[280px]/cp:gap-1.5 @[480px]/cp:gap-2 pt-0.5">
+  <button
+  type="button"
+  onClick={onClear}
+  disabled={items.length === 0}
+  className="min-h-[28px] @[280px]/cp:min-h-[32px] @[480px]/cp:min-h-[36px] @[768px]/cp:min-h-[40px] rounded @[280px]/cp:rounded-md @[480px]/cp:rounded-lg border @[280px]/cp:border-2 border-red-300 bg-white text-red-600 font-semibold text-[10px] @[280px]/cp:text-[11px] @[480px]/cp:text-xs @[768px]/cp:text-sm hover:bg-red-50 active:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors touch-manipulation tracking-wide uppercase"
+  aria-label="Delete (clear cart)"
+  >
+  Delete
+  </button>
+  <button
+  type="button"
+  onClick={onHold}
+  disabled={items.length === 0 || !onHold}
+  className="min-h-[28px] @[280px]/cp:min-h-[32px] @[480px]/cp:min-h-[36px] @[768px]/cp:min-h-[40px] rounded @[280px]/cp:rounded-md @[480px]/cp:rounded-lg border @[280px]/cp:border-2 border-slate-300 bg-white text-slate-800 font-semibold text-[10px] @[280px]/cp:text-[11px] @[480px]/cp:text-xs @[768px]/cp:text-sm hover:bg-slate-50 active:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors touch-manipulation tracking-wide uppercase"
+  aria-label="Hold (save draft)"
+  >
+  Hold
+  </button>
+  <button
+  onClick={onPay}
+  disabled={!canPay}
+  className={`min-h-[28px] @[280px]/cp:min-h-[32px] @[480px]/cp:min-h-[36px] @[768px]/cp:min-h-[40px] rounded @[280px]/cp:rounded-md @[480px]/cp:rounded-lg text-white font-bold text-[10px] @[280px]/cp:text-[11px] @[480px]/cp:text-xs @[768px]/cp:text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation tracking-wide uppercase ${accentClasses}`}
+  >
+  Pay {items.length > 0 ? formatMoney(total) : ""}
+  </button>
+  </div>
+ ) : (
  <button
   onClick={onPay}
   disabled={!canPay}
-  className={`w-full flex items-center justify-center gap-2 text-white font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation ${showItemsSummaryAndDetail ? "py-2.5 min-h-[44px]" : "py-3 sm:py-4 min-h-[52px]"} ${accentClasses}`}
+  className={`w-full flex items-center justify-center gap-1 @[280px]/cp:gap-1.5 text-white font-bold rounded-md @[480px]/cp:rounded-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation ${showItemsSummaryAndDetail ? "py-1.5 @[280px]/cp:py-2 min-h-[32px] @[280px]/cp:min-h-[38px] text-[11px] @[280px]/cp:text-xs @[480px]/cp:text-sm font-semibold" : "py-1.5 @[280px]/cp:py-2 @[480px]/cp:py-2.5 min-h-[34px] @[280px]/cp:min-h-[40px] @[480px]/cp:min-h-[44px] text-xs @[280px]/cp:text-sm @[480px]/cp:text-base font-semibold"} ${accentClasses}`}
  >
-  <CreditCard className="h-5 w-5" />
+  <CreditCard className="h-3.5 w-3.5 @[280px]/cp:h-4 @[280px]/cp:w-4 @[480px]/cp:h-4.5 @[480px]/cp:w-4.5" />
   {primaryButtonLabel ?? (isWholesale ? "Complete Order" : "Pay")} {items.length > 0 ? formatMoney(total) : ""}
  </button>
+ )}
  </div>
  </div>
  );

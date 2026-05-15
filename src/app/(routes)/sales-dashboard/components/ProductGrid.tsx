@@ -12,58 +12,92 @@ const SUGGESTIONS_MAX = 8;
 /** Stable colorful themes per category name (hash) — matches app accent style. */
 const CARD_THEMES = [
  {
- border: "border-neutral-200/90",
- bg: "bg-white",
- hover: "hover:border-neutral-300",
- iconBg: "bg-orange-500",
+ border: "border-blue-300",
+ bg: "bg-blue-50/25",
+ hover: "hover:bg-blue-100/70 hover:border-blue-400",
+ iconBg: "bg-blue-500",
  iconFg: "text-white",
- price: "text-neutral-800",
- badge: "bg-neutral-100/90 text-neutral-900 ring-1 ring-neutral-200",
+ price: "text-blue-900",
+ badge: "bg-blue-100 text-blue-900 ring-1 ring-blue-200",
+ tab: "border-blue-300 text-blue-700 bg-blue-50",
+ tabActive: "bg-blue-600 text-white border-blue-600",
  },
  {
- border: "border-neutral-200/90",
- bg: "bg-white",
- hover: "hover:border-neutral-300",
- iconBg: "bg-orange-500",
- iconFg: "text-white",
- price: "text-neutral-800",
- badge: "bg-neutral-100 text-neutral-900 ring-1 ring-neutral-200",
- },
- {
- border: "border-neutral-200/90",
- bg: "bg-white",
- hover: "hover:border-neutral-300",
- iconBg: "bg-orange-500",
- iconFg: "text-white",
- price: "text-neutral-900",
- badge: "bg-neutral-100/90 text-amber-950 ring-1 ring-amber-200/80",
- },
- {
- border: "border-neutral-200/90",
- bg: "bg-white",
- hover: "hover:border-neutral-300",
- iconBg: "bg-orange-500",
+ border: "border-emerald-300",
+ bg: "bg-emerald-50/25",
+ hover: "hover:bg-emerald-100/70 hover:border-emerald-400",
+ iconBg: "bg-emerald-500",
  iconFg: "text-white",
  price: "text-emerald-900",
- badge: "bg-emerald-100/90 text-emerald-950 ring-1 ring-emerald-200/80",
+ badge: "bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200",
+ tab: "border-emerald-300 text-emerald-700 bg-emerald-50",
+ tabActive: "bg-emerald-600 text-white border-emerald-600",
  },
  {
- border: "border-rose-200/90",
- bg: "bg-white",
- hover: "hover:border-neutral-300",
- iconBg: "bg-orange-500",
+ border: "border-amber-300",
+ bg: "bg-amber-50/25",
+ hover: "hover:bg-amber-100/70 hover:border-amber-400",
+ iconBg: "bg-amber-500",
+ iconFg: "text-white",
+ price: "text-amber-900",
+ badge: "bg-amber-100 text-amber-900 ring-1 ring-amber-200",
+ tab: "border-amber-300 text-amber-800 bg-amber-50",
+ tabActive: "bg-amber-500 text-white border-amber-500",
+ },
+ {
+ border: "border-rose-300",
+ bg: "bg-rose-50/25",
+ hover: "hover:bg-rose-100/70 hover:border-rose-400",
+ iconBg: "bg-rose-500",
  iconFg: "text-white",
  price: "text-rose-900",
- badge: "bg-rose-100/90 text-rose-950 ring-1 ring-rose-200/80",
+ badge: "bg-rose-100 text-rose-900 ring-1 ring-rose-200",
+ tab: "border-rose-300 text-rose-700 bg-rose-50",
+ tabActive: "bg-rose-600 text-white border-rose-600",
  },
  {
- border: "border-neutral-200/90",
- bg: "bg-white",
- hover: "hover:border-neutral-300",
- iconBg: "bg-orange-500",
+ border: "border-violet-300",
+ bg: "bg-violet-50/25",
+ hover: "hover:bg-violet-100/70 hover:border-violet-400",
+ iconBg: "bg-violet-500",
  iconFg: "text-white",
- price: "text-neutral-900",
- badge: "bg-neutral-100/90 text-neutral-900 ring-1 ring-neutral-200",
+ price: "text-violet-900",
+ badge: "bg-violet-100 text-violet-900 ring-1 ring-violet-200",
+ tab: "border-violet-300 text-violet-700 bg-violet-50",
+ tabActive: "bg-violet-600 text-white border-violet-600",
+ },
+ {
+ border: "border-cyan-300",
+ bg: "bg-cyan-50/25",
+ hover: "hover:bg-cyan-100/70 hover:border-cyan-400",
+ iconBg: "bg-cyan-500",
+ iconFg: "text-white",
+ price: "text-cyan-900",
+ badge: "bg-cyan-100 text-cyan-900 ring-1 ring-cyan-200",
+ tab: "border-cyan-300 text-cyan-700 bg-cyan-50",
+ tabActive: "bg-cyan-600 text-white border-cyan-600",
+ },
+ {
+ border: "border-fuchsia-300",
+ bg: "bg-fuchsia-50/25",
+ hover: "hover:bg-fuchsia-100/70 hover:border-fuchsia-400",
+ iconBg: "bg-fuchsia-500",
+ iconFg: "text-white",
+ price: "text-fuchsia-900",
+ badge: "bg-fuchsia-100 text-fuchsia-900 ring-1 ring-fuchsia-200",
+ tab: "border-fuchsia-300 text-fuchsia-700 bg-fuchsia-50",
+ tabActive: "bg-fuchsia-600 text-white border-fuchsia-600",
+ },
+ {
+ border: "border-teal-300",
+ bg: "bg-teal-50/25",
+ hover: "hover:bg-teal-100/70 hover:border-teal-400",
+ iconBg: "bg-teal-500",
+ iconFg: "text-white",
+ price: "text-teal-900",
+ badge: "bg-teal-100 text-teal-900 ring-1 ring-teal-200",
+ tab: "border-teal-300 text-teal-700 bg-teal-50",
+ tabActive: "bg-teal-600 text-white border-teal-600",
  },
 ] as const;
 
@@ -175,24 +209,26 @@ function CategoryStrip({
   onPointerUp={onPointerUp}
   onPointerCancel={onPointerUp}
  >
-  {categories.map((cat) => (
+  {categories.map((cat) => {
+  const theme = themeForCategory(cat);
+  const isActive = categoryFilter === cat;
+  return (
   <button
   key={cat}
   type="button"
   onClick={(e) => { if (dragState.current.moved) { e.preventDefault(); return; } onCategoryChange(cat); }}
   className={cn(
-  "touch-manipulation rounded-lg font-medium whitespace-nowrap transition-all flex-shrink-0",
-  "min-h-[32px] px-2.5 py-1 text-xs sm:min-h-[34px] sm:px-3 sm:py-1.5 sm:text-sm",
-  categoryFilter === cat
-   ? "bg-blue-600 text-white shadow-sm"
-   : cat === "all"
-   ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
-   : cn("border bg-white text-gray-700 hover:bg-gray-50", themeForCategory(cat).border)
+  "touch-manipulation rounded-md font-semibold whitespace-nowrap transition-all flex-shrink-0 border shadow-sm",
+  "min-h-[26px] px-2 py-0.5 text-[11px] @[480px]/pg:min-h-[30px] @[480px]/pg:px-2.5 @[480px]/pg:py-1 @[480px]/pg:text-xs @[768px]/pg:min-h-[32px] @[768px]/pg:text-sm",
+  cat === "all"
+   ? (isActive ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50")
+   : (isActive ? theme.tabActive : theme.tab + " hover:brightness-95")
   )}
   >
   {cat === "all" ? "All" : cat}
   </button>
-  ))}
+  );
+  })}
  </div>
 
  {/* Right arrow */}
@@ -243,6 +279,8 @@ interface ProductGridProps {
  categoryIcons?: Record<string, string>;
  /** Show shimmer placeholders instead of "No products" when true */
  loading?: boolean;
+ /** "icon" (default): coloured-icon tile. "pos": Eposnow-style dark-blue top + white bottom strip with price. */
+ tileStyle?: "icon" | "pos";
 }
 
 export const ProductGrid: React.FC<ProductGridProps> = ({
@@ -259,6 +297,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
  hideSearch = false,
  categoryIcons = {},
  loading = false,
+ tileStyle = "icon",
 }) => {
  const [showSuggestions, setShowSuggestions] = useState(false);
  const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -294,7 +333,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
  return (
  <div
  className={cn(
- "flex h-full min-h-0 flex-col overflow-hidden",
+ "@container/pg flex h-full min-h-0 flex-col overflow-hidden",
  embedded
   ? "rounded-lg bg-transparent"
   : "rounded-lg border border-gray-200/80 bg-white"
@@ -372,17 +411,44 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
  onAddManualItem={onAddManualItem}
  />
 
- <div className={cn("flex-1 min-h-0 touch-scroll overflow-y-auto overflow-x-hidden", embedded ? "p-2 sm:p-2.5" : "p-3 sm:p-4")}>
- <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 sm:gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+ <div className={cn("flex-1 min-h-0 touch-scroll overflow-y-auto overflow-x-hidden", embedded ? "p-1.5 @[480px]/pg:p-2 @[768px]/pg:p-2.5" : "p-2 @[480px]/pg:p-3 @[768px]/pg:p-4")}>
+ <div className="grid grid-cols-2 gap-1.5 @[420px]/pg:gap-2 @[640px]/pg:grid-cols-3 @[640px]/pg:gap-2.5 @[900px]/pg:grid-cols-4 @[1200px]/pg:grid-cols-5">
   {products.map((product) => {
   const theme = themeForCategory(product.category);
+  if (tileStyle === "pos") {
+   return (
+   <button
+    key={product.sku}
+    type="button"
+    onClick={() => onAddToCart(product)}
+    className="group relative flex h-full min-h-[78px] w-full touch-manipulation flex-col overflow-hidden rounded-md border border-slate-900/10 bg-white text-left shadow-sm transition-all active:scale-[0.98] hover:-translate-y-0.5 hover:shadow-md @[480px]/pg:min-h-[92px] @[480px]/pg:rounded-lg @[768px]/pg:min-h-[100px]"
+   >
+    <div className="flex-1 min-h-0 bg-[#1e2a78] px-2 py-1.5 @[480px]/pg:px-2.5 @[480px]/pg:py-2">
+    <span className="line-clamp-3 text-[10px] font-semibold leading-tight text-white @[480px]/pg:text-[11px] @[768px]/pg:text-xs">
+     {product.name}
+    </span>
+    </div>
+    <div className="bg-white border-t border-slate-900/10 px-2 py-1 @[480px]/pg:px-2.5 @[480px]/pg:py-1.5">
+    <span className="text-[11px] font-semibold tabular-nums text-slate-900 @[480px]/pg:text-xs @[768px]/pg:text-sm">
+     {product.price}
+    </span>
+    </div>
+    <span
+    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-slate-700 opacity-0 shadow-sm ring-1 ring-slate-200 transition group-hover:opacity-100"
+    aria-hidden
+    >
+    <Plus className="h-3 w-3" strokeWidth={2.5} />
+    </span>
+   </button>
+   );
+  }
   return (
   <button
   key={product.sku}
   type="button"
   onClick={() => onAddToCart(product)}
   className={cn(
-   "group relative flex h-full min-h-[158px] w-full touch-manipulation flex-col items-center rounded-xl border-2 p-2.5 pb-2 text-center transition-all active:scale-[0.98] sm:min-h-[168px] sm:rounded-lg sm:p-3 sm:pb-2.5",
+   "group relative flex h-full min-h-[96px] w-full touch-manipulation flex-col items-center rounded-md border p-1.5 pb-1 text-center transition-all active:scale-[0.98] @[480px]/pg:min-h-[110px] @[480px]/pg:rounded-lg @[480px]/pg:border-2 @[480px]/pg:p-2 @[768px]/pg:min-h-[120px]",
    theme.bg,
    theme.border,
    theme.hover,
@@ -397,7 +463,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
   </span>
   <div
    className={cn(
-   "mb-1.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg sm:mb-2 sm:h-11 sm:w-11 sm:rounded-xl",
+   "mb-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md @[480px]/pg:mb-1.5 @[480px]/pg:h-8 @[480px]/pg:w-8 @[480px]/pg:rounded-lg",
    theme.iconBg
    )}
   >
@@ -405,26 +471,25 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
    const iconName = product.category ? categoryIcons[product.category] : undefined;
    const CategoryIcon = iconName ? getLucideIconByName(iconName) : null;
    return CategoryIcon ? (
-   <CategoryIcon className={cn("h-5 w-5 sm:h-[22px] sm:w-[22px]", theme.iconFg)} />
+   <CategoryIcon className={cn("h-3 w-3 @[480px]/pg:h-4 @[480px]/pg:w-4", theme.iconFg)} />
    ) : (
-   <Package className={cn("h-5 w-5 sm:h-[22px] sm:w-[22px]", theme.iconFg)} />
+   <Package className={cn("h-3 w-3 @[480px]/pg:h-4 @[480px]/pg:w-4", theme.iconFg)} />
    );
    })()}
   </div>
-  {/* Fixed block for two lines so every card aligns; row stretch + h-full matches tallest in row */}
-  <div className="flex min-h-[2.625rem] w-full flex-shrink-0 items-start justify-center px-0.5 sm:min-h-[2.875rem]">
-   <span className="line-clamp-2 w-full text-[11px] font-semibold leading-tight text-gray-900 sm:text-xs sm:leading-snug">
+  <div className="flex min-h-[1.75rem] w-full flex-shrink-0 items-start justify-center px-0.5 @[480px]/pg:min-h-[2.125rem]">
+   <span className="line-clamp-2 w-full text-[9px] font-semibold leading-tight text-gray-900 @[480px]/pg:text-[10px] @[768px]/pg:text-[11px]">
    {product.name}
    </span>
   </div>
-  <div className="mt-auto flex w-full flex-shrink-0 flex-col items-center gap-0.5 pt-1 sm:gap-1 sm:pt-1.5">
-   <span className={cn("text-sm font-bold tabular-nums sm:text-base", theme.price)}>
+  <div className="mt-auto flex w-full flex-shrink-0 flex-col items-center gap-0 pt-0.5 @[480px]/pg:gap-0.5">
+   <span className={cn("text-[11px] font-bold tabular-nums @[480px]/pg:text-xs @[768px]/pg:text-sm", theme.price)}>
    {product.price}
    </span>
    {product.category && (
    <span
    className={cn(
-   "inline-flex max-w-full justify-center truncate rounded px-1.5 py-0.5 text-center text-[9px] font-semibold uppercase leading-tight tracking-wide sm:text-[10px]",
+   "inline-flex max-w-full justify-center truncate rounded px-1 py-0 text-center text-[8px] font-semibold uppercase leading-tight tracking-wide @[480px]/pg:px-1.5 @[480px]/pg:text-[9px]",
    theme.badge
    )}
    title={product.category}

@@ -10,6 +10,7 @@ function getAuthHeaders(): HeadersInit {
 
 export interface InventorySettingsData {
  syncSalePriceToSameVariant: boolean;
+ syncAllLocations?: boolean;
 }
 
 export async function getInventorySettings(): Promise<{

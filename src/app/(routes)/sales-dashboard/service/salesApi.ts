@@ -40,6 +40,8 @@ export interface CreateRetailSalePayload {
  locationId?: string;
  /** Optional user-supplied invoice number. Empty → backend auto-generates INV-XXXXXX. */
  reference?: string;
+ /** Idempotency key for one checkout attempt — same id on retry returns the original sale instead of failing with "already sold". */
+ clientRequestId?: string;
 }
 
 /** Payload to create a wholesale order/sale */
@@ -62,6 +64,8 @@ export interface CreateWholesaleSalePayload {
  note?: string;
  /** Optional user-supplied invoice number. Empty → backend auto-generates INV-XXXXXX. */
  reference?: string;
+ /** Idempotency key for one checkout attempt — same id on retry returns the original sale instead of failing with "already sold". */
+ clientRequestId?: string;
 }
 
 export type CreateSalePayload = CreateRetailSalePayload | CreateWholesaleSalePayload;

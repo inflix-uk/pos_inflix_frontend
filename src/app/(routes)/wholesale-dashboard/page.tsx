@@ -30,6 +30,7 @@ import { customerApi } from "../peoples/customers/service/customerApi";
 import { supplierApi } from "../peoples/suppliers/service/supplierApi";
 import { AddCustomerModal } from "../peoples/customers/components";
 import { getGeneralSettings } from "../settings/sales/service/generalSettingsApi";
+import { getInventorySettings } from "../settings/general/service/inventorySettingsApi";
 import type { Customer, CustomerFormData } from "../peoples/customers/types";
 import { FileText, ChevronDown, Package, PanelRightOpen, MapPin, Trash2, Building2 } from "lucide-react";
 import { categoryApi } from "../inventory/category/service/categoryApi";
@@ -288,6 +289,28 @@ const Page = () => {
  return null;
  }
  });
+ const [syncAllLocations, setSyncAllLocations] = useState<boolean>(() => {
+ if (typeof window === "undefined") return false;
+ try { return sessionStorage.getItem("create-sales-syncAllLocations") === "1"; } catch { return false; }
+ });
+
+ useEffect(() => {
+ let cancelled = false;
+ getInventorySettings()
+ .then((res) => {
+ if (cancelled) return;
+ if (res?.success && res.data) {
+  const v = res.data.syncAllLocations === true;
+  setSyncAllLocations(v);
+  try { sessionStorage.setItem("create-sales-syncAllLocations", v ? "1" : "0"); } catch {}
+ }
+ })
+ .catch(() => {});
+ return () => { cancelled = true; };
+ }, []);
+
+ // When syncAllLocations is on, ignore the per-location filter so all inventory is visible.
+ const inventoryLocationId = syncAllLocations ? null : selectedLocationId;
 
  // ── Locations: own fast-path so selectedLocationId is set ASAP (products depend on it) ──
  useEffect(() => {
@@ -488,7 +511,7 @@ const Page = () => {
 
  const { products: inventoryProducts, soldInfoMap, loading: productsLoading, error: productsError, refetch: refetchProducts } = useInventoryProductsForSales({
  pricingGroupId: customerPricingGroupId,
- locationId: selectedLocationId,
+ locationId: inventoryLocationId,
  });
 
  // On mount: clear serial lookup cache so first add-by-serial uses latest price (e.g. after returning from Rate List).
@@ -782,7 +805,7 @@ const Page = () => {
  const { results: typeaheadResults } = useSalesItemTypeahead({
  query: search,
  pricingGroupId: customerPricingGroupId,
- locationId: selectedLocationId,
+ locationId: inventoryLocationId,
  limit: 12,
  });
  const cartSearchSuggestions = useMemo(() => {
@@ -807,7 +830,7 @@ const Page = () => {
   : "none";
 
  return (
- <div className="@container h-full min-h-0 flex flex-col overflow-hidden bg-gray-100">
+ <div className={`@container h-full min-h-0 flex flex-col overflow-hidden ${retailModeEnabled ? "bg-[#f1f1f9]" : "bg-gray-100"}`}>
  {message.text && (
  <div
   className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] px-4 py-3 rounded-lg shadow-lg text-xs @[640px]:text-sm font-medium max-w-[calc(100vw-1rem)] break-words text-center ${
@@ -821,168 +844,12 @@ const Page = () => {
  )}
 
  <div className="flex-1 min-h-0 flex flex-col p-1.5 @[480px]:p-2 @[640px]:p-3 @[768px]:p-4 @[1024px]:p-5 gap-1.5 @[640px]:gap-2 @[768px]:gap-3 overflow-hidden">
- {/* ── Toolbar ── */}
- <div className="flex-shrink-0 rounded-xl border border-gray-200 bg-white shadow-sm">
-  {/* Retail mode: stepper row */}
-  {retailModeEnabled && (
-  <div className="flex flex-col @[640px]:flex-row @[640px]:items-center gap-2 px-4 py-2 border-b border-gray-100">
-  <div className="flex items-center gap-2 shrink-0">
-  <span className="text-xs @[640px]:text-sm font-semibold text-gray-800">Create Sales</span>
-  <span className="inline-flex items-center px-1.5 @[640px]:px-2 py-0.5 rounded-md text-[10px] @[640px]:text-xs font-semibold uppercase tracking-wide bg-neutral-100 text-neutral-700">Retail</span>
-  <HelpTip ariaLabel="Create sales workflow">
-   <p><strong className="font-semibold">Retail:</strong> walk-in mode — add items without choosing an account first.</p>
-   <p className="mt-2"><strong className="font-semibold">Drafts:</strong> save the current cart for today only; up to 3 drafts; cleared at midnight.</p>
-  </HelpTip>
-  </div>
-  <WholesaleStepper
-  currentStep={currentStep}
-  step1Valid={!!selectedCustomer || retailModeEnabled}
-  step2Valid={cartItemCount > 0}
-  step3Valid={canComplete}
-  embedded
-  className="min-w-0"
-  />
-  </div>
-  )}
-
-  {/* Single-row controls: Title + Customer + Location + Drafts */}
-  <div className="flex flex-wrap items-center gap-1.5 @[640px]:gap-2 px-2 @[640px]:px-3 py-1.5 @[640px]:py-2">
-  {/* Title + badge (wholesale only — retail has its own header row above). Hidden on narrow widths to save space. */}
-  {!retailModeEnabled && (
-  <div className="hidden @[480px]:flex items-center gap-1.5 @[640px]:gap-2 shrink-0 mr-1">
-  <div className="w-7 h-7 @[640px]:w-8 @[640px]:h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white flex-shrink-0">
-   <Building2 className="h-3.5 w-3.5 @[640px]:h-4 @[640px]:w-4" />
-  </div>
-  <h1 className="text-xs @[640px]:text-sm font-bold text-gray-900 whitespace-nowrap">Create Sales</h1>
-  <span className="inline-flex items-center px-1 @[640px]:px-1.5 py-0.5 rounded-md text-[9px] @[640px]:text-[10px] font-semibold uppercase tracking-wide bg-blue-100 text-blue-700">Wholesale</span>
-  <div className="w-px h-5 @[640px]:h-6 bg-gray-200 ml-1" />
-  </div>
-  )}
-
-  {/* Customer select */}
-  <CustomerAccountSelect
-  ref={customerSelectRef}
-  value={selectedCustomer}
-  onChange={setSelectedCustomer}
-  required={!retailModeEnabled}
-  placeholder={retailModeEnabled ? "Walk-in (or select)" : "Select customer *"}
-  onAddCustomerClick={() => setAddCustomerModalOpen(true)}
-  compact
-  className="flex-1 @[640px]:flex-initial min-w-[140px] @[640px]:min-w-[180px] max-w-full @[640px]:max-w-[260px]"
-  />
-
-  {/* Location */}
-  {locations.length > 0 && (
-  <div className="flex items-center gap-1.5 shrink-0">
-  <MapPin className="h-4 w-4 text-gray-400 shrink-0" />
-  <select
-   value={selectedLocationId ?? ""}
-   onChange={(e) => handleLocationChange(e.target.value)}
-   className="rounded-lg border border-gray-300 bg-white px-2 @[640px]:px-2.5 py-1.5 @[640px]:py-2 text-xs @[640px]:text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[34px] @[640px]:min-h-[40px]"
-   aria-label="Sale location"
-  >
-   {locations.map((loc) => (
-   <option key={loc._id} value={loc._id}>
-   {loc.name}
-   </option>
-   ))}
-  </select>
-  </div>
-  )}
-
-  {/* Customer context (inline when selected) */}
-  {selectedCustomer && (
-  <CustomerContextStrip
-  customer={selectedCustomer}
-  previousBalance={
-   previousBalanceForModal ??
-   ("balance" in selectedCustomer && typeof selectedCustomer.balance === "number"
-   ? selectedCustomer.balance
-   : 0)
-  }
-  className="shrink-0"
-  />
-  )}
-
-  <div className="flex-1 min-w-[8px]" />
-
-  {/* Draft controls */}
-  <div className="flex items-center gap-1.5 shrink-0">
-  <button
-  type="button"
-  onClick={handleSaveDraft}
-  className="flex items-center gap-1 @[640px]:gap-1.5 px-2 @[640px]:px-2.5 py-1.5 @[640px]:py-2 min-h-[34px] @[640px]:min-h-[40px] rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 active:bg-gray-100 text-xs @[640px]:text-sm font-medium transition-colors"
-  aria-label="Save draft"
-  >
-  <FileText className="h-3.5 w-3.5 @[640px]:h-4 @[640px]:w-4 shrink-0" />
-  <span className="hidden @[420px]:inline">Save draft</span>
-  </button>
-  <div className="relative shrink-0" ref={draftsRef}>
-  <button
-   type="button"
-   onClick={() => {
-   setDrafts(loadDraftsFromStorage());
-   setDraftsOpen((v) => !v);
-   }}
-   className="flex items-center gap-1 @[640px]:gap-1.5 px-2 @[640px]:px-2.5 py-1.5 @[640px]:py-2 min-h-[34px] @[640px]:min-h-[40px] rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 active:bg-gray-100 text-xs @[640px]:text-sm font-medium transition-colors"
-   aria-label="Open drafts"
-  >
-   Drafts{drafts.length > 0 ? ` (${drafts.length})` : ""}
-   <ChevronDown className="h-3.5 w-3.5 @[640px]:h-4 @[640px]:w-4 shrink-0" />
-  </button>
-  {draftsOpen && (
-   <div className="absolute right-0 top-full mt-1 w-72 max-w-[calc(100vw-1rem)] max-h-64 overflow-auto bg-white rounded-xl border border-gray-200 shadow-lg z-20 py-1">
-   {drafts.length === 0 ? (
-   <div className="px-3 @[640px]:px-4 py-2 @[640px]:py-3 flex items-start gap-2 text-xs @[640px]:text-sm text-gray-600">
-   <span>No drafts from today.</span>
-   <HelpTip align="end" ariaLabel="About drafts" iconClassName="h-3.5 w-3.5">
-    Save draft to store this order. Drafts are kept for today only and clear at midnight (max 3).
-   </HelpTip>
-   </div>
-   ) : (
-   <>
-   {drafts.map((d) => {
-    const itemCount = d.cart.reduce((s, i) => s + i.quantity, 0);
-    const draftTotal = d.cart.reduce(
-    (s, i) => s + parseFloat(String(i.price).replace(/[^0-9.-]/g, "")) * i.quantity,
-    0
-    );
-    const timeStr = d.savedAt ? formatDateTimeLondon(d.savedAt) : "";
-    return (
-    <button
-    key={d.id}
-    type="button"
-    role="option"
-    onClick={() => handleRestoreDraft(d)}
-    className="w-full text-left px-3 @[640px]:px-4 py-2 @[640px]:py-3 hover:bg-gray-50 text-xs @[640px]:text-sm border-b border-gray-100 last:border-b-0"
-    >
-    <span className="font-medium text-gray-900 block truncate">
-    {d.customer?.name ?? "No customer"}
-    </span>
-    <span className="text-gray-500 text-[10px] @[640px]:text-xs block mt-0.5">
-    {itemCount} item{itemCount === 1 ? "" : "s"} · £{draftTotal.toFixed(2)} · {timeStr}
-    </span>
-    </button>
-    );
-   })}
-   <div className="px-4 py-2 border-t border-gray-100 mt-1 flex items-center justify-end">
-    <HelpTip align="end" ariaLabel="Draft retention" iconClassName="h-3.5 w-3.5 text-gray-400">
-    Drafts are from today only: cleared at midnight, maximum 3 saved.
-    </HelpTip>
-   </div>
-   </>
-   )}
-   </div>
-  )}
-  </div>
-  </div>
-  </div>
- </div>
+ {/* Top customer-context toolbar removed — context info available inline in the toolbar and Complete Order modal. */}
 
  {/* ── Always-visible add bar: search + action buttons (pinned at top) ── */}
- <div className="flex-shrink-0 rounded-xl border border-gray-200 bg-white shadow-sm px-2.5 py-2 @[640px]:px-3">
-  <div className="flex flex-col gap-1.5 @[640px]:flex-row @[640px]:items-center @[640px]:gap-2">
-  <div className="flex-1 min-w-0 @[640px]:max-w-[60%]">
+ <div className="flex-shrink-0 rounded-lg border border-gray-200 bg-white shadow-sm px-1.5 py-1 @[640px]:px-2 @[640px]:py-1.5">
+  <div className="flex flex-nowrap items-center gap-1 @[640px]:gap-1.5 [overflow-x:clip] [overflow-y:visible]">
+  <div className="flex-1 min-w-[120px] max-w-[40%]">
   <UnifiedAddInput
    value={search}
    onChange={setSearch}
@@ -1001,16 +868,17 @@ const Page = () => {
    }}
    id="wholesale-unified-add"
    aria-label="Add item by scan or search. Press Enter to add. Ctrl+K to focus."
-   className="h-10 text-sm @[640px]:h-11 @[640px]:text-base"
+   className="h-7 text-[11px] @[640px]:h-8 @[640px]:text-xs rounded-md"
   />
   </div>
-  <div className="relative shrink-0 w-full @[640px]:w-44">
+  {!retailModeEnabled && (
+  <div className="relative shrink-0 w-20 @[640px]:w-28">
   <input
    id="wholesale-invoice-number"
    type="text"
    value={customReference}
    onChange={(e) => setCustomReference(e.target.value.slice(0, 32))}
-   placeholder="Invoice # (auto)"
+   placeholder="Inv #"
    autoComplete="off"
    spellCheck={false}
    title={
@@ -1020,7 +888,7 @@ const Page = () => {
    : refStatus === "checking" ? "Checking…"
    : "Leave empty to auto-generate INV-XXXXXX"
    }
-   className={`h-10 @[640px]:h-11 w-full text-xs @[640px]:text-sm uppercase tracking-wide text-gray-900 placeholder-gray-400 placeholder:normal-case placeholder:tracking-normal border rounded-lg px-2.5 pr-7 focus:outline-none focus:ring-1 ${
+   className={`h-7 @[640px]:h-8 w-full text-[11px] @[640px]:text-xs uppercase tracking-wide text-gray-900 placeholder-gray-400 placeholder:normal-case placeholder:tracking-normal border rounded-md px-1.5 pr-5 focus:outline-none focus:ring-1 ${
    refStatus === "available"
    ? "border-green-500 ring-green-200 focus:ring-green-400 focus:border-green-500 bg-green-50"
    : refStatus === "taken" || refStatus === "invalid"
@@ -1028,18 +896,47 @@ const Page = () => {
    : "border-gray-300 focus:ring-blue-400 focus:border-blue-400"
    }`}
   />
-  <div className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs">
-   {refStatus === "checking" && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />}
+  <div className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px]">
+   {refStatus === "checking" && <Loader2 className="h-3 w-3 animate-spin text-gray-400" />}
    {refStatus === "available" && <span className="text-green-600 font-bold">✓</span>}
    {(refStatus === "taken" || refStatus === "invalid") && <span className="text-red-600 font-bold">✕</span>}
   </div>
   </div>
-  <div className="flex flex-wrap gap-1.5 shrink-0">
+  )}
+  <CustomerAccountSelect
+   ref={customerSelectRef}
+   value={selectedCustomer}
+   onChange={setSelectedCustomer}
+   required={!retailModeEnabled}
+   placeholder={retailModeEnabled ? "Walk-in Customer" : "Customer *"}
+   onAddCustomerClick={() => setAddCustomerModalOpen(true)}
+   compact
+   className={retailModeEnabled ? "ml-auto min-w-[160px] @[640px]:min-w-[180px] max-w-[220px] @[768px]:max-w-[240px]" : "min-w-[90px] @[640px]:min-w-[110px] max-w-[140px] @[768px]:max-w-[160px]"}
+  />
+  {locations.length > 0 && (
+   <div className="relative shrink-0 h-7 @[640px]:h-8">
+   <MapPin className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-500" />
+   <select
+    value={selectedLocationId ?? ""}
+    onChange={(e) => handleLocationChange(e.target.value)}
+    className={`h-full appearance-none rounded-md border border-gray-300 bg-white pl-6 pr-5 text-[11px] @[640px]:text-xs font-medium text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${retailModeEnabled ? "min-w-[120px] @[640px]:min-w-[140px]" : ""}`}
+    aria-label="Sale location"
+   >
+    {locations.map((loc) => (
+    <option key={loc._id} value={loc._id}>
+     {loc.name}
+    </option>
+    ))}
+   </select>
+   <ChevronDown className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-500" />
+   </div>
+  )}
+  {!retailModeEnabled && (
   <button
    type="button"
    onClick={() => setBulkDrawerOpen(true)}
    disabled={!selectedCustomer && !retailModeEnabled}
-   className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 @[640px]:px-2.5 @[640px]:text-sm"
+   className="inline-flex items-center justify-center gap-1 h-7 @[640px]:h-8 rounded-md border border-gray-300 bg-white px-1.5 @[640px]:px-2 text-[11px] @[640px]:text-xs font-medium text-gray-700 whitespace-nowrap hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 shrink-0"
    title={
    selectedCustomer || retailModeEnabled
    ? "Paste or upload bulk IMEIs"
@@ -1047,45 +944,121 @@ const Page = () => {
    }
    aria-label="Bulk IMEIs"
   >
-   <Package className="h-3.5 w-3.5 shrink-0 @[640px]:h-4 @[640px]:w-4" /> Bulk IMEIs
+   <Package className="h-3 w-3 shrink-0" />
+   <span>Bulk</span>
   </button>
+  )}
+  {!retailModeEnabled && (
   <button
    type="button"
    onClick={() => setProductPanelOpen((v) => !v)}
-   className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 @[640px]:px-2.5 @[640px]:text-sm"
+   className="inline-flex items-center justify-center gap-1 h-7 @[640px]:h-8 rounded-md border border-gray-300 bg-white px-1.5 @[640px]:px-2 text-[11px] @[640px]:text-xs font-medium text-gray-700 whitespace-nowrap hover:bg-gray-50 shrink-0"
    aria-label={productPanelOpen ? "Hide product grid" : "Show product grid"}
+   title={productPanelOpen ? "Hide products" : "Show products"}
   >
-   <PanelRightOpen className="h-3.5 w-3.5 shrink-0 @[640px]:h-4 @[640px]:w-4" />{" "}
-   {productPanelOpen ? "Hide products" : "Show products"}
+   <PanelRightOpen className="h-3 w-3 shrink-0" />
+   <span>{productPanelOpen ? "Hide" : "Show"}</span>
   </button>
+  )}
+  {!retailModeEnabled && (
   <button
    type="button"
-   onClick={() => setManualItemModalOpen(true)}
-   disabled={!selectedCustomer && !retailModeEnabled}
-   className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-neutral-50/80 px-2 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-100/80 disabled:cursor-not-allowed disabled:opacity-50 @[640px]:px-2.5 @[640px]:text-sm"
-   title={selectedCustomer || retailModeEnabled ? "Add manual item" : "Select customer first."}
-   aria-label="Add manual item"
+   onClick={handleSaveDraft}
+   className="inline-flex items-center justify-center gap-1 h-7 @[640px]:h-8 rounded-md border border-gray-300 bg-white px-1.5 @[640px]:px-2 text-[11px] @[640px]:text-xs font-medium text-gray-700 whitespace-nowrap hover:bg-gray-50 shrink-0"
+   aria-label="Save draft"
+   title="Save current cart as a draft"
   >
-   + Manual item
+   <FileText className="h-3 w-3 shrink-0" />
+   <span>Save</span>
   </button>
+  )}
+  {!retailModeEnabled && (
+  <div className="relative shrink-0" ref={draftsRef}>
+   <button
+    type="button"
+    onClick={() => {
+    setDrafts(loadDraftsFromStorage());
+    setDraftsOpen((v) => !v);
+    }}
+    className="inline-flex items-center justify-center gap-1 h-7 @[640px]:h-8 rounded-md border border-gray-300 bg-white px-1.5 @[640px]:px-2 text-[11px] @[640px]:text-xs font-medium text-gray-700 whitespace-nowrap hover:bg-gray-50"
+    aria-label="Open drafts"
+    title="Open saved drafts"
+   >
+    <span>Drafts{drafts.length > 0 ? ` (${drafts.length})` : ""}</span>
+    <ChevronDown className="h-3 w-3 shrink-0" />
+   </button>
+   {draftsOpen && (
+    <>
+    <div
+     className="fixed inset-0 z-40 bg-black/30 sm:hidden"
+     onClick={() => setDraftsOpen(false)}
+     aria-hidden="true"
+    />
+    <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(20rem,calc(100vw-1.5rem))] max-h-[70vh] overflow-auto bg-white rounded-xl border border-gray-200 shadow-xl z-50 py-1 sm:absolute sm:left-auto sm:top-full sm:right-0 sm:translate-x-0 sm:translate-y-0 sm:mt-1 sm:w-72 sm:max-w-[calc(100vw-1rem)] sm:max-h-64 sm:shadow-lg sm:z-20">
+    {drafts.length === 0 ? (
+    <div className="px-3 @[640px]:px-4 py-2 @[640px]:py-3 flex items-start gap-2 text-xs @[640px]:text-sm text-gray-600">
+    <span>No drafts from today.</span>
+    <HelpTip align="end" ariaLabel="About drafts" iconClassName="h-3.5 w-3.5">
+     Save draft to store this order. Drafts are kept for today only and clear at midnight (max 3).
+    </HelpTip>
+    </div>
+    ) : (
+    <>
+    {drafts.map((d) => {
+     const itemCount = d.cart.reduce((s, i) => s + i.quantity, 0);
+     const draftTotal = d.cart.reduce(
+     (s, i) => s + parseFloat(String(i.price).replace(/[^0-9.-]/g, "")) * i.quantity,
+     0
+     );
+     const timeStr = d.savedAt ? formatDateTimeLondon(d.savedAt) : "";
+     return (
+     <button
+     key={d.id}
+     type="button"
+     role="option"
+     onClick={() => handleRestoreDraft(d)}
+     className="w-full text-left px-3 @[640px]:px-4 py-2 @[640px]:py-3 hover:bg-gray-50 text-xs @[640px]:text-sm border-b border-gray-100 last:border-b-0"
+     >
+     <span className="font-medium text-gray-900 block truncate">
+     {d.customer?.name ?? "No customer"}
+     </span>
+     <span className="text-gray-500 text-[10px] @[640px]:text-xs block mt-0.5">
+     {itemCount} item{itemCount === 1 ? "" : "s"} · £{draftTotal.toFixed(2)} · {timeStr}
+     </span>
+     </button>
+     );
+    })}
+    <div className="px-4 py-2 border-t border-gray-100 mt-1 flex items-center justify-end">
+     <HelpTip align="end" ariaLabel="Draft retention" iconClassName="h-3.5 w-3.5 text-gray-400">
+     Drafts are from today only: cleared at midnight, maximum 3 saved.
+     </HelpTip>
+    </div>
+    </>
+    )}
+    </div>
+    </>
+   )}
+  </div>
+  )}
   {cart.length > 0 && (
    <button
    type="button"
    onClick={clearCart}
-   className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50/80 px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100/80 @[640px]:px-2.5 @[640px]:text-sm"
+   className="inline-flex items-center justify-center gap-1 h-7 @[640px]:h-8 rounded-md border border-red-200 bg-red-50/80 px-1.5 @[640px]:px-2 text-[11px] @[640px]:text-xs font-medium text-red-600 whitespace-nowrap hover:bg-red-100/80 shrink-0"
    aria-label="Clear cart"
+   title="Clear cart"
    >
-   <Trash2 className="h-3.5 w-3.5 shrink-0 @[640px]:h-4 @[640px]:w-4" /> Clear cart
+   <Trash2 className="h-3 w-3 shrink-0" />
+   <span>Clear</span>
    </button>
   )}
-  </div>
   </div>
  </div>
 
  <div className="flex-1 min-h-0 flex flex-col @[1024px]:flex-row gap-2 @[640px]:gap-3 overflow-hidden">
   {/* Left panel: Product grid — toggled by "Show/Hide products" */}
   {productPanelOpen && (
-  <div className="flex-1 min-w-0 @[1024px]:basis-0 min-h-0 overflow-hidden flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm">
+  <div className={`flex-1 min-w-0 ${retailModeEnabled ? "@[1024px]:basis-[60%] @[1024px]:flex-[6]" : "@[1024px]:basis-0"} min-h-0 overflow-hidden flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm`}>
   <div className="min-h-0 flex-1 overflow-auto p-2 @[640px]:p-2.5 relative">
   {productsLoading && (
    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white rounded-xl">
@@ -1125,6 +1098,7 @@ const Page = () => {
    hideSearch
    categoryIcons={categoryIcons}
    loading={productsLoading}
+   tileStyle="icon"
    />
   )}
   </div>
@@ -1132,9 +1106,9 @@ const Page = () => {
   )}
 
   {/* Right panel: Cart / Current order */}
-  <div className="flex min-h-0 min-w-0 flex-1 @[1024px]:basis-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-  <div className="flex-shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-gray-100">
-  <h2 className="text-xs @[640px]:text-sm font-semibold text-gray-900">
+  <div className={`flex min-h-0 min-w-0 flex-1 ${retailModeEnabled ? "@[1024px]:basis-[40%] @[1024px]:flex-[4]" : "@[1024px]:basis-0"} flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm`}>
+  <div className="flex-shrink-0 flex items-center justify-between px-2.5 py-1 border-b border-gray-100">
+  <h2 className="text-[11px] @[640px]:text-xs font-semibold text-gray-900">
   Current order{cartItemCount > 0 ? ` (${cartItemCount})` : ""}
   </h2>
   <button
@@ -1148,18 +1122,25 @@ const Page = () => {
   </button>
   </div>
   <div className={`flex-1 min-h-0 overflow-auto flex flex-col ${orderSummaryCollapsed ? "hidden @[1024px]:flex" : ""}`}>
-  <div className="px-3 pt-2 pb-1 border-b border-gray-100">
-  <label htmlFor="wholesale-sale-note" className="block text-[11px] font-medium text-gray-600 mb-1">
-   Note
-  </label>
+  <div className="px-2.5 pt-1 pb-1 border-b border-gray-100 flex items-stretch gap-1.5">
   <textarea
    id="wholesale-sale-note"
    value={saleNote}
    onChange={(e) => setSaleNote(e.target.value.slice(0, 2000))}
-   placeholder="Add a note for this order (optional)"
-   rows={2}
-   className="w-full text-xs @[640px]:text-sm text-gray-900 placeholder-gray-400 border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400 resize-y"
+   placeholder="Add a note (optional)"
+   rows={1}
+   className="flex-1 min-w-0 text-[11px] @[640px]:text-xs text-gray-900 placeholder-gray-400 border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400 resize-y"
   />
+  <button
+   type="button"
+   onClick={() => setManualItemModalOpen(true)}
+   disabled={!selectedCustomer && !retailModeEnabled}
+   className="shrink-0 inline-flex items-center justify-center gap-1 h-7 @[640px]:h-8 rounded-md border border-neutral-200 bg-neutral-50/80 px-2 text-[11px] @[640px]:text-xs font-medium text-neutral-900 whitespace-nowrap hover:bg-neutral-100/80 disabled:cursor-not-allowed disabled:opacity-50"
+   title={selectedCustomer || retailModeEnabled ? "Add MISC item" : "Select customer first."}
+   aria-label="Add MISC item"
+  >
+   + MISC
+  </button>
   </div>
   {cart.length === 0 ? (
   <div className="p-3">
@@ -1204,8 +1185,10 @@ const Page = () => {
    }
    accent="blue"
    collapsibleLines
-   showItemsSummaryAndDetail
-   primaryButtonLabel="Complete order"
+   showItemsSummaryAndDetail={!retailModeEnabled}
+   prominentTotals={retailModeEnabled}
+   primaryButtonLabel={retailModeEnabled ? "Pay" : "Complete order"}
+   onHold={retailModeEnabled ? handleSaveDraft : undefined}
    categoryVariantSlugOrderByCategoryId={categoryVariantSlugOrderByCategoryId}
   />
   )}
@@ -1286,6 +1269,7 @@ const Page = () => {
   note: saleNote.trim(),
   ...(trimmedRef ? { reference: trimmedRef } : {}),
   ...(selectedLocationId ? { locationId: selectedLocationId } : {}),
+  ...(details.clientRequestId ? { clientRequestId: details.clientRequestId } : {}),
   };
   const result = await orderWriter.createSale(payload);
   const createOrderMs = Math.round(performance.now() - createOrderStart);

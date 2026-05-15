@@ -9,6 +9,9 @@ import React, { createContext, useContext } from "react";
  */
 const CartTaxSlotContext = createContext<React.ReactNode | null>(null);
 
+export type CartTaxConfig = { rate: number; type: "percentage" | "flat" } | null;
+const CartTaxConfigContext = createContext<CartTaxConfig>(null);
+
 export function CartTaxSlotProvider({
  value,
  children,
@@ -19,6 +22,20 @@ export function CartTaxSlotProvider({
  return <CartTaxSlotContext.Provider value={value}>{children}</CartTaxSlotContext.Provider>;
 }
 
+export function CartTaxConfigProvider({
+ value,
+ children,
+}: {
+ value: CartTaxConfig;
+ children: React.ReactNode;
+}) {
+ return <CartTaxConfigContext.Provider value={value}>{children}</CartTaxConfigContext.Provider>;
+}
+
 export function useCartTaxSlot(): React.ReactNode | null {
  return useContext(CartTaxSlotContext);
+}
+
+export function useCartTaxConfig(): CartTaxConfig {
+ return useContext(CartTaxConfigContext);
 }

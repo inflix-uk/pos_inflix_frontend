@@ -58,7 +58,7 @@ export function EmptyCartQuickActions({
   <ScanLine className="h-3.5 w-3.5 shrink-0" />
   Scan / search
  </button>
- {showProductGridAction && (
+ {showProductGridAction && !retailMode && (
   <button
   type="button"
   onClick={onShowProducts}
@@ -70,6 +70,7 @@ export function EmptyCartQuickActions({
   Products
   </button>
  )}
+ {!retailMode && (
  <button
   type="button"
   onClick={onPasteImeis}
@@ -81,17 +82,18 @@ export function EmptyCartQuickActions({
   <ClipboardList className="h-3.5 w-3.5 shrink-0" />
   Bulk IMEIs
  </button>
+ )}
  <button
   type="button"
   onClick={onAddManualItem}
   disabled={!canAct}
   className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-neutral-50/90 px-3 py-2 text-xs font-medium text-neutral-900 hover:bg-neutral-100/90 disabled:cursor-not-allowed disabled:opacity-50"
-  aria-label="Add manual item"
+  aria-label="Add MISC item"
  >
   <Plus className="h-3.5 w-3.5 shrink-0" />
-  Manual
+  MISC Item
  </button>
- {hasDrafts && (
+ {hasDrafts && !retailMode && (
   <button
   type="button"
   onClick={onLoadDraft}

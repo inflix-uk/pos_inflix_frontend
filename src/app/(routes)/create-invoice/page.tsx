@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Loader2, RotateCcw, Percent } from "lucide-react";
 import WholesaleDashboardPage from "../wholesale-dashboard/page";
-import { CartTaxSlotProvider } from "../sales-dashboard/components/CartTaxSlotContext";
+import { CartTaxSlotProvider, CartTaxConfigProvider, type CartTaxConfig } from "../sales-dashboard/components/CartTaxSlotContext";
 import { SearchableSelect } from "../purchases/add/components/SearchableSelect";
 import { OrderWriterProvider, type OrderWriter } from "../wholesale-dashboard/components/OrderWriterContext";
 import { invoicesApi } from "../invoice-online-order/service/invoicesApi";
@@ -173,11 +173,20 @@ export default function CreateInvoicePage() {
   [selectedId],
  );
 
+ const taxConfig = useMemo<CartTaxConfig>(() => {
+  const selected = taxes.find((t) => t._id === selectedId);
+  if (!selected) return null;
+  const type: "percentage" | "flat" = selected.type === "fixed" || selected.type === "flat" ? "flat" : "percentage";
+  return { rate: Number(selected.rate) || 0, type };
+ }, [taxes, selectedId]);
+
  return (
   <OrderWriterProvider value={writer}>
-   <CartTaxSlotProvider value={slot}>
-    <WholesaleDashboardPage />
-   </CartTaxSlotProvider>
+   <CartTaxConfigProvider value={taxConfig}>
+    <CartTaxSlotProvider value={slot}>
+     <WholesaleDashboardPage />
+    </CartTaxSlotProvider>
+   </CartTaxConfigProvider>
   </OrderWriterProvider>
  );
 }
