@@ -125,6 +125,8 @@ export const useSalesDashboard = (options?: {
  pricingGroupId?: string | null;
  /** Pre-loaded category names so category buttons appear before products load. */
  categoriesOverride?: string[] | null;
+ /** When true, refuse cart adds/increases that would exceed on-hand inventory (product.qty). */
+ blockNegativeStock?: boolean;
 }) => {
  const { products: contextProducts } = useProducts();
  const productsOverride = options?.productsOverride;
@@ -132,6 +134,7 @@ export const useSalesDashboard = (options?: {
  const draftStorageKey = options?.draftStorageKey ?? null;
  const locationId = options?.locationId ?? null;
  const pricingGroupId = options?.pricingGroupId ?? undefined;
+ const blockNegativeStock = options?.blockNegativeStock ?? false;
 
  const products = useMemo(() => {
   // When override is an array (including empty), use it so wholesale can show only real inventory
@@ -157,6 +160,8 @@ export const useSalesDashboard = (options?: {
   }));
  }, [productsOverride, contextProducts]);
  const [cart, setCart] = useState<CartLineItem[]>([]);
+ const cartStateRef = useRef<CartLineItem[]>([]);
+ cartStateRef.current = cart;
  const [search, setSearch] = useState("");
  const [categoryFilter, setCategoryFilter] = useState<string>("all");
  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -211,6 +216,14 @@ export const useSalesDashboard = (options?: {
   [products]
  );
 
+ const inventoryBySku = useMemo(() => {
+  const m = new Map<string, number>();
+  for (const p of posProducts) {
+   if (p.qty != null) m.set(p.sku, Number(p.qty));
+  }
+  return m;
+ }, [posProducts]);
+
  // Precompute a single lowercase haystack per product. Built once when posProducts changes;
  // the search filter then runs a single `indexOf` per row instead of lowercasing 5 fields per keystroke.
  const productSearchIndex = useMemo<string[]>(() => {
@@ -253,6 +266,20 @@ export const useSalesDashboard = (options?: {
   const isSerialItem = !!product.serialNumber;
   // Non-serial: allow oversell (cart can exceed stock; inventory may go negative)
   const addedQty = isSerialItem ? 1 : Math.max(1, qty);
+  if (blockNegativeStock && !isSerialItem && product.qty != null) {
+   const stock = Number(product.qty);
+   const existing = cartStateRef.current.find((i) => i.sku === product.sku);
+   const inCart = existing?.quantity ?? 0;
+   if (inCart + addedQty > stock) {
+    const remaining = Math.max(0, stock - inCart);
+    if (remaining <= 0) {
+     showMessage("error", `Out of stock for "${product.name}" (in stock: ${stock}).`);
+    } else {
+     showMessage("error", `Only ${remaining} more available for "${product.name}" (in stock: ${stock}).`);
+    }
+    return;
+   }
+  }
   setCart((prev) => {
    const serial = product.serialNumber ?? null;
    // Serial already in cart (any line) — skip to avoid duplicate after price splits
@@ -361,7 +388,7 @@ export const useSalesDashboard = (options?: {
     },
    ];
   });
- }, [soldInfoMap]);
+ }, [soldInfoMap, blockNegativeStock]);
 
  /** Add multiple serial items — merged by variant; line price = price of serial most recently added to inventory. */
  const addBulkSerialsToCart = useCallback((products: POSProduct[]) => {
@@ -515,6 +542,17 @@ export const useSalesDashboard = (options?: {
  }, []);
 
  const updateQuantity = useCallback((sku: string, delta: number) => {
+  if (blockNegativeStock && delta > 0) {
+   const line = cartStateRef.current.find((i) => i.sku === sku);
+   const stock = inventoryBySku.get(sku);
+   if (line && stock != null) {
+    const isSerialItem = !!(line.serialNumbers && line.serialNumbers.length > 0);
+    if (!isSerialItem && line.quantity + delta > stock) {
+     showMessage("error", `Only ${stock} in stock for "${line.name}".`);
+     return;
+    }
+   }
+  }
   setCart((prev) =>
    prev
     .map((i) => {
@@ -543,7 +581,7 @@ export const useSalesDashboard = (options?: {
     })
     .filter((i): i is CartLineItem => i !== null)
   );
- }, []);
+ }, [blockNegativeStock, inventoryBySku]);
 
  const removeLine = useCallback((sku: string, serial?: string) => {
   setCart((prev) => {

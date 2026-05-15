@@ -275,6 +275,10 @@ const Page = () => {
  if (typeof window === "undefined") return false;
  try { return sessionStorage.getItem("create-sales-retailMode") === "1"; } catch { return false; }
  });
+ const [blockNegativeStock, setBlockNegativeStock] = useState(() => {
+ if (typeof window === "undefined") return false;
+ try { return sessionStorage.getItem("create-sales-blockNegStock") === "1"; } catch { return false; }
+ });
  const [categoryIcons, setCategoryIcons] = useState<Record<string, string>>({});
  const [categoryNames, setCategoryNames] = useState<string[]>([]);
  const [categoryVariantSlugOrderByCategoryId, setCategoryVariantSlugOrderByCategoryId] = useState<
@@ -424,6 +428,10 @@ const Page = () => {
  const isRetail = !!setRes.data.retailModeEnabled;
  setRetailModeEnabled(isRetail);
  try { sessionStorage.setItem("create-sales-retailMode", isRetail ? "1" : "0"); } catch {}
+
+ const blockNeg = setRes.data.allowNegativeStock === false;
+ setBlockNegativeStock(blockNeg);
+ try { sessionStorage.setItem("create-sales-blockNegStock", blockNeg ? "1" : "0"); } catch {}
 
  const params = new URLSearchParams(window.location.search);
  const hasUrlAccount = params.has("customerId") || params.has("accountId");
@@ -591,6 +599,7 @@ const Page = () => {
  locationId: selectedLocationId,
  pricingGroupId: customerPricingGroupId,
  categoriesOverride: categoryNames.length > 0 ? categoryNames : null,
+ blockNegativeStock,
  });
 
  const cartRef = useRef(cart);
@@ -1099,6 +1108,7 @@ const Page = () => {
    categoryIcons={categoryIcons}
    loading={productsLoading}
    tileStyle="icon"
+   showStock={blockNegativeStock}
    />
   )}
   </div>

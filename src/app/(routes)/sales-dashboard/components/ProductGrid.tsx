@@ -281,6 +281,8 @@ interface ProductGridProps {
  loading?: boolean;
  /** "icon" (default): coloured-icon tile. "pos": Eposnow-style dark-blue top + white bottom strip with price. */
  tileStyle?: "icon" | "pos";
+ /** Show on-hand inventory (qty) on each product card. Enable when "Block negative stock" is on. */
+ showStock?: boolean;
 }
 
 export const ProductGrid: React.FC<ProductGridProps> = ({
@@ -298,6 +300,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
  categoryIcons = {},
  loading = false,
  tileStyle = "icon",
+ showStock = false,
 }) => {
  const [showSuggestions, setShowSuggestions] = useState(false);
  const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -433,6 +436,21 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
      {product.price}
     </span>
     </div>
+    {showStock && (
+    <span
+    className={cn(
+     "absolute left-1 top-1 rounded px-1 py-[1px] text-[9px] font-bold tabular-nums leading-none ring-1",
+     product.qty <= 0
+     ? "bg-red-600 text-white ring-red-700"
+     : product.qty <= 5
+     ? "bg-amber-100 text-amber-900 ring-amber-300"
+     : "bg-emerald-100 text-emerald-900 ring-emerald-300"
+    )}
+    title={`In stock: ${product.qty}`}
+    >
+     {product.qty}
+    </span>
+    )}
     <span
     className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-slate-700 opacity-0 shadow-sm ring-1 ring-slate-200 transition group-hover:opacity-100"
     aria-hidden
@@ -455,6 +473,21 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
    "shadow-sm hover:-translate-y-0.5 hover:shadow-lg"
   )}
   >
+  {showStock && (
+   <span
+   className={cn(
+    "absolute left-1 top-1 rounded px-1 py-[1px] text-[9px] font-bold tabular-nums leading-none ring-1 @[480px]/pg:left-1.5 @[480px]/pg:top-1.5 @[480px]/pg:text-[10px]",
+    product.qty <= 0
+    ? "bg-red-600 text-white ring-red-700"
+    : product.qty <= 5
+    ? "bg-amber-100 text-amber-900 ring-amber-300"
+    : "bg-emerald-100 text-emerald-900 ring-emerald-300"
+   )}
+   title={`In stock: ${product.qty}`}
+   >
+   {product.qty}
+   </span>
+  )}
   <span
    className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-white text-neutral-600 opacity-0 shadow-sm ring-1 ring-gray-200/80 transition group-hover:opacity-100 sm:right-2 sm:top-2"
    aria-hidden
