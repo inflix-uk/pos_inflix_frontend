@@ -547,7 +547,16 @@ export const salesApi = {
      : cached.status === "returned_to_supplier"
       ? "Returned to supplier"
       : "Serial not found in inventory";
-   throw new Error(msg);
+   // Preserve status/soldInfo on cached throws so callers can branch on them
+   // (without this, repeat scans of a sold serial lose the discriminator and
+   // the UI falls through to a SKU/barcode lookup that may wrongly add to cart).
+   const e = new Error(msg) as Error & {
+    status?: string;
+    soldInfo?: { reference?: string; customerName?: string } | null;
+   };
+   e.status = cached.status;
+   e.soldInfo = cached.soldInfo ?? null;
+   throw e;
   }
   const url = new URL(`${API_BASE_URL}/purchases/find-in-stock-serial/${encodeURIComponent(serial)}`);
   if (pricingGroupId) url.searchParams.set("pricingGroupId", pricingGroupId);

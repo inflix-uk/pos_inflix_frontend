@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { StockViewRow } from "../types";
 import { stockViewApi } from "../services/stockViewApi";
 import { downloadProductsExcel, downloadProductsPdf } from "@/lib/productsExport";
+import { onInventoryEvent } from "@/lib/inventoryEvents";
 
 export function empty(v: string | number | undefined | null): string | number {
  if (v === undefined || v === null) return "-";
@@ -132,6 +133,27 @@ export function useStockView() {
 
  useEffect(() => {
   fetchStock();
+ }, [fetchStock]);
+
+ // Re-fetch when the tab regains focus or becomes visible, so qty reflects sales
+ // made in another tab (e.g. /create-sales). Without this, stock looks stale.
+ useEffect(() => {
+  const onVisible = () => {
+   if (document.visibilityState === "visible") fetchStock();
+  };
+  const onFocus = () => fetchStock();
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", onFocus);
+  return () => {
+   document.removeEventListener("visibilitychange", onVisible);
+   window.removeEventListener("focus", onFocus);
+  };
+ }, [fetchStock]);
+
+ // Live cross-tab refresh: re-fetch the moment a sale (or other inventory write) lands
+ // in any tab, even if this tab is in the background and never receives a focus event.
+ useEffect(() => {
+  return onInventoryEvent(() => fetchStock());
  }, [fetchStock]);
 
  const handlePageChange = useCallback((page: number) => {
