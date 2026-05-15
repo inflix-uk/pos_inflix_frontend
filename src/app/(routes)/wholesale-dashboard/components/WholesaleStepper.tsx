@@ -33,7 +33,7 @@ export function WholesaleStepper({
  embedded = false,
 }: WholesaleStepperProps) {
  const shell = embedded
- ? "flex min-w-0 flex-1 items-center justify-center gap-1.5 @[640px]:gap-3 py-1.5 px-2 @[640px]:px-3 bg-slate-50/90 rounded-lg border border-slate-100"
+ ? "flex min-w-0 flex-1 items-center justify-center gap-1 @[640px]:gap-2 py-0.5 px-1.5 @[640px]:px-2 bg-slate-50/90 rounded-md border border-slate-100"
  : "flex items-center justify-center gap-2 @[640px]:gap-4 py-2 px-3 bg-white rounded-xl border border-gray-200 shadow-sm";
  return (
  <nav className={`${shell} ${className}`.trim()} aria-label="Order progress">
@@ -45,26 +45,26 @@ export function WholesaleStepper({
  return (
   <React.Fragment key={step.num}>
   <div
-  className={`flex items-center gap-2 px-2 @[640px]:px-3 py-1.5 rounded-lg ${
+  className={`flex items-center gap-1.5 px-1.5 @[640px]:px-2 py-0.5 rounded ${
   isActive ? "bg-blue-50 ring-1 ring-blue-200" : done ? "bg-green-50 text-green-800" : "text-gray-500"
   }`}
   aria-current={isActive ? "step" : undefined}
   >
   <span
-  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+  className={`flex h-5 w-5 @[640px]:h-6 @[640px]:w-6 shrink-0 items-center justify-center rounded-full text-[10px] @[640px]:text-xs font-semibold ${
    done ? "bg-green-100 text-green-700" : isActive ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"
   }`}
   aria-hidden
   >
-  {done ? <step.Icon className="h-4 w-4" /> : step.num}
+  {done ? <step.Icon className="h-3 w-3 @[640px]:h-3.5 @[640px]:w-3.5" /> : step.num}
   </span>
-  <span className="hidden @[640px]:inline text-sm font-medium">
+  <span className="hidden @[640px]:inline text-xs font-medium">
   {step.num}. {step.label}
   </span>
-  <span className="@[640px]:hidden text-sm font-medium">{step.short}</span>
+  <span className="@[640px]:hidden text-xs font-medium">{step.short}</span>
   </div>
   {idx < STEPS.length - 1 && (
-  <div className="h-px w-4 @[640px]:w-8 bg-gray-200 shrink-0" aria-hidden />
+  <div className="h-px w-2 @[640px]:w-4 bg-gray-200 shrink-0" aria-hidden />
   )}
   </React.Fragment>
  );

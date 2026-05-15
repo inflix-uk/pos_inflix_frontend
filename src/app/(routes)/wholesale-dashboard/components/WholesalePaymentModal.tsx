@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { X, Banknote, CreditCard, Wallet, Landmark, Printer, Mail, Receipt, CheckCircle, Download } from "lucide-react";
 import { downloadInvoiceA4, printInvoiceA4, printReceipt80mm, type SaleForPrint } from "@/lib/invoicePrint";
 import { printReceipt as printReceiptSilent } from "@/services/printService";
@@ -34,6 +34,17 @@ export interface WholesalePaymentDetails {
  amountDue: number;
  payments: { cash: number; card: number; credit: number; bank: number };
  bankAccount: string;
+ /** Idempotency key for this checkout attempt. Stable across retries within the modal so a
+  *  network glitch doesn't create a duplicate sale (or trigger "Serial already sold" on retry). */
+ clientRequestId: string;
+}
+
+/** Generate an idempotency key — uses crypto.randomUUID when available, falls back otherwise. */
+function makeRequestId(): string {
+ if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  return crypto.randomUUID();
+ }
+ return `cr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 interface WholesalePaymentModalProps {
@@ -105,10 +116,16 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  const [defaultBankName, setDefaultBankName] = useState<string>("");
  const [error, setError] = useState<string | null>(null);
  const [submitting, setSubmitting] = useState(false);
+ // One idempotency key per modal session. Same key is reused across retries inside this
+ // modal (e.g. user clicks again after a perceived network failure) so the backend can
+ // dedupe instead of erroring out. Regenerated when the modal is freshly opened.
+ const requestIdRef = useRef<string>("");
 
  // Reset the submit lock whenever the modal opens (parent re-opened it) or closes.
+ // Also rotate the idempotency key on each open so a brand-new checkout starts fresh.
  useEffect(() => {
  setSubmitting(false);
+ if (open) requestIdRef.current = makeRequestId();
  }, [open]);
 
  // Once a sale has been created (parent passes saleForPrint), drop the lock so
@@ -117,14 +134,13 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  if (saleForPrint) setSubmitting(false);
  }, [saleForPrint]);
 
- const guardedComplete = (details: WholesalePaymentDetails) => {
+ const guardedComplete = async (details: WholesalePaymentDetails) => {
  if (submitting) return; // double-click / repeated tap guard
  setSubmitting(true);
  try {
-  onComplete(details);
- } catch (err) {
+  await onComplete(details);
+ } finally {
   setSubmitting(false);
-  throw err;
  }
  };
 
@@ -225,6 +241,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
 
  const buildDetails = (paymentsOverride?: { cash: number; card: number; credit: number; bank: number }): WholesalePaymentDetails => {
  const due = dueRounded;
+ if (!requestIdRef.current) requestIdRef.current = makeRequestId();
  const baseDetails = {
  discount: discountNum,
  discountType,
@@ -233,6 +250,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  previousBalance: previousBalanceNum,
  amountDue: due,
  bankAccount: defaultBankName || "Default",
+ clientRequestId: requestIdRef.current,
  };
  if (paymentsOverride) {
  return { ...baseDetails, payments: paymentsOverride };
@@ -473,51 +491,51 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  role="dialog"
  aria-modal="true"
  aria-labelledby="wholesale-payment-title"
- className="relative w-full sm:max-w-2xl bg-white rounded-t-2xl sm:rounded-lg shadow-xl max-h-[90vh] overflow-hidden flex flex-col"
+ className={`relative w-full ${retailMode ? "sm:max-w-lg" : "sm:max-w-2xl"} bg-white rounded-t-2xl sm:rounded-lg shadow-xl max-h-[95vh] overflow-hidden flex flex-col`}
  >
- <div className="flex items-center justify-between p-4 border-b border-gray-200">
-  <h2 id="wholesale-payment-title" className="text-lg font-semibold text-gray-900">
+ <div className="flex items-center justify-between px-3 py-2 sm:px-4 border-b border-gray-200">
+  <h2 id="wholesale-payment-title" className="text-base sm:text-lg font-semibold text-gray-900">
   Complete Order
   </h2>
   <button
   onClick={onClose}
-  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-200 touch-manipulation"
+  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-200 touch-manipulation"
   aria-label="Close"
   >
-  <X className="h-5 w-5" />
+  <X className="h-4 w-4" />
   </button>
  </div>
 
- <div className="overflow-y-auto touch-scroll flex-1 p-4 sm:p-6 space-y-5">
+ <div className="overflow-y-auto touch-scroll flex-1 p-3 sm:p-4 space-y-2">
   {customerName && (
-  <div className="text-sm text-gray-600">
+  <div className="text-xs text-gray-600">
   <span className="font-medium">Account:</span> {customerName}
   </div>
   )}
 
-  <div className="grid grid-cols-2 gap-4">
+  <div className="grid grid-cols-2 gap-2">
   <div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount</label>
-  <div className="px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 text-gray-900 font-medium">
+  <label className="block text-xs font-medium text-gray-700 mb-1">Total Amount</label>
+  <div className="px-3 py-2 rounded-lg border border-gray-300 bg-gray-50 text-gray-900 font-medium text-sm">
   {formatMoney(total)}
   </div>
   </div>
   <div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">Discount</label>
-  <div className="flex items-stretch h-[50px] rounded-xl border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 overflow-hidden bg-white">
+  <label className="block text-xs font-medium text-gray-700 mb-1">Discount</label>
+  <div className="flex items-stretch h-[40px] rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 overflow-hidden bg-white">
   <input
   type="text"
   inputMode="decimal"
   value={discount}
   onChange={(e) => setDiscount(e.target.value.replace(/[^0-9.]/g, ""))}
   placeholder={discountType === "percent" ? "0" : "0.00"}
-  className="flex-1 min-w-0 px-4 bg-transparent focus:outline-none"
+  className="flex-1 min-w-0 px-3 bg-transparent focus:outline-none text-sm"
   />
   <div className="flex shrink-0 border-l border-gray-300">
   <button
    type="button"
    onClick={() => setDiscountType("flat")}
-   className={`w-12 text-sm font-semibold transition-colors ${
+   className={`w-10 text-xs font-semibold transition-colors ${
    discountType === "flat" ? "bg-blue-500 text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"
    }`}
    aria-pressed={discountType === "flat"}
@@ -527,7 +545,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   <button
    type="button"
    onClick={() => setDiscountType("percent")}
-   className={`w-12 text-sm font-semibold transition-colors border-l border-gray-300 ${
+   className={`w-10 text-xs font-semibold transition-colors border-l border-gray-300 ${
    discountType === "percent" ? "bg-blue-500 text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"
    }`}
    aria-pressed={discountType === "percent"}
@@ -537,7 +555,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   </div>
   </div>
   {discountNum > 0 && (
-  <p className="mt-1 text-xs text-gray-500">
+  <p className="mt-1 text-[11px] text-gray-500">
   Applied: −{formatMoney(discountNum)}
   {discountType === "percent" && discountInput > 0 && ` (${Math.min(100, discountInput)}%)`}
   </p>
@@ -546,35 +564,75 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   <div>
   {previousBalanceNum > 0 && (
   <>
-   <label className="block text-sm font-medium text-gray-700 mb-1">
-   Previous balance (outstanding)
-   </label>
-   <div className="px-4 py-3 rounded-xl border-2 border-neutral-200 bg-neutral-50 text-neutral-800 font-semibold">
+   <label className="block text-xs font-medium text-gray-700 mb-1">Previous balance</label>
+   <div className="px-3 py-2 rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-800 font-semibold text-sm">
    {formatMoney(previousBalanceNum)}
    </div>
   </>
   )}
   </div>
   <div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">Amount Due</label>
-  <div className="px-4 py-3 rounded-xl border-2 border-blue-200 bg-blue-50 text-blue-700 font-bold">
+  <label className="block text-xs font-medium text-gray-700 mb-1">Amount Due</label>
+  <div className="px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 font-bold text-sm">
   {formatMoney(amountDue)}
   </div>
   </div>
   </div>
 
+  {retailMode && (
+  <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2 sm:p-2.5 space-y-2">
+  <div className="flex items-baseline justify-between">
+   <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Amount Due</span>
+   <span className="text-xl sm:text-2xl font-bold tabular-nums text-slate-900">{formatMoney(amountDue)}</span>
+  </div>
+  <div className="grid grid-cols-5 gap-1 sm:gap-1.5">
+   {[5, 10, 20, 50].map((v) => (
+   <button
+    key={v}
+    type="button"
+    onClick={() => {
+    setCheckedMethods((prev) => ({ ...prev, cash: true }));
+    setAmounts((a) => ({ ...a, cash: (parseAmount(a.cash) + v).toFixed(2) }));
+    }}
+    className="min-h-[32px] rounded-md border border-blue-200 bg-white text-blue-700 font-semibold text-xs hover:bg-blue-50 active:bg-blue-100 transition-colors"
+   >
+    +£{v}
+   </button>
+   ))}
+   <button
+   type="button"
+   onClick={() => {
+    setCheckedMethods((prev) => ({ ...prev, cash: true }));
+    setAmounts((a) => ({ ...a, cash: amountDue.toFixed(2) }));
+   }}
+   className="min-h-[32px] rounded-md border border-blue-600 bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 active:bg-blue-800 transition-colors"
+   >
+   EXACT
+   </button>
+  </div>
+  <div className="flex items-center justify-between text-[11px]">
+   <span className="text-slate-500">Paid now</span>
+   <span className="font-semibold tabular-nums text-slate-900">{formatMoney(paidNow)}</span>
+  </div>
+  </div>
+  )}
   <div>
-  <p className="text-sm font-medium text-gray-700 mb-3">Payment method</p>
-  <p className="text-xs text-gray-500 mb-2">
-  {retailMode
-  ? "Retail mode: full payment required (Cash, Card, Bank). No credit."
-  : "Cash, Card and Bank are payments received (balance reduces). Any remainder is automatically applied as Credit (stays on account). Enter amounts for Cash/Card/Bank only; the rest goes to Credit."}
-  </p>
-  <div className="flex flex-wrap gap-2">
+  {!retailMode && (
+   <>
+   <p className="text-sm font-medium text-gray-700 mb-2">Payment method</p>
+   <p className="text-xs text-gray-500 mb-2">
+   Cash, Card and Bank are payments received. Any remainder is automatically applied as Credit.
+   </p>
+   </>
+  )}
+  {retailMode && (
+   <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Pay By</p>
+  )}
+  <div className={retailMode ? "grid grid-cols-3 gap-1.5" : "flex flex-wrap gap-2"}>
   {paymentMethodsToShow.map(({ id, label, icon: Icon }) => (
   <label
    key={id}
-   className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 cursor-pointer touch-manipulation min-h-[44px] ${
+   className={`${retailMode ? "flex items-center justify-center gap-1.5 px-2 py-1.5 min-h-[36px]" : "inline-flex items-center gap-2 px-4 py-2.5 min-h-[44px]"} rounded-lg border-2 cursor-pointer touch-manipulation ${
    checkedMethods[id]
    ? "border-blue-500 bg-blue-50 text-blue-700"
    : "border-gray-200 hover:border-gray-300"
@@ -584,39 +642,39 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
    type="checkbox"
    checked={checkedMethods[id]}
    onChange={() => toggleMethod(id)}
-   className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+   className={retailMode ? "sr-only" : "rounded border-gray-300 text-blue-500 focus:ring-blue-500"}
    />
-   <Icon className="h-5 w-5" />
-   <span className="font-medium">{label}</span>
+   <Icon className={retailMode ? "h-4 w-4" : "h-5 w-5"} />
+   <span className={retailMode ? "text-xs font-semibold" : "font-medium"}>{label}</span>
   </label>
   ))}
   </div>
   </div>
 
-  <div className="space-y-3">
+  <div className={retailMode ? "space-y-1.5" : "space-y-3"}>
   {checkedMethods.cash && (
   <div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">Cash Amount</label>
+  <label className={`block ${retailMode ? "text-[11px]" : "text-sm"} font-medium text-gray-700 mb-1`}>Cash Amount</label>
   <input
    type="text"
    inputMode="decimal"
    value={amounts.cash}
    onChange={(e) => setAmount("cash", e.target.value.replace(/[^0-9.]/g, ""))}
    placeholder="0.00"
-   className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500"
+   className={`w-full ${retailMode ? "px-3 py-1.5 text-sm rounded-md" : "px-4 py-3 rounded-xl"} border border-gray-300 focus:ring-2 focus:ring-blue-500`}
   />
   </div>
   )}
   {checkedMethods.card && (
   <div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">Card Amount</label>
+  <label className={`block ${retailMode ? "text-[11px]" : "text-sm"} font-medium text-gray-700 mb-1`}>Card Amount</label>
   <input
    type="text"
    inputMode="decimal"
    value={amounts.card}
    onChange={(e) => setAmount("card", e.target.value.replace(/[^0-9.]/g, ""))}
    placeholder="0.00"
-   className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500"
+   className={`w-full ${retailMode ? "px-3 py-1.5 text-sm rounded-md" : "px-4 py-3 rounded-xl"} border border-gray-300 focus:ring-2 focus:ring-blue-500`}
   />
   </div>
   )}
@@ -630,8 +688,8 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   )}
   {checkedMethods.bank && (
   <div>
-  <label className="block text-sm font-medium text-gray-700 mb-1">Bank Amount</label>
-  {defaultBankName && (
+  <label className={`block ${retailMode ? "text-[11px]" : "text-sm"} font-medium text-gray-700 mb-1`}>Bank Amount</label>
+  {defaultBankName && !retailMode && (
    <p className="text-xs text-gray-500 mb-1">Bank: {defaultBankName}</p>
   )}
   <input
@@ -640,7 +698,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
    value={amounts.bank}
    onChange={(e) => setAmount("bank", e.target.value.replace(/[^0-9.]/g, ""))}
    placeholder="0.00"
-   className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500"
+   className={`w-full ${retailMode ? "px-3 py-1.5 text-sm rounded-md" : "px-4 py-3 rounded-xl"} border border-gray-300 focus:ring-2 focus:ring-blue-500`}
   />
   </div>
   )}
@@ -738,11 +796,11 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   )}
  </div>
 
- <div className="p-4 sm:p-6 border-t border-gray-200 flex gap-3">
+ <div className={`${retailMode ? "p-2.5" : "p-4 sm:p-6"} border-t border-gray-200 flex gap-2`}>
   <button
   type="button"
   onClick={onClose}
-  className="flex-1 min-h-[52px] py-3 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 active:bg-gray-100 touch-manipulation"
+  className={`flex-1 ${retailMode ? "min-h-[40px] py-2 text-sm rounded-md" : "min-h-[52px] py-3 rounded-xl"} border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 active:bg-gray-100 touch-manipulation`}
   >
   Close
   </button>
@@ -750,7 +808,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   type="button"
   onClick={handleCreateSales}
   disabled={submitting || overpayment > 0 || (retailMode && remaining > 0.01)}
-  className="flex-1 min-h-[52px] py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 active:bg-blue-800 touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
+  className={`flex-1 ${retailMode ? "min-h-[40px] py-2 text-sm rounded-md" : "min-h-[52px] py-3 rounded-xl"} bg-blue-600 text-white font-semibold hover:bg-blue-700 active:bg-blue-800 touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed`}
   >
   {submitting ? "Saving…" : primaryButtonLabel}
   </button>

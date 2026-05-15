@@ -553,14 +553,15 @@ export async function buildInvoicePdf(
       y += itemRowStep;
     });
 
-    y += 2;
+    y += 3;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(io.fontTablePt);
+    const grandTotalFontPt = Math.min(io.fontSectionHeadingPt + 4, 18);
+    doc.setFontSize(grandTotalFontPt);
     const totalQty = sale.items.reduce((s, i) => s + i.quantity, 0);
     doc.text("Grand total", left, y);
     doc.text(String(totalQty), colQty, y);
     doc.text(formatMoney(sale.subtotal), right, y, { align: "right" });
-    y += 8;
+    y += grandTotalFontPt * 0.6 + 4;
     doc.setFont("helvetica", "normal");
   }
 
@@ -590,10 +591,13 @@ export async function buildInvoicePdf(
     }
     const balanceDue = totalDueBeforePayments - received;
     doc.setFont("helvetica", "bold");
+    const balanceDueFontPt = Math.min(io.fontSectionHeadingPt + 4, 18);
+    doc.setFontSize(balanceDueFontPt);
     doc.text("Balance Due:", left, y);
     doc.text(formatMoney(Math.max(0, balanceDue)), right, y, { align: "right" });
     doc.setFont("helvetica", "normal");
-    y += 8;
+    doc.setFontSize(io.fontBodyPt);
+    y += balanceDueFontPt * 0.6 + 4;
   }
 
   const hasPaymentsEarly =
@@ -684,9 +688,14 @@ export async function buildInvoicePdf(
       doc.text(`-${formatMoney(discountAmt)}`, right, y, { align: "right" });
       y += 6;
     }
+    doc.setFont("helvetica", "bold");
+    const invoiceTotalFontPt = Math.min(io.fontSectionHeadingPt + 4, 18);
+    doc.setFontSize(invoiceTotalFontPt);
     doc.text("Invoice Total:", left, y);
     doc.text(formatMoney(sale.total - discountAmt), right, y, { align: "right" });
-    y += 10;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(io.fontBodyPt);
+    y += invoiceTotalFontPt * 0.6 + 6;
   }
 
   y += 6;

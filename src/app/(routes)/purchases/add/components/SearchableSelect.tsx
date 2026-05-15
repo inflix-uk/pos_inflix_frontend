@@ -37,6 +37,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
  onRetry,
 }) => {
  const [isOpen, setIsOpen] = useState(false);
+ const [openUp, setOpenUp] = useState(false);
  const [search, setSearch] = useState("");
  const containerRef = useRef<HTMLDivElement>(null);
  const inputRef = useRef<HTMLInputElement>(null);
@@ -63,6 +64,13 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
  useEffect(() => {
  if (isOpen && inputRef.current) {
  inputRef.current.focus();
+ }
+ if (isOpen && containerRef.current) {
+ const rect = containerRef.current.getBoundingClientRect();
+ const spaceBelow = window.innerHeight - rect.bottom;
+ const spaceAbove = rect.top;
+ const estimatedHeight = 260;
+ setOpenUp(spaceBelow < estimatedHeight && spaceAbove > spaceBelow);
  }
  }, [isOpen]);
 
@@ -103,7 +111,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
  </div>
 
  {isOpen && (
- <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg">
+ <div className={`absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg ${openUp ? "bottom-full mb-1" : "top-full mt-1"}`}>
   <div className="p-2 border-b border-gray-100">
   <div className="relative">
   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />

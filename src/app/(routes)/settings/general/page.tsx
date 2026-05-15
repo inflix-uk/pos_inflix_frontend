@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { SlidersHorizontal, ArrowLeft, Package, Palette, Check, ShoppingBag, Loader2, Trash2, AlertTriangle } from "lucide-react";
+import { SlidersHorizontal, ArrowLeft, Package, Palette, Check, ShoppingBag, Loader2, Trash2, AlertTriangle, Globe } from "lucide-react";
 import { useAppCurrency, type CurrencyCode } from "@/lib/app-currency-context";
 import { useTheme } from "@/contexts/ThemeContext";
 import { THEMES } from "@/lib/theme";
@@ -18,6 +18,9 @@ const GeneralSettingsPage = () => {
  const [selected, setSelected] = useState<CurrencyCode>(currencyCode);
  const [saved, setSaved] = useState(false);
  const [syncSalePriceToSameVariant, setSyncSalePriceToSameVariant] = useState(true);
+ const [syncAllLocations, setSyncAllLocations] = useState(false);
+ const [syncAllLocationsSaving, setSyncAllLocationsSaving] = useState(false);
+ const [syncAllLocationsSaved, setSyncAllLocationsSaved] = useState(false);
  const [inventorySettingsLoading, setInventorySettingsLoading] = useState(true);
  const [inventorySettingsSaving, setInventorySettingsSaving] = useState(false);
  const [inventorySettingsSaved, setInventorySettingsSaved] = useState(false);
@@ -36,7 +39,10 @@ const GeneralSettingsPage = () => {
  useEffect(() => {
  getInventorySettings()
  .then((res) => {
- if (res.success && res.data != null) setSyncSalePriceToSameVariant(res.data.syncSalePriceToSameVariant !== false);
+ if (res.success && res.data != null) {
+  setSyncSalePriceToSameVariant(res.data.syncSalePriceToSameVariant !== false);
+  setSyncAllLocations(res.data.syncAllLocations === true);
+ }
  })
  .finally(() => setInventorySettingsLoading(false));
  }, []);
@@ -110,6 +116,25 @@ const GeneralSettingsPage = () => {
  setSaved(true);
  setTimeout(() => setSaved(false), 3000);
  };
+
+ const handleSyncAllLocationsToggle = useCallback(async (enabled: boolean) => {
+ setSyncAllLocations(enabled);
+ setSyncAllLocationsSaving(true);
+ setSyncAllLocationsSaved(false);
+ try {
+ const res = await updateInventorySettings({ syncAllLocations: enabled });
+ if (res.success) {
+ setSyncAllLocationsSaved(true);
+ setTimeout(() => setSyncAllLocationsSaved(false), 3000);
+ } else {
+ setSyncAllLocations(!enabled);
+ }
+ } catch {
+ setSyncAllLocations(!enabled);
+ } finally {
+ setSyncAllLocationsSaving(false);
+ }
+ }, []);
 
  const handleAutoSyncToggle = useCallback(async (enabled: boolean) => {
  setSyncSalePriceToSameVariant(enabled);
@@ -395,6 +420,62 @@ const GeneralSettingsPage = () => {
   </div>
   </div>
   )}
+ </div>
+
+ {/* Row 2.6: Sync inventory across all locations */}
+ <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+ <h2 className="text-lg font-medium text-gray-800 mb-2 flex items-center gap-2">
+  <Globe className="h-5 w-5 text-orange-500" />
+  Inventory location scope on Create Sales
+ </h2>
+ <p className="text-sm text-gray-500 mb-4">
+  Controls whether the <strong>Create Sales</strong> page shows inventory <strong>only from the selected location</strong> or
+  <strong> from all locations</strong>. When <strong>on</strong>, the selected location filter is ignored and stock from every
+  location is visible in the product grid and typeahead. When <strong>off</strong> (default), only items assigned to the
+  selected location are shown.
+ </p>
+ {inventorySettingsLoading ? (
+  <div className="flex items-center gap-2 text-gray-500 py-2">
+  <Loader2 className="h-5 w-5 animate-spin" /> Loading…
+  </div>
+ ) : (
+  <div className="flex flex-col gap-3">
+  <div className="flex items-center gap-3">
+   <span className={`text-sm font-medium ${!syncAllLocations ? "text-gray-900" : "text-gray-500"}`}>
+   Location-wise (default)
+   </span>
+   <button
+   type="button"
+   role="switch"
+   aria-checked={syncAllLocations}
+   disabled={syncAllLocationsSaving}
+   onClick={() => handleSyncAllLocationsToggle(!syncAllLocations)}
+   className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+   syncAllLocations ? "bg-orange-500" : "bg-gray-200"
+   }`}
+   >
+   <span
+   className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+   syncAllLocations ? "translate-x-5" : "translate-x-1"
+   }`}
+   />
+   </button>
+   <span className={`text-sm font-medium ${syncAllLocations ? "text-gray-900" : "text-gray-500"}`}>
+   Sync all locations
+   </span>
+  </div>
+  <div className="flex items-center gap-2 text-sm text-gray-500">
+   {syncAllLocationsSaving && (
+   <>
+   <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+   </>
+   )}
+   {syncAllLocationsSaved && !syncAllLocationsSaving && (
+   <span className="text-green-600">Saved</span>
+   )}
+  </div>
+  </div>
+ )}
  </div>
 
  {/* Row 3: Theme full width */}
