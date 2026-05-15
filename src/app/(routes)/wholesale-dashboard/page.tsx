@@ -24,6 +24,7 @@ import {
  CustomerContextStrip,
 } from "./components";
 import { useOrderWriter } from "./components/OrderWriterContext";
+import { emitInventoryEvent } from "@/lib/inventoryEvents";
 import type { CartLineItem } from "../sales-dashboard/types";
 import { salesApi, formatAddressForInvoice } from "../sales-dashboard/service/salesApi";
 import { customerApi } from "../peoples/customers/service/customerApi";
@@ -1345,6 +1346,11 @@ const Page = () => {
   try {
   if (typeof window !== "undefined") window.localStorage.removeItem(CUSTOMER_DRAFT_KEY);
   } catch {}
+  // Refresh inventory grid so qty reflects what was just sold (otherwise the picker
+  // still shows the pre-sale stock and you can try to re-sell an already-sold unit).
+  refetchProducts();
+  // Broadcast to other tabs (e.g. /inventory/products) so their stock displays refresh too.
+  emitInventoryEvent({ type: "sale-created", saleId: result.data?._id });
   } else {
   showMessage("error", result.message || "Failed to save order");
   }

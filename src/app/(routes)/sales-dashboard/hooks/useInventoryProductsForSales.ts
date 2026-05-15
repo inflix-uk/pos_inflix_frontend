@@ -128,7 +128,11 @@ function flattenPurchasesToRows(purchases: PurchaseRaw[]): FlattenRow[] {
    const salePrice = Number(item.salePrice) || 0;
    const itemName = item.name?.trim();
    const itemBarcode = item.barcode?.trim();
-   const qty = Number(item.quantity) || 1;
+   // `Number(item.quantity) || 1` would render qty=0 as 1 (0 is falsy in JS),
+   // making sold-out non-serial items appear to still have one in stock on the
+   // create-sales / create-invoice grid.
+   const rawQty = Number(item.quantity);
+   const qty = Number.isFinite(rawQty) ? rawQty : 0;
    const unitCost = item.purchasePrice != null ? Number(item.purchasePrice) : undefined;
 
    if (isSerial) {
@@ -156,6 +160,9 @@ function flattenPurchasesToRows(purchases: PurchaseRaw[]): FlattenRow[] {
      });
     });
    } else {
+    // Skip sold-out non-serial items so they don't show in the create-sales /
+    // create-invoice product grid (parallel to inventory page's "Available only" filter).
+    if (qty <= 0) return;
     rows.push({
      rowKey: `${purchaseId}-${itemId}-no-imei`,
      name: itemName,
