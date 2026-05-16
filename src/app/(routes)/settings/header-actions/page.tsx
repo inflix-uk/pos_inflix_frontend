@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, LayoutPanelTop, Loader2, PlusCircle, Wrench, Truck, RotateCcw, ShoppingBag, FileSpreadsheet, Boxes } from "lucide-react";
+import { ArrowLeft, LayoutPanelTop, Loader2, PlusCircle, Wrench, Truck, RotateCcw, ShoppingBag, FileSpreadsheet, Boxes, Globe } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
  fetchHeaderQuickActionsVisibility,
@@ -61,6 +61,12 @@ const ROWS: Row[] = [
  label: "Stock List",
  description: "Shortcut to Inventory → Stock List tab.",
  Icon: Boxes,
+ },
+ {
+ key: "showSalesOnline",
+ label: "Sales",
+ description: "Shortcut to Sales (Online Orders) page.",
+ Icon: Globe,
  },
 ];
 
@@ -140,7 +146,7 @@ export default function HeaderActionsSettingsPage() {
  </div>
  </div>
 
- <div className="max-w-xl bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+ <div className="max-w-4xl bg-white rounded-lg shadow-sm border border-gray-200 p-6">
  <p className="text-sm text-gray-600 mb-6">
   Disabled buttons stay available from the sidebar if the user has permission. Only users with{" "}
   <span className="font-medium">settings.manage</span> can change these toggles.
@@ -151,9 +157,9 @@ export default function HeaderActionsSettingsPage() {
   <Loader2 className="h-5 w-5 animate-spin" /> Loading…
   </div>
  ) : (
-  <ul className="space-y-0 divide-y divide-gray-100">
+  <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
   {ROWS.map(({ key, label, description, Icon }) => (
-  <li key={key} className="flex items-center justify-between gap-4 py-4 first:pt-0">
+  <li key={key} className="flex items-center justify-between gap-4 py-4 border-b border-gray-100">
   <div className="flex items-start gap-3 min-w-0">
    <div className="p-2 rounded-lg bg-gray-100 text-gray-600 shrink-0">
    <Icon className="h-4 w-4" />

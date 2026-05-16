@@ -5,7 +5,7 @@ import type React from "react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Command, Menu, User, FileText, Settings, LogOut, PlusCircle, Wrench, Truck, RotateCcw, ShoppingBag, FileSpreadsheet, Boxes } from "lucide-react";
+import { Search, Command, Menu, User, FileText, Settings, LogOut, PlusCircle, Wrench, Truck, RotateCcw, ShoppingBag, FileSpreadsheet, Boxes, Globe } from "lucide-react";
 import { ProductHistoryModal } from "@/app/(routes)/inventory/product-history/ProductHistoryModal";
 import { usePermissions } from "@/hooks/usePermissions";
 import { globalSearch, type GlobalSearchResult } from "@/app/(routes)/dashboard/service/dashboardApi";
@@ -160,7 +160,8 @@ export function Header() {
   const showSalesModeToggle = quickActions.showSalesModeToggle && canManageSettings && can("sale.create");
   const showAccounts = quickActions.showAccounts && can("accounts.view");
   const showStockList = quickActions.showStockList && (can("product.view") || can("stock.view"));
-  const showAnyPrimaryQuickAction = showNewSale || showNewRepair || showParcel || showReturn || showAccounts || showStockList;
+  const showSalesOnline = quickActions.showSalesOnline && can("sale.view");
+  const showAnyPrimaryQuickAction = showNewSale || showNewRepair || showParcel || showReturn || showAccounts || showStockList || showSalesOnline;
 
   return (
     <>
@@ -264,6 +265,15 @@ export function Header() {
                 >
                   <Boxes className="h-4.5 w-4.5 shrink-0 text-teal-600" />
                   <span className="hidden xl:inline">Stock List</span>
+                </Link>
+              )}
+              {showSalesOnline && (
+                <Link
+                  href="/sales-online-orders"
+                  className="inline-flex items-center gap-2 px-2.5 xl:px-3.5 py-2 rounded-lg text-sm font-semibold text-indigo-800 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 active:bg-indigo-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 transition-colors whitespace-nowrap"
+                >
+                  <Globe className="h-4.5 w-4.5 shrink-0 text-indigo-600" />
+                  <span className="hidden xl:inline">Sales</span>
                 </Link>
               )}
               {showSalesModeToggle && (

@@ -14,6 +14,8 @@ export interface HeaderQuickActionsVisibility {
   showAccounts: boolean;
   /** Stock List (Inventory Products – stock-list tab) shortcut */
   showStockList: boolean;
+  /** Online Sales (sales-online-orders) shortcut */
+  showSalesOnline: boolean;
 }
 
 const defaults: HeaderQuickActionsVisibility = {
@@ -24,6 +26,7 @@ const defaults: HeaderQuickActionsVisibility = {
   showSalesModeToggle: true,
   showAccounts: true,
   showStockList: true,
+  showSalesOnline: true,
 };
 
 function normalize(partial: Partial<HeaderQuickActionsVisibility> | null | undefined): HeaderQuickActionsVisibility {
@@ -35,6 +38,7 @@ function normalize(partial: Partial<HeaderQuickActionsVisibility> | null | undef
     showSalesModeToggle: partial?.showSalesModeToggle !== false,
     showAccounts: partial?.showAccounts !== false,
     showStockList: partial?.showStockList !== false,
+    showSalesOnline: partial?.showSalesOnline !== false,
   };
 }
 
