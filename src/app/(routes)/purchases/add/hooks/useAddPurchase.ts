@@ -1416,7 +1416,7 @@ export const useAddPurchase = () => {
     product.salePrice != null && Number.isFinite(Number(product.salePrice))
      ? String(product.salePrice)
      : prev.salePrice,
-   quantity: prev.quantity && prev.quantity !== "0" ? prev.quantity : "1",
+   quantity: prev.quantity || "0",
   }));
   if (categoryId) {
    fetchSubCategories(categoryId);
