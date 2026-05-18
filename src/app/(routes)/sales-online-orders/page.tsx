@@ -844,6 +844,8 @@ const Page = () => {
  subtotal: s.subtotal,
  tax: s.tax,
  discount: s.discount,
+ discountType: s.discountType,
+ discountValue: s.discountValue,
  total: s.total,
  paymentMethod: s.paymentMethod,
  payments: s.payments,
