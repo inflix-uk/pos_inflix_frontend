@@ -71,7 +71,7 @@ export const useEditPurchase = () => {
   colour: "",
   purchasePrice: "",
   salePrice: "",
-  quantity: "1",
+  quantity: "0",
   name: "",
   barcode: "",
   variantValues: {},
@@ -897,7 +897,7 @@ export const useEditPurchase = () => {
   setSavedOtherItems((prev) => [...prev, entry]);
   setOtherItemData({
    sendTo: "", taxCategory: "", type: "", make: "", grade: "", brand: "",
-   brandModel: "", capacity: "", colour: "", purchasePrice: "", salePrice: "", quantity: "1",
+   brandModel: "", capacity: "", colour: "", purchasePrice: "", salePrice: "", quantity: "0",
    name: "", barcode: "", variantValues: {},
   });
   setSubmitMessage({ type: "", text: "" });
@@ -1247,7 +1247,7 @@ export const useEditPurchase = () => {
   });
   setOtherItemData({
    sendTo: "", taxCategory: "", type: "", make: "", grade: "", brand: "",
-   brandModel: "", capacity: "", colour: "", purchasePrice: "", salePrice: "", quantity: "1",
+   brandModel: "", capacity: "", colour: "", purchasePrice: "", salePrice: "", quantity: "0",
    name: "", barcode: "", variantValues: {},
   });
   setSubmitMessage({ type: "", text: "" });
