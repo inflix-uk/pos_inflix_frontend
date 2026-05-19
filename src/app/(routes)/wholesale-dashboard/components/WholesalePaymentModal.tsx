@@ -720,74 +720,15 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
    Full payment required. Remaining: <strong className="tabular-nums">{formatMoney(remaining)}</strong>
    </span>
   )}
-  {paidNow > dueRounded + 0.01 && (
-   <span className="text-red-600 font-medium">
-   Payment exceeds due by {formatMoney(paidNow - dueRounded)}
-   </span>
-  )}
   </div>
   )}
   </div>
 
   {overpayment > 0 && (
-  <div className="p-4 rounded-xl border-2 border-neutral-200 bg-neutral-50 space-y-3">
+  <div className="p-4 rounded-xl border-2 border-neutral-200 bg-neutral-50">
   <p className="text-sm font-medium text-neutral-800">
-  Payment exceeds due by {formatMoney(overpayment)}. Choose how to handle the excess:
+   Payment exceeds due by: <span className="tabular-nums">{formatMoney(overpayment)}</span>
   </p>
-  <div className="space-y-2">
-  <p className="text-xs font-semibold text-neutral-800 uppercase tracking-wider">
-   Refund {formatMoney(overpayment)} from:
-  </p>
-  <div className="flex flex-wrap gap-2">
-   {parseAmount(amounts.cash) >= overpayment - 0.01 && (
-   <button
-   type="button"
-   onClick={() => handleRefundFrom("cash")}
-   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-orange-500 bg-white text-neutral-800 font-semibold hover:bg-neutral-50 transition-colors"
-   >
-   <Banknote className="h-4 w-4" />
-   Cash ({formatMoney(parseAmount(amounts.cash))})
-   </button>
-   )}
-   {parseAmount(amounts.card) >= overpayment - 0.01 && (
-   <button
-   type="button"
-   onClick={() => handleRefundFrom("card")}
-   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-orange-500 bg-white text-neutral-800 font-semibold hover:bg-neutral-50 transition-colors"
-   >
-   <CreditCard className="h-4 w-4" />
-   Card ({formatMoney(parseAmount(amounts.card))})
-   </button>
-   )}
-   {parseAmount(amounts.bank) >= overpayment - 0.01 && (
-   <button
-   type="button"
-   onClick={() => handleRefundFrom("bank")}
-   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-orange-500 bg-white text-neutral-800 font-semibold hover:bg-neutral-50 transition-colors"
-   >
-   <Landmark className="h-4 w-4" />
-   Bank ({formatMoney(parseAmount(amounts.bank))})
-   </button>
-   )}
-  </div>
-  <div className="flex flex-wrap gap-2 pt-1 border-t border-neutral-200/80">
-   <button
-   type="button"
-   onClick={handleRefund}
-   className="text-sm font-medium text-neutral-700 hover:text-neutral-900 underline"
-   >
-   Refund proportionally
-   </button>
-   <span className="text-neutral-600">|</span>
-   <button
-   type="button"
-   onClick={handleStoreCredit}
-   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors text-sm"
-   >
-   Store credit {formatMoney(overpayment)}
-   </button>
-  </div>
-  </div>
   </div>
   )}
 
