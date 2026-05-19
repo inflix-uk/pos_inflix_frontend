@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { ChevronLeft, MapPin, Calendar, RefreshCw, ChevronDown, ChevronUp, X, Eye, Loader2, ArrowLeft } from "lucide-react";
+import { ChevronLeft, MapPin, Calendar, RefreshCw, ChevronDown, ChevronUp, X, Eye, Loader2, ArrowLeft, Printer, Receipt } from "lucide-react";
 import { useTakingsDashboard } from "./hooks/useTakingsDashboard";
 import {
  formatDateLabel,
@@ -119,10 +119,10 @@ export default function TakingsDashboardPage() {
  <header className="mb-4 @[640px]:mb-5 @[768px]:mb-6 flex flex-col gap-2 @[640px]:gap-3 @[768px]:gap-4">
  <div>
   <h1 className="text-base @[480px]:text-lg @[640px]:text-xl @[1024px]:text-2xl font-bold text-gray-900">
-  Takings Dashboard
+  Takings Dashboard <span className="text-gray-400 font-normal">/ Till X &amp; Z Reading</span>
   </h1>
   <p className="mt-0.5 text-[11px] @[640px]:text-xs @[768px]:text-sm text-gray-500">
-  Takings by payment method and P&L for the selected period. Times in Europe/London.
+  End-of-period till reading: sales count + payment method breakdown. Times in Europe/London.
   </p>
  </div>
 
@@ -213,6 +213,17 @@ export default function TakingsDashboardPage() {
  <TakingsSkeleton />
  ) : data ? (
  <>
+  <TillReadingCard
+  data={data}
+  dateLabel={formatDateLabel(from, to)}
+  rangeLabel={dateRangeLabel}
+  locationLabel={
+   selectedLocationId === "all"
+   ? "All locations"
+   : locations.find((l) => l._id === selectedLocationId)?.name || "—"
+  }
+  />
+
   <section className="mb-4 @[640px]:mb-5 @[768px]:mb-8">
   <h2 className="mb-2.5 @[640px]:mb-3 @[768px]:mb-4 text-[11px] @[640px]:text-xs @[768px]:text-sm font-semibold uppercase tracking-wide text-gray-500">
   KPIs

@@ -438,12 +438,13 @@ export async function buildInvoicePdf(
     ? getLocationHeaderLines(location)
     : (settings.about.companyAddress || "").split("\n").filter(Boolean);
 
-  let docTitleY = io.marginMm + 4;
+  const docTitleY = io.marginMm + 4;
+  let logoRendered = false;
   if (io.showLogo && settings.about.logo) {
     try {
       const format = (settings.about.logo as string).startsWith("data:image/jpeg") ? "JPEG" : "PNG";
-      const maxLogoW = 28;
-      const maxLogoH = 22;
+      const maxLogoW = 36;
+      const maxLogoH = 16;
       const { width: natW, height: natH } = await loadImageDimensions(settings.about.logo as string);
       const aspect = natW > 0 && natH > 0 ? natW / natH : maxLogoW / maxLogoH;
       let logoW = maxLogoW;
@@ -452,33 +453,46 @@ export async function buildInvoicePdf(
         logoH = maxLogoH;
         logoW = logoH * aspect;
       }
-      const logoX = pageW - left - logoW;
-      doc.addImage(settings.about.logo, format, logoX, io.marginMm, logoW, logoH);
-      docTitleY = io.marginMm + logoH + 4;
+      doc.addImage(settings.about.logo, format, left, io.marginMm, logoW, logoH);
+      y = io.marginMm + logoH + 4;
+      logoRendered = true;
     } catch {
       /* ignore invalid image */
     }
   }
 
-  doc.setFontSize(io.fontCompanyNamePt);
-  doc.setFont("helvetica", "bold");
-  doc.text(headerName, left, y);
-  y += 8;
+  if (!logoRendered) {
+    doc.setFontSize(io.fontCompanyNamePt);
+    doc.setFont("helvetica", "bold");
+    doc.text(headerName, left, y);
+    y += 8;
+  }
   doc.setFontSize(io.fontBodyPt);
   doc.setFont("helvetica", "normal");
+  doc.setTextColor(110, 110, 110);
   headerAddressLines.forEach((line: string) => {
     doc.text(line.trim(), left, y);
     y += 5;
   });
+  doc.setTextColor(0, 0, 0);
   y += 6;
 
   doc.setFontSize(io.fontDocTitlePt);
   doc.setFont("helvetica", "bold");
-  doc.text(settings.about.invoicePdfTitle || "Dispatch Note", right, docTitleY, { align: "right" });
+  const docTitleText = settings.about.invoicePdfTitle || "Dispatch Note";
+  doc.text(docTitleText, right, docTitleY, { align: "right" });
+  const titleWidth = doc.getTextWidth(docTitleText);
+  doc.setDrawColor(40, 40, 40);
+  doc.setLineWidth(0.4);
+  doc.line(right - titleWidth, docTitleY + 1.5, right, docTitleY + 1.5);
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.2);
   doc.setFontSize(io.fontBodyPt);
   doc.setFont("helvetica", "normal");
+  doc.setTextColor(110, 110, 110);
   doc.text(`Ref: ${sale.reference}`, right, docTitleY + 6, { align: "right" });
   doc.text(`Date: ${formatDate(sale.createdAt)}`, right, docTitleY + 11, { align: "right" });
+  doc.setTextColor(0, 0, 0);
   const invoiceQrPayload = String(sale.reference || "").trim() || String(sale._id || "");
   const invoiceQrMm = io.invoiceReferenceQrSizeMm;
   let headerBottom = docTitleY + 16;
@@ -498,16 +512,25 @@ export async function buildInvoicePdf(
     }
   }
   y = Math.max(y, headerBottom);
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.1);
+  doc.line(left, y, right, y);
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.2);
+  y += 6;
 
   if (io.showBillTo) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(io.fontSectionHeadingPt);
-    doc.text("Bill To", left, y);
-    y += 6;
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(io.fontTablePt);
+    doc.setTextColor(120, 120, 120);
+    doc.text("BILL TO", left, y);
+    doc.setTextColor(0, 0, 0);
+    y += 5;
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(io.fontBodyPt);
     const retailLike = sale.type === "retail" || sale.type === "repair";
     doc.text(sale.customerName || (retailLike ? "Walk-in Customer" : "—"), left, y);
+    doc.setFont("helvetica", "normal");
     y += 5;
     if (sale.customerAddress && sale.customerAddress.trim()) {
       doc.setFontSize(io.fontTablePt);
@@ -532,12 +555,20 @@ export async function buildInvoicePdf(
     y += 7;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(io.fontTablePt);
+    doc.setTextColor(110, 110, 110);
     doc.text("#", left, y);
     doc.text("Item", left + 8, y);
     doc.text("Qty", colQty, y);
     doc.text("Unit price", colUnit, y);
     doc.text("Amount", right, y, { align: "right" });
-    y += 6;
+    doc.setTextColor(0, 0, 0);
+    y += 2;
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.1);
+    doc.line(left, y, right, y);
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.2);
+    y += 4;
 
     const itemRowFontPt = Math.min(io.fontTablePt + 2, 11);
     const itemRowStep = itemRowFontPt >= 10 ? 6 : 5;
@@ -558,7 +589,13 @@ export async function buildInvoicePdf(
       y += itemRowStep;
     });
 
-    y += 3;
+    y += 1;
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.1);
+    doc.line(left, y, right, y);
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.2);
+    y += 5;
     doc.setFont("helvetica", "bold");
     const grandTotalFontPt = Math.min(io.fontSectionHeadingPt + 4, 18);
     doc.setFontSize(grandTotalFontPt);
@@ -581,20 +618,33 @@ export async function buildInvoicePdf(
     const prevBal = Number(sale.previousBalance) || 0;
     const invTotal = (Number(sale.total) || 0) - (Number(sale.discount) || 0);
     const totalDueBeforePayments = prevBal + invTotal;
+    doc.setTextColor(110, 110, 110);
     doc.text("Previous Balance:", left, y);
+    doc.setTextColor(0, 0, 0);
     doc.text(formatMoney(prevBal), right, y, { align: "right" });
     y += 6;
+    doc.setTextColor(110, 110, 110);
     doc.text("Invoice Total + Previous Balance:", left, y);
+    doc.setTextColor(0, 0, 0);
     doc.text(formatMoney(totalDueBeforePayments), right, y, { align: "right" });
     y += 6;
     const payments = sale.payments || {};
     const received = (Number(payments.cash) || 0) + (Number(payments.card) || 0) + (Number(payments.bank) || 0);
     if (received > 0) {
+      doc.setTextColor(110, 110, 110);
       doc.text("Payments Received:", left, y);
+      doc.setTextColor(0, 0, 0);
       doc.text("-" + formatMoney(received), right, y, { align: "right" });
       y += 6;
     }
     const balanceDue = totalDueBeforePayments - received;
+    y += 1;
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.1);
+    doc.line(left, y, right, y);
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.2);
+    y += 5;
     doc.setFont("helvetica", "bold");
     const balanceDueFontPt = Math.min(io.fontSectionHeadingPt + 4, 18);
     doc.setFontSize(balanceDueFontPt);
@@ -620,10 +670,12 @@ export async function buildInvoicePdf(
     if (sale.payments!.card) methodAmounts.push({ method: "Card", amount: sale.payments!.card });
     if (sale.payments!.bank) methodAmounts.push({ method: "Bank", amount: sale.payments!.bank });
     if (sale.payments!.credit) methodAmounts.push({ method: "Balance to pay", amount: sale.payments!.credit });
+    doc.setTextColor(110, 110, 110);
     methodAmounts.forEach(({ method, amount }) => {
       doc.text(`${dateStr} — ${method} — ${formatMoney(amount)}`, left, y);
       y += 5;
     });
+    doc.setTextColor(0, 0, 0);
     y += 4;
   }
 
@@ -641,11 +693,19 @@ export async function buildInvoicePdf(
     doc.setFontSize(io.fontTablePt);
     const colSerial = left + 10;
     const colSerialItem = left + 44;
+    doc.setTextColor(110, 110, 110);
     doc.text("#", left, y);
     doc.text("Serial", colSerial, y);
     doc.text("Item", colSerialItem, y);
     doc.text("Unit price", right, y, { align: "right" });
-    y += 5;
+    doc.setTextColor(0, 0, 0);
+    y += 2;
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.1);
+    doc.line(left, y, right, y);
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.2);
+    y += 3;
     let rowNum = 0;
     sale.items.forEach((item) => {
       if (!item.serialNumbers || item.serialNumbers.length === 0) return;
@@ -672,7 +732,11 @@ export async function buildInvoicePdf(
       doc.addPage();
       y = 20;
     }
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.1);
     doc.line(left, y, right, y);
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.2);
     y += 6;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(io.fontSectionHeadingPt);
@@ -682,16 +746,26 @@ export async function buildInvoicePdf(
     doc.setFontSize(io.fontBodyPt);
     const discountAmt = Number(sale.discount) || 0;
     if (discountAmt > 0) {
+      doc.setTextColor(110, 110, 110);
       doc.text("Subtotal:", left, y);
+      doc.setTextColor(0, 0, 0);
       doc.text(formatMoney(sale.subtotal), right, y, { align: "right" });
       y += 6;
       const discLabel =
         sale.discountType === "percent" && sale.discountValue
           ? `Discount (${Math.min(100, Number(sale.discountValue))}%):`
           : "Discount:";
+      doc.setTextColor(110, 110, 110);
       doc.text(discLabel, left, y);
+      doc.setTextColor(0, 0, 0);
       doc.text(`-${formatMoney(discountAmt)}`, right, y, { align: "right" });
-      y += 6;
+      y += 4;
+      doc.setDrawColor(220, 220, 220);
+      doc.setLineWidth(0.1);
+      doc.line(left, y, right, y);
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.2);
+      y += 5;
     }
     doc.setFont("helvetica", "bold");
     const invoiceTotalFontPt = Math.min(io.fontSectionHeadingPt + 4, 18);
@@ -745,6 +819,31 @@ export async function buildInvoicePdf(
     if (defaultBank.iban) {
       y += 4;
       doc.text(`IBAN: ${defaultBank.iban}`, left, y);
+    }
+  }
+
+  if (settings.about.logo) {
+    try {
+      const format = (settings.about.logo as string).startsWith("data:image/jpeg") ? "JPEG" : "PNG";
+      const { width: wmW, height: wmH } = await loadImageDimensions(settings.about.logo as string);
+      const aspect = wmW > 0 && wmH > 0 ? wmW / wmH : 1;
+      const targetW = 130;
+      const targetH = targetW / aspect;
+      const pageH = 297;
+      const wmX = (pageW - targetW) / 2;
+      const wmY = (pageH - targetH) / 2;
+      const totalPages = doc.getNumberOfPages();
+      const docAny = doc as unknown as { GState: new (o: { opacity: number }) => unknown; setGState: (g: unknown) => void };
+      const faded = new docAny.GState({ opacity: 0.06 });
+      const solid = new docAny.GState({ opacity: 1 });
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        docAny.setGState(faded);
+        doc.addImage(settings.about.logo, format, wmX, wmY, targetW, targetH);
+        docAny.setGState(solid);
+      }
+    } catch {
+      /* ignore watermark failure */
     }
   }
 

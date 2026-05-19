@@ -858,7 +858,7 @@ const Page = () => {
 
  {/* ── Always-visible add bar: search + action buttons (pinned at top) ── */}
  <div className="flex-shrink-0 rounded-lg border border-gray-200 bg-white shadow-sm px-1.5 py-1 @[640px]:px-2 @[640px]:py-1.5">
-  <div className="flex flex-nowrap items-center gap-1 @[640px]:gap-1.5 [overflow-x:clip] [overflow-y:visible]">
+  <div className="flex flex-wrap items-center gap-1 @[640px]:gap-1.5">
   <div className="flex-1 min-w-[120px] max-w-[40%]">
   <UnifiedAddInput
    value={search}
