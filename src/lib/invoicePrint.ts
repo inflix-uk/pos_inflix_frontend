@@ -409,6 +409,15 @@ function getLocationPostalLinesOnly(loc: LocationForHeader | null): string[] {
   return lines.slice(0, 6);
 }
 
+function loadImageDimensions(src: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve({ width: 0, height: 0 });
+    img.src = src;
+  });
+}
+
 /** Build A4 invoice PDF. Returns blob URL for open/print. */
 export async function buildInvoicePdf(
   sale: SaleForPrint,
@@ -433,19 +442,15 @@ export async function buildInvoicePdf(
   if (io.showLogo && settings.about.logo) {
     try {
       const format = (settings.about.logo as string).startsWith("data:image/jpeg") ? "JPEG" : "PNG";
-      const maxLogoW = 60;
-      const maxLogoH = 20;
-      const logoImg = new Image();
-      logoImg.src = settings.about.logo as string;
-      const natW = logoImg.naturalWidth || maxLogoW;
-      const natH = logoImg.naturalHeight || maxLogoH;
-      const pxToMm = 0.2646;
-      let logoW = natW * pxToMm;
-      let logoH = natH * pxToMm;
-      if (logoW > maxLogoW || logoH > maxLogoH) {
-        const scale = Math.min(maxLogoW / logoW, maxLogoH / logoH);
-        logoW *= scale;
-        logoH *= scale;
+      const maxLogoW = 28;
+      const maxLogoH = 22;
+      const { width: natW, height: natH } = await loadImageDimensions(settings.about.logo as string);
+      const aspect = natW > 0 && natH > 0 ? natW / natH : maxLogoW / maxLogoH;
+      let logoW = maxLogoW;
+      let logoH = logoW / aspect;
+      if (logoH > maxLogoH) {
+        logoH = maxLogoH;
+        logoW = logoH * aspect;
       }
       const logoX = pageW - left - logoW;
       doc.addImage(settings.about.logo, format, logoX, io.marginMm, logoW, logoH);
@@ -796,19 +801,15 @@ export async function buildReceipt80mmPdf(
         if (!ro.showLogo || !settings.about.logo) break;
         try {
           const format = (settings.about.logo as string).startsWith("data:image/jpeg") ? "JPEG" : "PNG";
-          const maxW = 60;
-          const maxH = 20;
-          const img = new Image();
-          img.src = settings.about.logo as string;
-          const naturalW = img.naturalWidth || maxW;
-          const naturalH = img.naturalHeight || maxH;
-          const pxToMm = 0.2646;
-          let logoW = naturalW * pxToMm;
-          let logoH = naturalH * pxToMm;
-          if (logoW > maxW || logoH > maxH) {
-            const scale = Math.min(maxW / logoW, maxH / logoH);
-            logoW *= scale;
-            logoH *= scale;
+          const maxW = 22;
+          const maxH = 16;
+          const { width: naturalW, height: naturalH } = await loadImageDimensions(settings.about.logo as string);
+          const aspect = naturalW > 0 && naturalH > 0 ? naturalW / naturalH : maxW / maxH;
+          let logoW = maxW;
+          let logoH = logoW / aspect;
+          if (logoH > maxH) {
+            logoH = maxH;
+            logoW = logoH * aspect;
           }
           const receiptLogoX = (width - logoW) / 2;
           doc.addImage(settings.about.logo, format, receiptLogoX, y, logoW, logoH);
@@ -1103,19 +1104,15 @@ export async function buildRepairTicket80mmPdf(
         if (!rp.showLogo || !settings.about.logo) break;
         try {
           const format = (settings.about.logo as string).startsWith("data:image/jpeg") ? "JPEG" : "PNG";
-          const maxW = 60;
-          const maxH = 20;
-          const img = new Image();
-          img.src = settings.about.logo as string;
-          const naturalW = img.naturalWidth || maxW;
-          const naturalH = img.naturalHeight || maxH;
-          const pxToMm = 0.2646;
-          let logoW = naturalW * pxToMm;
-          let logoH = naturalH * pxToMm;
-          if (logoW > maxW || logoH > maxH) {
-            const scale = Math.min(maxW / logoW, maxH / logoH);
-            logoW *= scale;
-            logoH *= scale;
+          const maxW = 22;
+          const maxH = 16;
+          const { width: naturalW, height: naturalH } = await loadImageDimensions(settings.about.logo as string);
+          const aspect = naturalW > 0 && naturalH > 0 ? naturalW / naturalH : maxW / maxH;
+          let logoW = maxW;
+          let logoH = logoW / aspect;
+          if (logoH > maxH) {
+            logoH = maxH;
+            logoW = logoH * aspect;
           }
           const receiptLogoX = (width - logoW) / 2;
           doc.addImage(settings.about.logo, format, receiptLogoX, y, logoW, logoH);
