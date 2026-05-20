@@ -443,23 +443,25 @@ export function invalidateCashDrawerPinCache(): void {
  * ESC/POS drawer pulse: init + ESC p (longer pulse) + real-time DLE DC4 (Epson/Star).
  * Pin 0 = drawer kick connector 2 on most printers; pin 1 = alternate connector.
  */
-export function buildCashDrawerKickBase64(pin: 0 | 1 = 0): string {
+function appendDrawerPulse(bytes: number[], pin: 0 | 1): void {
   const ESC = 0x1b;
   const m = pin === 1 ? 1 : 0;
-  const bytes = new Uint8Array([
-    ESC,
-    0x40,
-    ESC,
-    0x70,
-    m,
-    60,
-    120,
-    0x10,
-    0x14,
-    0x01,
-    m,
-    0x19,
-  ]);
+  bytes.push(ESC, 0x70, m, 60, 120, 0x10, 0x14, 0x01, m, 0x19);
+}
+
+export function buildCashDrawerKickBase64(pin: 0 | 1 = 0): string {
+  const bytes: number[] = [0x1b, 0x40];
+  appendDrawerPulse(bytes, pin);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+/** Single RAW job: init + pulse pin 0 + pulse pin 1 (covers both drawer connectors). */
+export function buildCashDrawerKickBothPinsBase64(): string {
+  const bytes: number[] = [0x1b, 0x40];
+  appendDrawerPulse(bytes, 0);
+  appendDrawerPulse(bytes, 1);
   let bin = "";
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
   return btoa(bin);
@@ -470,51 +472,52 @@ const DRAWER_PRINTER_HINT =
 
 async function sendDrawerKickToAgent(
   settings: PrintingSettings,
-  pin: 0 | 1
+  pin: 0 | 1,
+  tryBothPins: boolean
 ): Promise<PrintReceiptResult> {
-  const drawerPayload = {
+  const drawerPayload: Record<string, unknown> = {
     printerName: settings.receiptPrinterName.trim(),
-    dataBase64: buildCashDrawerKickBase64(pin),
-    jobName: `cash-drawer-pin${pin}`,
+    jobName: tryBothPins ? "cash-drawer-both-pins" : `cash-drawer-pin${pin}`,
+    tryBothPins,
+    pin,
+    dataBase64: tryBothPins ? buildCashDrawerKickBothPinsBase64() : buildCashDrawerKickBase64(pin),
   };
-  const agentRes = await fetchPrintAgent(settings.agentUrl, "POST", "/print/drawer/kick", {
-    token: settings.agentToken,
-    timeoutMs: 10000,
-    jsonBody: drawerPayload,
-  });
-  const agentJson = (await agentRes.json().catch(() => ({}))) as { success?: boolean; message?: string };
-  if (agentRes.ok && agentJson.success) {
-    return { sent: true };
-  }
-  if (agentRes.status === 404) {
-    const legacyRes = await fetchPrintAgent(settings.agentUrl, "POST", "/print/receipt/escpos", {
-      token: settings.agentToken,
-      timeoutMs: 10000,
-      jsonBody: drawerPayload,
-    });
-    const legacyJson = (await legacyRes.json().catch(() => ({}))) as { success?: boolean; message?: string };
-    if (legacyRes.ok && legacyJson.success) {
-      return { sent: true };
+
+  const paths = ["/print/drawer/kick", "/print/receipt/escpos"] as const;
+  let lastError = "Drawer kick failed.";
+
+  for (const path of paths) {
+    try {
+      const agentRes = await fetchPrintAgent(settings.agentUrl, "POST", path, {
+        token: settings.agentToken,
+        timeoutMs: 12000,
+        jsonBody: drawerPayload,
+      });
+      const agentJson = (await agentRes.json().catch(() => ({}))) as {
+        success?: boolean;
+        message?: string;
+        printer?: string;
+        rawEngine?: string;
+      };
+      if (agentRes.ok && agentJson.success) {
+        return { sent: true };
+      }
+      lastError =
+        agentJson.message ||
+        `Drawer kick failed (${agentRes.status} on ${path}). ${DRAWER_PRINTER_HINT}`;
+      if (agentRes.status !== 404) break;
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e);
     }
-    return {
-      sent: false,
-      error:
-        legacyJson.message ||
-        `Drawer kick failed (${legacyRes.status}). Reinstall POS Print Bridge on this PC. ${DRAWER_PRINTER_HINT}`,
-    };
   }
-  return {
-    sent: false,
-    error:
-      agentJson.message ||
-      `Drawer kick failed (${agentRes.status}). ${DRAWER_PRINTER_HINT}`,
-  };
+
+  return { sent: false, error: lastError };
 }
 
-/** Open cash drawer via receipt printer (RAW ESC/POS). Requires silent printing configured. */
+/** Open cash drawer via receipt printer (RAW ESC/POS through Print Bridge). */
 export async function openCashDrawer(options?: {
   pin?: 0 | 1;
-  /** Try pin 0 then pin 1 when the first kick fails or for test (some drawers use pin 5). */
+  /** Pulse both drawer connectors in one RAW job (recommended). */
   tryBothPins?: boolean;
 }): Promise<PrintReceiptResult> {
   const settings = await loadPrintingSettings();
@@ -525,9 +528,6 @@ export async function openCashDrawer(options?: {
     const stored = localStorage.getItem("pos_print_agent_token");
     if (stored !== null) settings.agentToken = stored;
   }
-  if (!settings.silentPrintingEnabled) {
-    return { sent: false, error: "Enable silent printing in Settings → Printing." };
-  }
   if (!settings.receiptPrinterName?.trim()) {
     return { sent: false, error: `Select a receipt printer in Settings → Printing. ${DRAWER_PRINTER_HINT}` };
   }
@@ -536,22 +536,14 @@ export async function openCashDrawer(options?: {
   }
   const ok = await checkAgentHealth(settings.agentUrl, settings.agentToken);
   if (!ok) {
-    return { sent: false, error: "Cannot reach Print Bridge on this PC." };
+    return { sent: false, error: "Cannot reach Print Bridge on this PC. Start POS Print Bridge and check http://127.0.0.1:9123/health" };
   }
 
   const primary = options?.pin ?? (await getCashDrawerPin());
-  const pinsToTry: (0 | 1)[] = options?.tryBothPins ? [primary, primary === 0 ? 1 : 0] : [primary];
+  const tryBothPins = options?.tryBothPins !== false;
 
   try {
-    let last: PrintReceiptResult = { sent: false, error: "Drawer kick failed." };
-    for (const pin of pinsToTry) {
-      last = await sendDrawerKickToAgent(settings, pin);
-      if (last.sent) return last;
-      if (options?.tryBothPins && pin !== pinsToTry[pinsToTry.length - 1]) {
-        await new Promise((r) => setTimeout(r, 400));
-      }
-    }
-    return last;
+    return await sendDrawerKickToAgent(settings, primary, tryBothPins);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { sent: false, error: msg };
