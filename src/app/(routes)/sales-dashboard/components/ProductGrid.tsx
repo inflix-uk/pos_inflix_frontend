@@ -140,7 +140,7 @@ function CategoryStrip({
   onClick={() => onCategoryChange(cat)}
   className={cn(
   "touch-manipulation rounded-lg font-semibold whitespace-nowrap transition-all border shadow-sm",
-  "min-h-[32px] px-2.5 py-1 text-xs @[480px]/pg:min-h-[36px] @[480px]/pg:px-3 @[480px]/pg:py-1.5 @[480px]/pg:text-sm @[768px]/pg:min-h-[40px] @[768px]/pg:px-3.5 @[768px]/pg:py-1.5 @[768px]/pg:text-sm",
+  "min-h-[36px] px-3 py-1.5 text-[13px] @[480px]/pg:min-h-[40px] @[480px]/pg:px-3.5 @[480px]/pg:py-2 @[480px]/pg:text-sm @[768px]/pg:min-h-[44px] @[768px]/pg:px-4 @[768px]/pg:py-2 @[768px]/pg:text-[15px]",
   cat === "all"
    ? (isActive ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50")
    : (isActive ? theme.tabActive : theme.tab + " hover:brightness-95")

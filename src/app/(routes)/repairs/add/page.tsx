@@ -46,7 +46,7 @@ export default function AddRepairTicketPage() {
  id: string;
  deviceDescription: string;
  serialNumber: string;
- problemType: string;
+ problemTypes: string[];
  estimatedPrice: string;
  devicePassword: string;
  notes: string;
@@ -56,11 +56,12 @@ export default function AddRepairTicketPage() {
  const [problemOptions, setProblemOptions] = useState<string[]>(DEFAULT_PROBLEMS);
  const [newProblemModalOpen, setNewProblemModalOpen] = useState(false);
  const [newProblemInput, setNewProblemInput] = useState("");
+ const [problemTargetDeviceId, setProblemTargetDeviceId] = useState<string | null>(null);
 
  const addDevice = (deviceDescription: string, serialNumber: string) => {
  setDevices((prev) => [
  ...prev,
- { id: `d-${Date.now()}-${prev.length}`, deviceDescription: deviceDescription.trim(), serialNumber: serialNumber.trim(), problemType: "", estimatedPrice: "", devicePassword: "", notes: "" },
+ { id: `d-${Date.now()}-${prev.length}`, deviceDescription: deviceDescription.trim(), serialNumber: serialNumber.trim(), problemTypes: [], estimatedPrice: "", devicePassword: "", notes: "" },
  ]);
  };
  const updateDevice = (id: string, updates: Partial<Omit<DeviceEntry, "id">>) => {
@@ -68,6 +69,16 @@ export default function AddRepairTicketPage() {
  };
  const removeDevice = (id: string) => {
  setDevices((prev) => prev.filter((d) => d.id !== id));
+ };
+ const toggleProblem = (deviceId: string, problem: string) => {
+ setDevices((prev) => prev.map((d) => {
+ if (d.id !== deviceId) return d;
+ const has = d.problemTypes.includes(problem);
+ return { ...d, problemTypes: has ? d.problemTypes.filter((p) => p !== problem) : [...d.problemTypes, problem] };
+ }));
+ };
+ const removeProblem = (deviceId: string, problem: string) => {
+ setDevices((prev) => prev.map((d) => d.id === deviceId ? { ...d, problemTypes: d.problemTypes.filter((p) => p !== problem) } : d));
  };
 
  // Options
@@ -113,18 +124,25 @@ export default function AddRepairTicketPage() {
 
  const addNewProblemFromModal = () => {
  const v = newProblemInput.trim();
- if (v && !problemOptions.includes(v)) {
- setProblemOptions((prev) => [...prev, v]);
+ if (!v) return;
+ if (!problemOptions.includes(v)) setProblemOptions((prev) => [...prev, v]);
+ if (problemTargetDeviceId) {
+ setDevices((prev) => prev.map((d) => {
+ if (d.id !== problemTargetDeviceId) return d;
+ if (d.problemTypes.includes(v)) return d;
+ return { ...d, problemTypes: [...d.problemTypes, v] };
+ }));
+ }
  setNewProblemInput("");
  setNewProblemModalOpen(false);
- }
+ setProblemTargetDeviceId(null);
  };
 
  const handleCreateRepair = async () => {
  if (!selectedCustomer) { setMessage({ type: "error", text: "Please select a customer." }); return; }
  if (devices.length === 0) { setMessage({ type: "error", text: "Please add at least one device." }); return; }
- const invalid = devices.find((d) => !d.deviceDescription.trim() || !d.problemType);
- if (invalid) { setMessage({ type: "error", text: "Each device must have a description and a problem selected." }); return; }
+ const invalid = devices.find((d) => !d.deviceDescription.trim() || d.problemTypes.length === 0);
+ if (invalid) { setMessage({ type: "error", text: "Each device must have a description and at least one problem selected." }); return; }
  setIsSubmitting(true);
  setMessage({ type: "success", text: "" });
  try {
@@ -133,7 +151,7 @@ export default function AddRepairTicketPage() {
  const deviceList = devices.map((d) => ({
   deviceDescription: d.deviceDescription.trim(),
   serialNumber: d.serialNumber.trim(),
-  problemType: d.problemType,
+  problemType: d.problemTypes.join(", "),
   devicePassword: d.devicePassword.trim(),
   estimatedCost: d.estimatedPrice.trim() ? (parseFloat(d.estimatedPrice) || null) : null,
   notes: d.notes.trim(),
@@ -141,7 +159,7 @@ export default function AddRepairTicketPage() {
  const combinedNotes = devices
   .map((d, i) => {
   const head = devices.length > 1 ? `Device ${i + 1}: ` : "";
-  const body = [d.problemType, d.notes].filter(Boolean).join(" · ");
+  const body = [d.problemTypes.join(", "), d.notes].filter(Boolean).join(" · ");
   return body ? `${head}${body}` : "";
   })
   .filter(Boolean)
@@ -158,7 +176,7 @@ export default function AddRepairTicketPage() {
   internalNotes: internalNotes || undefined,
   devicePassword: first.devicePassword.trim() || undefined,
   estimatedCost: firstEstimated ?? undefined,
-  problemType: first.problemType,
+  problemType: first.problemTypes.join(", "),
   notifyViaEmail,
   ...(selectedLocationId ? { locationId: selectedLocationId } : {}),
  };
@@ -186,7 +204,7 @@ export default function AddRepairTicketPage() {
  } catch { /* ignore */ }
  };
 
- const canCreateRepair = Boolean(selectedCustomer) && devices.length > 0 && devices.every((d) => d.deviceDescription.trim() && d.problemType);
+ const canCreateRepair = Boolean(selectedCustomer) && devices.length > 0 && devices.every((d) => d.deviceDescription.trim() && d.problemTypes.length > 0);
 
  return (
  <div className="min-h-screen bg-gray-50 p-4">
@@ -328,14 +346,35 @@ export default function AddRepairTicketPage() {
    <input type="text" value={d.serialNumber} onChange={(e) => updateDevice(d.id, { serialNumber: e.target.value })} placeholder="Optional" className={`${inputCls} font-mono text-xs`} />
    </div>
    <div className="sm:col-span-2">
-   <label className={labelCls}>Problem <span className="text-red-500">*</span></label>
-   <div className="flex gap-2">
-    <select value={d.problemType} onChange={(e) => updateDevice(d.id, { problemType: e.target.value })} className={`${inputCls} flex-1 appearance-none`}>
-    <option value="">Select problem</option>
-    {problemOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-    </select>
-    <button type="button" onClick={() => setNewProblemModalOpen(true)} className="shrink-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs font-medium text-gray-600 shadow-sm hover:bg-gray-50">
-    + New
+   <label className={labelCls}>Problems <span className="text-red-500">*</span> <span className="text-gray-400 normal-case font-normal">(select one or more)</span></label>
+   {d.problemTypes.length > 0 && (
+    <div className="flex flex-wrap gap-1.5 mb-2">
+    {d.problemTypes.map((p) => (
+    <span key={p} className="inline-flex items-center gap-1 rounded-full bg-orange-100 text-orange-800 border border-orange-200 px-2 py-0.5 text-xs font-medium">
+    {p}
+    <button type="button" onClick={() => removeProblem(d.id, p)} className="hover:text-orange-900" title="Remove">
+    <X className="h-3 w-3" />
+    </button>
+    </span>
+    ))}
+    </div>
+   )}
+   <div className="flex flex-wrap gap-1.5 mb-2">
+    {problemOptions.map((p) => {
+    const selected = d.problemTypes.includes(p);
+    return (
+    <button
+    key={p}
+    type="button"
+    onClick={() => toggleProblem(d.id, p)}
+    className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${selected ? "bg-orange-500 border-orange-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+    >
+    {selected ? "✓ " : "+ "}{p}
+    </button>
+    );
+    })}
+    <button type="button" onClick={() => { setProblemTargetDeviceId(d.id); setNewProblemModalOpen(true); }} className="rounded-full border border-dashed border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50">
+    + New problem
     </button>
    </div>
    </div>
@@ -416,12 +455,12 @@ export default function AddRepairTicketPage() {
 
  {newProblemModalOpen && (
  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-  <div className="absolute inset-0 bg-black/30" onClick={() => setNewProblemModalOpen(false)} />
+  <div className="absolute inset-0 bg-black/30" onClick={() => { setNewProblemModalOpen(false); setProblemTargetDeviceId(null); setNewProblemInput(""); }} />
   <div className="relative w-full max-w-sm rounded-lg border border-gray-200 bg-white p-4 shadow-xl">
   <h3 className="text-sm font-bold text-gray-900 mb-3">Add problem type</h3>
   <input type="text" value={newProblemInput} onChange={(e) => setNewProblemInput(e.target.value)} placeholder="e.g. Cracked screen" className={`${inputCls} mb-3`} />
   <div className="flex justify-end gap-2">
-  <button type="button" onClick={() => setNewProblemModalOpen(false)} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+  <button type="button" onClick={() => { setNewProblemModalOpen(false); setProblemTargetDeviceId(null); setNewProblemInput(""); }} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
   <button type="button" onClick={addNewProblemFromModal} className="rounded-lg bg-orange-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-600">Add</button>
   </div>
   </div>
