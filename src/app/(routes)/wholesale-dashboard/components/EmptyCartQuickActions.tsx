@@ -46,16 +46,26 @@ export function EmptyCartQuickActions({
   {hint}
  </HelpTip>
  </div>
- <div className="mx-auto mt-4 grid max-w-md grid-cols-2 gap-2 @[640px]:flex @[640px]:flex-wrap @[640px]:justify-center">
+ <div className="mx-auto mt-4 grid max-w-md grid-cols-2 gap-3 @[640px]:flex @[640px]:flex-wrap @[640px]:justify-center">
+ <button
+  type="button"
+  onClick={onAddManualItem}
+  disabled={!canAct}
+  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50/90 px-5 py-3 text-sm font-semibold text-neutral-900 hover:bg-neutral-100/90 disabled:cursor-not-allowed disabled:opacity-50"
+  aria-label="Add MISC item"
+ >
+  <Plus className="h-5 w-5 shrink-0" />
+  MISC Item
+ </button>
  <button
   type="button"
   onClick={onFocusAddInput}
   disabled={!canAct}
-  className="col-span-2 inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 @[640px]:col-span-1 @[640px]:min-h-0"
+  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
   title={canAct ? "Focus scan/search (Ctrl+K)" : undefined}
   aria-label="Scan or search to add item"
  >
-  <ScanLine className="h-3.5 w-3.5 shrink-0" />
+  <ScanLine className="h-5 w-5 shrink-0" />
   Scan / search
  </button>
  {showProductGridAction && !retailMode && (
@@ -63,10 +73,10 @@ export function EmptyCartQuickActions({
   type="button"
   onClick={onShowProducts}
   disabled={!canAct}
-  className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
   aria-label="Show product grid"
   >
-  <Package className="h-3.5 w-3.5 shrink-0" />
+  <Package className="h-5 w-5 shrink-0" />
   Products
   </button>
  )}
@@ -75,32 +85,22 @@ export function EmptyCartQuickActions({
   type="button"
   onClick={onPasteImeis}
   disabled={!canAct}
-  className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
   title={canAct ? "Bulk IMEIs" : undefined}
   aria-label="Bulk IMEIs"
  >
-  <ClipboardList className="h-3.5 w-3.5 shrink-0" />
+  <ClipboardList className="h-5 w-5 shrink-0" />
   Bulk IMEIs
  </button>
  )}
- <button
-  type="button"
-  onClick={onAddManualItem}
-  disabled={!canAct}
-  className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-neutral-50/90 px-3 py-2 text-xs font-medium text-neutral-900 hover:bg-neutral-100/90 disabled:cursor-not-allowed disabled:opacity-50"
-  aria-label="Add MISC item"
- >
-  <Plus className="h-3.5 w-3.5 shrink-0" />
-  MISC Item
- </button>
  {hasDrafts && !retailMode && (
   <button
   type="button"
   onClick={onLoadDraft}
-  className="col-span-2 inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-neutral-50/80 px-3 py-2 text-xs font-medium text-neutral-900 hover:bg-neutral-100 @[640px]:col-span-1"
+  className="col-span-2 inline-flex min-h-[52px] items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50/80 px-5 py-3 text-sm font-semibold text-neutral-900 hover:bg-neutral-100 @[640px]:col-span-1"
   aria-label="Load draft"
   >
-  <FileText className="h-3.5 w-3.5 shrink-0" />
+  <FileText className="h-5 w-5 shrink-0" />
   Load draft
   </button>
  )}
