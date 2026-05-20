@@ -44,10 +44,10 @@ function buildEscposTestPayload(): string {
  return btoa(bin);
 }
 
-/** Same-origin proxy avoids browser CORS (localhost:3001 → 127.0.0.1:9123 is cross-origin). */
+/** Browser → Print Bridge directly. Chrome treats http://127.0.0.1 as a secure origin so HTTPS pages may load it; Print Bridge must respond with CORS headers (Access-Control-Allow-Origin). */
 function fetchStatus(agentUrl: string): Promise<{ tokenPresent?: boolean; token?: string } | null> {
- const q = encodeURIComponent(agentUrl.replace(/\/$/, ""));
- return fetch(`/api/print-agent/status?agentBase=${q}`, { method: "GET", signal: AbortSignal.timeout(8000) })
+ const base = agentUrl.replace(/\/$/, "");
+ return fetch(`${base}/status`, { method: "GET", signal: AbortSignal.timeout(8000) })
  .then((r) => (r.ok ? r.json() : null))
  .catch(() => null);
 }
@@ -120,7 +120,7 @@ export default function PrintingSettingsPage() {
  return;
  }
  const printersRes = await fetch(
- `/api/print-agent/printers?agentBase=${encodeURIComponent(agentUrl.replace(/\/$/, ""))}`,
+ `${agentUrl.replace(/\/$/, "")}/printers`,
  {
   method: "GET",
   headers: token ? { "X-Print-Token": token } : {},
@@ -160,19 +160,16 @@ export default function PrintingSettingsPage() {
   setTestResult({ ok: false, text: "Select a Receipt printer first." });
   return;
   }
-  const res = await fetch(`/api/print-agent/print/receipt/escpos`, {
+  const res = await fetch(`${agentUrl.replace(/\/$/, "")}/print/receipt/escpos`, {
   method: "POST",
   headers: {
    "Content-Type": "application/json",
    ...(token ? { "X-Print-Token": token } : {}),
   },
   body: JSON.stringify({
-   agentBase: agentUrl.replace(/\/$/, ""),
-   payload: {
    printerName: receiptPrinterName.trim(),
    dataBase64: buildEscposTestPayload(),
    jobName: "print-bridge-test",
-   },
   }),
   signal: AbortSignal.timeout(15000),
   });
@@ -181,13 +178,17 @@ export default function PrintingSettingsPage() {
   setTestResult({ ok: true, text: "Test sent. Check the receipt printer." });
   } else if (res.status === 401) {
   setTestResult({ ok: false, text: "Agent token invalid. Copy it from Print Bridge Status and Save." });
-  } else if (res.status === 502) {
-  setTestResult({ ok: false, text: "Cannot reach Print Bridge. Is it running on this PC?" });
   } else {
   setTestResult({ ok: false, text: j.message || `Agent error (${res.status}). Check printer name.` });
   }
  } catch (e) {
-  setTestResult({ ok: false, text: e instanceof Error ? e.message : "Test print failed." });
+  const msg = e instanceof Error ? e.message : "Test print failed.";
+  setTestResult({
+  ok: false,
+  text: msg.includes("fetch") || msg.includes("Failed to fetch")
+   ? "Cannot reach Print Bridge from the browser. Is Print Bridge running on this PC, and does it allow CORS for this site?"
+   : msg,
+  });
  } finally {
   setTesting(false);
  }
@@ -207,9 +208,9 @@ export default function PrintingSettingsPage() {
   hint: "LAN IPs are blocked by the proxy. Use http://127.0.0.1:9123.",
   },
   {
-  label: "Print Bridge is reachable",
+  label: "Print Bridge is reachable from this browser",
   ok: agentReachable === true,
-  hint: "Install/start POS Print Bridge on this PC, then click Refresh printers.",
+  hint: "Install/start POS Print Bridge on this PC. If it is running, the browser may be blocked by CORS — Print Bridge must allow this site's origin.",
   },
   {
   label: "Agent token is present on this device",
@@ -351,8 +352,8 @@ export default function PrintingSettingsPage() {
 
   <p className="text-sm text-gray-600 bg-blue-50 px-3 py-2 rounded-lg border border-neutral-200">
   Install POS Print Bridge on this PC (one-click installer), then click <strong>Refresh printers</strong> to test
-  the connection. The app checks the agent through the Next.js server so the browser does not block the link to
-  127.0.0.1 (CORS).
+  the connection. The browser talks to Print Bridge directly at 127.0.0.1 (Chrome treats loopback as a secure
+  origin even from HTTPS). Print Bridge must allow this site&apos;s origin via CORS.
   </p>
 
   <div>

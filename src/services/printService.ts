@@ -103,23 +103,21 @@ export function isLabelSilentPrintingConfigured(settings: PrintingSettings | nul
   return !!parseAllowedLoopbackAgentBase(settings.agentUrl);
 }
 
-/** Check if agent is reachable (via same-origin proxy — avoids CORS from app origin to 127.0.0.1:9123). */
+/** Check if agent is reachable. Calls Print Bridge DIRECTLY from the browser (Chrome treats http://127.0.0.1 as a secure origin even from HTTPS pages, so mixed-content is allowed; the cloud-side proxy fallback is only used in same-machine installs). */
 export async function checkAgentHealth(
   agentUrl: string,
   agentToken: string
 ): Promise<boolean> {
   if (typeof window === "undefined") return false;
+  const base = agentUrl.replace(/\/$/, "");
   try {
     const headers: HeadersInit = {};
     if (agentToken) headers["X-Print-Token"] = agentToken;
-    const res = await fetch(
-      `/api/print-agent/health?agentBase=${encodeURIComponent(agentUrl.replace(/\/$/, ""))}`,
-      {
-        method: "GET",
-        headers,
-        signal: AbortSignal.timeout(5000),
-      }
-    );
+    const res = await fetch(`${base}/health`, {
+      method: "GET",
+      headers,
+      signal: AbortSignal.timeout(5000),
+    });
     const json = (await res.json().catch(() => ({}))) as { ok?: boolean };
     return res.ok && !!json.ok;
   } catch {
@@ -179,19 +177,16 @@ export async function printReceipt(saleId: string): Promise<PrintReceiptResult> 
     if (!json.success || !json.dataBase64) {
       return { sent: false, error: "Backend did not return receipt data." };
     }
-    const agentRes = await fetch(`/api/print-agent/print/receipt/escpos`, {
+    const agentRes = await fetch(`${settings.agentUrl.replace(/\/$/, "")}/print/receipt/escpos`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Print-Token": settings.agentToken,
       },
       body: JSON.stringify({
-        agentBase: settings.agentUrl.replace(/\/$/, ""),
-        payload: {
-          printerName: settings.receiptPrinterName,
-          dataBase64: json.dataBase64,
-          jobName: json.jobName || `receipt-${saleId}`,
-        },
+        printerName: settings.receiptPrinterName,
+        dataBase64: json.dataBase64,
+        jobName: json.jobName || `receipt-${saleId}`,
       }),
       signal: AbortSignal.timeout(30000),
     });
@@ -287,20 +282,17 @@ export async function printLabelsPdf(
   }
 
   try {
-    const res = await fetch(`/api/print-agent/print/pdf`, {
+    const res = await fetch(`${settings.agentUrl.replace(/\/$/, "")}/print/pdf`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(settings.agentToken ? { "X-Print-Token": settings.agentToken } : {}),
       },
       body: JSON.stringify({
-        agentBase: settings.agentUrl.replace(/\/$/, ""),
-        payload: {
-          printerName: settings.labelPrinterName,
-          pdfBase64,
-          jobName,
-          scale: options?.scale ?? "noscale",
-        },
+        printerName: settings.labelPrinterName,
+        pdfBase64,
+        jobName,
+        scale: options?.scale ?? "noscale",
       }),
       signal: AbortSignal.timeout(30000),
     });
@@ -380,22 +372,19 @@ export async function printRepairLabelCanvasPngToAgent(
     return false;
   }
   try {
-    const res = await fetch(`/api/print-agent/print/label-png`, {
+    const res = await fetch(`${settings.agentUrl.replace(/\/$/, "")}/print/label-png`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(settings.agentToken ? { "X-Print-Token": settings.agentToken } : {}),
       },
       body: JSON.stringify({
-        agentBase: settings.agentUrl.replace(/\/$/, ""),
-        payload: {
-          printerName: settings.labelPrinterName,
-          pngBase64,
-          jobName,
-          copies: 1,
-          gdiWidthMm,
-          gdiHeightMm,
-        },
+        printerName: settings.labelPrinterName,
+        pngBase64,
+        jobName,
+        copies: 1,
+        gdiWidthMm,
+        gdiHeightMm,
       }),
       signal: AbortSignal.timeout(30000),
     });
@@ -428,19 +417,16 @@ export async function printInvoicePdf(pdfBase64: string): Promise<boolean> {
   const ok = await checkAgentHealth(settings.agentUrl, settings.agentToken);
   if (!ok) return false;
   try {
-    const res = await fetch(`/api/print-agent/print/pdf`, {
+    const res = await fetch(`${settings.agentUrl.replace(/\/$/, "")}/print/pdf`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(settings.agentToken ? { "X-Print-Token": settings.agentToken } : {}),
       },
       body: JSON.stringify({
-        agentBase: settings.agentUrl.replace(/\/$/, ""),
-        payload: {
-          printerName: settings.a4PrinterName,
-          pdfBase64,
-          jobName: "invoice",
-        },
+        printerName: settings.a4PrinterName,
+        pdfBase64,
+        jobName: "invoice",
       }),
       signal: AbortSignal.timeout(30000),
     });
