@@ -243,11 +243,14 @@ export function normalizeSalesReceiptSectionOrder(input?: string[] | null): Sale
   /** QR at footer (before thank you), matching 80mm PDF / browser print preview. */
   const qr: SalesReceiptSectionId = "reference_qr";
   if (normalized.includes(qr)) {
-    const base = normalized.filter((id) => id !== qr);
-    const iThank = base.indexOf("thank_you");
-    const at = iThank >= 0 ? iThank : base.length;
-    base.splice(at, 0, qr);
-    normalized = base;
+    const withoutQr = normalized.filter((id) => id !== qr);
+    const iThank = withoutQr.indexOf("thank_you");
+    const at = iThank >= 0 ? iThank : withoutQr.length;
+    normalized = [
+      ...withoutQr.slice(0, at),
+      qr,
+      ...withoutQr.slice(at),
+    ];
   }
   return normalized;
 }
