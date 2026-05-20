@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { ChevronLeft, MapPin, Calendar, RefreshCw, ChevronDown, ChevronUp, X, Eye, Loader2, ArrowLeft, Printer, Receipt } from "lucide-react";
+import { ChevronLeft, MapPin, Calendar, RefreshCw, ChevronDown, ChevronUp, X, Eye, Loader2, ArrowLeft, Receipt } from "lucide-react";
 import { useTakingsDashboard } from "./hooks/useTakingsDashboard";
 import {
  formatDateLabel,
@@ -213,16 +213,7 @@ export default function TakingsDashboardPage() {
  <TakingsSkeleton />
  ) : data ? (
  <>
-  <TillReadingCard
-  data={data}
-  dateLabel={formatDateLabel(from, to)}
-  rangeLabel={dateRangeLabel}
-  locationLabel={
-   selectedLocationId === "all"
-   ? "All locations"
-   : locations.find((l) => l._id === selectedLocationId)?.name || "—"
-  }
-  />
+  <TillReadingCard data={data} />
 
   <section className="mb-4 @[640px]:mb-5 @[768px]:mb-8">
   <h2 className="mb-2.5 @[640px]:mb-3 @[768px]:mb-4 text-[11px] @[640px]:text-xs @[768px]:text-sm font-semibold uppercase tracking-wide text-gray-500">
@@ -352,6 +343,76 @@ export default function TakingsDashboardPage() {
   onClose={() => setSalesModalOpen(false)}
  />
  )}
+ </div>
+ );
+}
+
+function TillReadingCard({
+ data,
+}: {
+ data: import("./service/takingsDashboardApi").TakingsDashboardData;
+}) {
+ const { takings } = data;
+ const pb = takings.paymentBreakdown;
+ const totalIn = pb.cash.in + pb.card.in + pb.bank.in + pb.credit.in;
+ const totalOut = pb.cash.out + pb.card.out + pb.bank.out + pb.credit.out;
+ const totalNet = pb.cash.net + pb.card.net + pb.bank.net + pb.credit.net;
+
+ return (
+ <section className="mb-4 @[640px]:mb-5 @[768px]:mb-8">
+ <div className="mb-2.5 @[640px]:mb-3 @[768px]:mb-4">
+ <h2 className="text-[11px] @[640px]:text-xs @[768px]:text-sm font-semibold uppercase tracking-wide text-gray-500 flex items-center gap-1.5">
+  <Receipt className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4" />
+  Till Reading (Z-Read)
+ </h2>
+ </div>
+ <div className="rounded-xl border-2 border-dashed border-gray-300 bg-white p-3 @[640px]:p-4 @[768px]:p-5 shadow-sm">
+ <div className="grid grid-cols-2 @[640px]:grid-cols-3 @[1024px]:grid-cols-6 gap-2.5 @[640px]:gap-3 mb-3 pb-3 border-b border-dashed border-gray-200">
+  <TillStat label="Sales #" value={String(takings.salesCount)} />
+  <TillStat label="Refunds #" value={String(takings.refundsCount)} />
+  <TillStat label="Voids #" value={String(takings.voidsCount)} />
+  <TillStat label="Gross sales" value={new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(takings.grossSales)} />
+  <TillStat label="Refunds" value={new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(takings.refundsGross)} negative />
+  <TillStat label="Net revenue" value={new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(takings.netRevenue)} highlight />
+ </div>
+ <div className="overflow-x-auto">
+  <table className="min-w-full text-[11px] @[640px]:text-xs @[768px]:text-sm">
+  <thead>
+  <tr className="text-gray-500">
+  <th className="px-2 py-1 text-left font-medium">Method</th>
+  <th className="px-2 py-1 text-right font-medium">In</th>
+  <th className="px-2 py-1 text-right font-medium">Out</th>
+  <th className="px-2 py-1 text-right font-medium">Net</th>
+  </tr>
+  </thead>
+  <tbody>
+  {(["cash","card","bank","credit"] as const).map((m) => (
+  <tr key={m} className="border-t border-gray-100">
+   <td className="px-2 py-1.5 capitalize font-medium text-gray-900">{m}</td>
+   <td className="px-2 py-1.5 text-right text-gray-700 tabular-nums">{new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(pb[m].in)}</td>
+   <td className="px-2 py-1.5 text-right text-gray-700 tabular-nums">{new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(pb[m].out)}</td>
+   <td className={`px-2 py-1.5 text-right font-medium tabular-nums ${pb[m].net < 0 ? "text-red-600" : "text-gray-900"}`}>{new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(pb[m].net)}</td>
+  </tr>
+  ))}
+  <tr className="border-t-2 border-gray-300 bg-orange-50/30">
+  <td className="px-2 py-1.5 font-bold uppercase text-orange-700">Total</td>
+  <td className="px-2 py-1.5 text-right font-bold text-orange-700 tabular-nums">{new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(totalIn)}</td>
+  <td className="px-2 py-1.5 text-right font-bold text-orange-700 tabular-nums">{new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(totalOut)}</td>
+  <td className="px-2 py-1.5 text-right font-bold text-orange-700 tabular-nums">{new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(totalNet)}</td>
+  </tr>
+  </tbody>
+  </table>
+ </div>
+ </div>
+ </section>
+ );
+}
+
+function TillStat({ label, value, negative, highlight }: { label: string; value: string; negative?: boolean; highlight?: boolean }) {
+ return (
+ <div>
+ <p className="text-[10px] @[640px]:text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
+ <p className={`mt-0.5 text-sm @[640px]:text-base @[1024px]:text-lg font-bold tabular-nums ${negative ? "text-red-600" : highlight ? "text-orange-700" : "text-gray-900"}`}>{value}</p>
  </div>
  );
 }
