@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useMemo } from "react";
-import { Search, Package, PackagePlus, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Package, PackagePlus, Plus } from "lucide-react";
 import { getLucideIconByName } from "@/lib/lucide-icons";
 import { cn } from "@/lib/utils";
 import { HelpTip } from "@/components/HelpTip";
@@ -122,93 +122,14 @@ function CategoryStrip({
  embedded?: boolean;
  onAddManualItem?: () => void;
 }) {
- const scrollRef = useRef<HTMLDivElement>(null);
- const [canScrollLeft, setCanScrollLeft] = useState(false);
- const [canScrollRight, setCanScrollRight] = useState(false);
- const dragState = useRef<{ down: boolean; startX: number; scrollLeft: number; moved: boolean }>({ down: false, startX: 0, scrollLeft: 0, moved: false });
-
- const checkScroll = () => {
- const el = scrollRef.current;
- if (!el) return;
- setCanScrollLeft(el.scrollLeft > 2);
- setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
- };
-
- useEffect(() => {
- checkScroll();
- const el = scrollRef.current;
- if (!el) return;
- el.addEventListener("scroll", checkScroll, { passive: true });
- const ro = new ResizeObserver(checkScroll);
- ro.observe(el);
- return () => { el.removeEventListener("scroll", checkScroll); ro.disconnect(); };
- }, [categories.length]);
-
- const scroll = (dir: "left" | "right") => {
- const el = scrollRef.current;
- if (!el) return;
- el.scrollBy({ left: dir === "left" ? -200 : 200, behavior: "smooth" });
- };
-
- // Mouse drag-to-scroll — defer pointer capture until actual drag so button clicks still fire
- const onPointerDown = (e: React.PointerEvent) => {
- const el = scrollRef.current;
- if (!el) return;
- dragState.current = { down: true, startX: e.clientX, scrollLeft: el.scrollLeft, moved: false };
- el.style.cursor = "grabbing";
- };
- const onPointerMove = (e: React.PointerEvent) => {
- if (!dragState.current.down) return;
- const dx = e.clientX - dragState.current.startX;
- if (Math.abs(dx) > 3) {
- if (!dragState.current.moved) {
- dragState.current.moved = true;
- scrollRef.current?.setPointerCapture(e.pointerId);
- }
- }
- scrollRef.current!.scrollLeft = dragState.current.scrollLeft - dx;
- };
- const onPointerUp = (e: React.PointerEvent) => {
- if (!dragState.current.down) return;
- dragState.current.down = false;
- const el = scrollRef.current;
- if (el) {
- try { el.releasePointerCapture(e.pointerId); } catch { /* not captured */ }
- el.style.cursor = "";
- }
- };
-
  return (
  <div
  className={cn(
  "relative border-b border-gray-100/90 bg-white",
- embedded ? "px-1 py-1.5 sm:px-1.5" : "px-1 py-2 sm:px-2"
+ embedded ? "px-1.5 py-2 sm:px-2" : "px-1.5 py-2.5 sm:px-2.5"
  )}
  >
- <div className="flex items-center gap-1">
- {/* Left arrow */}
- <button
-  type="button"
-  onClick={() => scroll("left")}
-  className={cn(
-  "flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all",
-  !canScrollLeft && "opacity-30 pointer-events-none"
-  )}
-  aria-label="Scroll categories left"
-  tabIndex={-1}
- >
-  <ChevronLeft className="h-4 w-4" />
- </button>
-
- {/* Scrollable category row — drag or touch to scroll */}
- <div
-  ref={scrollRef}
-  className="flex-1 min-w-0 overflow-x-auto scrollbar-hide flex items-center gap-1.5 cursor-grab select-none touch-scroll"
-  onPointerDown={onPointerDown}
-  onPointerMove={onPointerMove}
-  onPointerUp={onPointerUp}
-  onPointerCancel={onPointerUp}
- >
+ <div className="flex flex-wrap items-center gap-1.5">
   {categories.map((cat) => {
   const theme = themeForCategory(cat);
   const isActive = categoryFilter === cat;
@@ -216,10 +137,10 @@ function CategoryStrip({
   <button
   key={cat}
   type="button"
-  onClick={(e) => { if (dragState.current.moved) { e.preventDefault(); return; } onCategoryChange(cat); }}
+  onClick={() => onCategoryChange(cat)}
   className={cn(
-  "touch-manipulation rounded-md font-semibold whitespace-nowrap transition-all flex-shrink-0 border shadow-sm",
-  "min-h-[26px] px-2 py-0.5 text-[11px] @[480px]/pg:min-h-[30px] @[480px]/pg:px-2.5 @[480px]/pg:py-1 @[480px]/pg:text-xs @[768px]/pg:min-h-[32px] @[768px]/pg:text-sm",
+  "touch-manipulation rounded-lg font-semibold whitespace-nowrap transition-all border shadow-sm",
+  "min-h-[32px] px-2.5 py-1 text-xs @[480px]/pg:min-h-[36px] @[480px]/pg:px-3 @[480px]/pg:py-1.5 @[480px]/pg:text-sm @[768px]/pg:min-h-[40px] @[768px]/pg:px-3.5 @[768px]/pg:py-1.5 @[768px]/pg:text-sm",
   cat === "all"
    ? (isActive ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50")
    : (isActive ? theme.tabActive : theme.tab + " hover:brightness-95")
@@ -229,35 +150,17 @@ function CategoryStrip({
   </button>
   );
   })}
- </div>
-
- {/* Right arrow */}
- <button
-  type="button"
-  onClick={() => scroll("right")}
-  className={cn(
-  "flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all",
-  !canScrollRight && "opacity-30 pointer-events-none"
-  )}
-  aria-label="Scroll categories right"
-  tabIndex={-1}
- >
-  <ChevronRight className="h-4 w-4" />
- </button>
 
  {/* Add manual item button (non-embedded only) */}
  {onAddManualItem && !embedded && (
-  <>
-  <div className="w-px h-6 bg-gray-200 flex-shrink-0" />
   <button
   type="button"
   onClick={onAddManualItem}
-  className="flex-shrink-0 flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-100 transition sm:text-sm"
+  className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-100 transition sm:text-sm"
   >
   <PackagePlus className="h-3.5 w-3.5 text-neutral-600" />
   Manual item
   </button>
-  </>
  )}
  </div>
  </div>

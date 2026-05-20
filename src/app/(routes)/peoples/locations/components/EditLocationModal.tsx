@@ -29,6 +29,8 @@ export const EditLocationModal: React.FC<EditLocationModalProps> = ({
  city: "",
  postcode: "",
  country: "",
+ companyNumber: "",
+ vatNumber: "",
  isActive: true,
  });
 
@@ -44,6 +46,8 @@ export const EditLocationModal: React.FC<EditLocationModalProps> = ({
  city: location.city || "",
  postcode: location.postcode || "",
  country: location.country || "",
+ companyNumber: location.companyNumber || "",
+ vatNumber: location.vatNumber || "",
  isActive: location.isActive ?? true,
  });
  }
@@ -61,7 +65,7 @@ export const EditLocationModal: React.FC<EditLocationModalProps> = ({
  return (
  <div className="fixed inset-0 z-50 flex items-center justify-center">
  <div className="absolute inset-0 bg-black/20" aria-hidden />
- <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+ <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
  <div className="flex items-center justify-between p-6 border-b border-gray-200">
   <h2 className="text-xl font-semibold text-gray-900">Edit Location</h2>
   <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
@@ -190,6 +194,33 @@ export const EditLocationModal: React.FC<EditLocationModalProps> = ({
   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
   placeholder="Country"
   />
+  </div>
+
+  <div className="grid grid-cols-2 gap-4">
+  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+  Company Number
+  </label>
+  <input
+  type="text"
+  value={formData.companyNumber}
+  onChange={(e) => setFormData({ ...formData, companyNumber: e.target.value })}
+  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+  placeholder="Company number"
+  />
+  </div>
+  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+  VAT Number
+  </label>
+  <input
+  type="text"
+  value={formData.vatNumber}
+  onChange={(e) => setFormData({ ...formData, vatNumber: e.target.value })}
+  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+  placeholder="VAT number"
+  />
+  </div>
   </div>
 
   <div className="flex items-center gap-2">

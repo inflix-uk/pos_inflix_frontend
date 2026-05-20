@@ -9,6 +9,8 @@ export interface Location {
  city: string;
  postcode: string;
  country: string;
+ companyNumber: string;
+ vatNumber: string;
  isActive: boolean;
  createdAt?: string;
  updatedAt?: string;
@@ -24,6 +26,8 @@ export interface LocationFormData {
  city: string;
  postcode: string;
  country: string;
+ companyNumber: string;
+ vatNumber: string;
  isActive: boolean;
 }
 
