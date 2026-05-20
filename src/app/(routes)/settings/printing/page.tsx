@@ -9,7 +9,10 @@ import {
  updatePrintingSettings,
  type PrintingSettingsData,
 } from "./service/printingSettingsApi";
-import { fetchPrintAgent } from "@/lib/printAgentClient";
+import {
+  checkPrintAgentReachable,
+  fetchPrintAgent,
+} from "@/lib/printAgentClient";
 import { getDeviceId, invalidatePrintingSettingsCache } from "@/services/printService";
 
 const AGENT_TOKEN_KEY = "pos_print_agent_token";
@@ -112,14 +115,15 @@ export default function PrintingSettingsPage() {
  setAgentReachable(null);
  setTokenNotPaired(false);
  try {
- const status = await fetchStatus(agentUrl);
- if (!status) {
+ const healthy = await checkPrintAgentReachable(agentUrl, token || undefined);
+ if (!healthy) {
  setAgentReachable(false);
  setPrinters([]);
  return;
  }
  setAgentReachable(true);
- if (status.tokenPresent && !token) {
+ const status = await fetchStatus(agentUrl);
+ if (status?.tokenPresent && !token) {
  setTokenNotPaired(true);
  setPrinters([]);
  return;
@@ -207,7 +211,10 @@ export default function PrintingSettingsPage() {
   {
   label: "Print Bridge is reachable from this browser",
   ok: agentReachable === true,
-  hint: "Install/start POS Print Bridge on this PC. If it is running, the browser may be blocked by CORS — Print Bridge must allow this site's origin.",
+  hint:
+   typeof window !== "undefined"
+    ? `Install/start POS Print Bridge on this PC. If http://127.0.0.1:9123/status works in a tab but this fails, add "${window.location.origin}" to corsOrigin in %ProgramData%\\PosPrintAgent\\config.json and restart Print Bridge.`
+    : "Install/start POS Print Bridge on this PC.",
   },
   {
   label: "Agent token is present on this device",

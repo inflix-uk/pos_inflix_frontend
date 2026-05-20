@@ -12,9 +12,13 @@ export async function GET(req: NextRequest) {
       { status: 400 }
     );
   }
-  const target = `${agentBaseOrigin(u)}/status`;
+  const target = `${agentBaseOrigin(u)}/status?format=json`;
   try {
-    const r = await fetch(target, { method: "GET", signal: AbortSignal.timeout(8000) });
+    const r = await fetch(target, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+    });
     const text = await r.text();
     try {
       const json = JSON.parse(text) as unknown;

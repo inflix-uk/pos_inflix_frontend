@@ -5,8 +5,19 @@
 
 import { parseAllowedLoopbackAgentBase } from "@/lib/printAgentLoopbackUrl";
 
+const JSON_ACCEPT: HeadersInit = { Accept: "application/json" };
+
 function agentBaseParam(agentUrl: string): string {
   return encodeURIComponent(agentUrl.replace(/\/$/, ""));
+}
+
+/** /status returns HTML unless format=json or Accept is application/json only. */
+function agentPathWithQuery(agentPath: string): string {
+  const p = agentPath.startsWith("/") ? agentPath : `/${agentPath}`;
+  if (p === "/status" || p.startsWith("/status?")) {
+    return p.includes("?") ? p : `${p}?format=json`;
+  }
+  return p;
 }
 
 /** True when the POS tab is on this machine (localhost) so Next can proxy to 127.0.0.1. */
@@ -70,7 +81,33 @@ async function fetchViaProxy(
   });
 }
 
-/** GET or POST to Print Bridge; uses Next proxy on localhost when direct fetch fails. */
+async function fetchDirect(
+  agentUrl: string,
+  method: "GET" | "POST",
+  agentPath: string,
+  options?: {
+    token?: string;
+    jsonBody?: Record<string, unknown>;
+    signal?: AbortSignal;
+  }
+): Promise<Response> {
+  const base = agentUrl.replace(/\/$/, "");
+  const path = agentPathWithQuery(agentPath.startsWith("/") ? agentPath : `/${agentPath}`);
+  return fetch(`${base}${path}`, {
+    method,
+    signal: options?.signal,
+    headers: {
+      ...JSON_ACCEPT,
+      ...(options?.token ? { "X-Print-Token": options.token } : {}),
+      ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(method === "POST" && options?.jsonBody
+      ? { body: JSON.stringify(options.jsonBody) }
+      : {}),
+  });
+}
+
+/** GET or POST to Print Bridge; on localhost prefers Next proxy (no CORS). */
 export async function fetchPrintAgent(
   agentUrl: string,
   method: "GET" | "POST",
@@ -81,32 +118,49 @@ export async function fetchPrintAgent(
     timeoutMs?: number;
   }
 ): Promise<Response> {
-  const base = agentUrl.replace(/\/$/, "");
   const path = agentPath.startsWith("/") ? agentPath : `/${agentPath}`;
   const signal = options?.timeoutMs
     ? AbortSignal.timeout(options.timeoutMs)
     : undefined;
-  const directInit: RequestInit = {
-    method,
+  const init = {
+    token: options?.token,
+    jsonBody: options?.jsonBody,
     signal,
-    headers: {
-      ...(options?.token ? { "X-Print-Token": options.token } : {}),
-      ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
-    },
-    ...(method === "POST" && options?.jsonBody
-      ? { body: JSON.stringify(options.jsonBody) }
-      : {}),
   };
 
+  // Local dev: proxy first — avoids CORS when POS is localhost:3001 and agent allows only some origins.
+  if (canUsePrintAgentProxy(agentUrl)) {
+    try {
+      const proxyRes = await fetchViaProxy(agentUrl, method, path, init);
+      if (proxyRes.ok || proxyRes.status === 401 || proxyRes.status === 403) {
+        return proxyRes;
+      }
+    } catch {
+      /* try direct */
+    }
+  }
+
   try {
-    const res = await fetch(`${base}${path}`, directInit);
-    return res;
+    return await fetchDirect(agentUrl, method, path, init);
   } catch (e) {
     if (!canUsePrintAgentProxy(agentUrl) || !isLikelyNetworkOrCorsError(e)) throw e;
-    return fetchViaProxy(agentUrl, method, path, {
-      token: options?.token,
-      jsonBody: options?.jsonBody,
-      signal,
+    return fetchViaProxy(agentUrl, method, path, init);
+  }
+}
+
+/** Reliable reachability: /health is always JSON (unlike /status HTML page). */
+export async function checkPrintAgentReachable(
+  agentUrl: string,
+  agentToken?: string
+): Promise<boolean> {
+  try {
+    const res = await fetchPrintAgent(agentUrl, "GET", "/health", {
+      token: agentToken,
+      timeoutMs: 5000,
     });
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean };
+    return res.ok && !!json.ok;
+  } catch {
+    return false;
   }
 }

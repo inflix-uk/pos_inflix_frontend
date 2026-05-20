@@ -3,7 +3,7 @@
  * Falls back to browser/current behavior when disabled or agent unreachable.
  */
 
-import { fetchPrintAgent } from "@/lib/printAgentClient";
+import { checkPrintAgentReachable, fetchPrintAgent } from "@/lib/printAgentClient";
 import { parseAllowedLoopbackAgentBase } from "@/lib/printAgentLoopbackUrl";
 
 const DEVICE_ID_KEY = "pos_print_device_id";
@@ -110,16 +110,7 @@ export async function checkAgentHealth(
   agentToken: string
 ): Promise<boolean> {
   if (typeof window === "undefined") return false;
-  try {
-    const res = await fetchPrintAgent(agentUrl, "GET", "/health", {
-      token: agentToken,
-      timeoutMs: 5000,
-    });
-    const json = (await res.json().catch(() => ({}))) as { ok?: boolean };
-    return res.ok && !!json.ok;
-  } catch {
-    return false;
-  }
+  return checkPrintAgentReachable(agentUrl, agentToken);
 }
 
 export interface PrintReceiptResult {
