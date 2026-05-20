@@ -83,25 +83,13 @@ export default function ZReadDashboardPage() {
   error,
   from,
   to,
-  range,
-  setRange,
-  customFrom,
-  setCustomFrom,
-  customTo,
-  setCustomTo,
   refresh,
  } = useTakingsDashboard({
   locationId: selectedLocationId === "all" ? "all" : selectedLocationId,
  });
 
- const dateRangeLabel =
-  range === "today"
-   ? "Today"
-   : range === "7d"
-   ? "7 days"
-   : range === "30d"
-   ? "30 days"
-   : "Custom";
+ // Z-Read is a fixed end-of-day report — always today, no range picker.
+ const dateRangeLabel = "Today";
 
  const locationName = useMemo(() => {
   if (selectedLocationId === "all") return "All locations";
@@ -126,53 +114,16 @@ export default function ZReadDashboardPage() {
       Daily Closing Till Reading <span className="text-gray-400 font-normal">(Z-Read)</span>
      </h1>
      <p className="mt-1 text-xs @[768px]:text-sm text-gray-500">
-      End-of-day cash-up summary. Sales, refunds, voids and payment method totals for the selected period.
+      End-of-day cash-up summary for today. Sales, refunds, voids and payment method totals.
      </p>
     </div>
 
     <div className="flex flex-col gap-2 @[768px]:flex-row @[768px]:flex-wrap @[768px]:items-center">
-     <div className="flex items-center gap-2">
+     <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs @[768px]:text-sm text-gray-700">
       <Calendar className="h-4 w-4 shrink-0 text-gray-500" />
-      <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1">
-       {(["today", "7d", "30d", "custom"] as const).map((r) => (
-        <button
-         key={r}
-         type="button"
-         onClick={() => setRange(r)}
-         disabled={loading}
-         className={`rounded-md px-2.5 py-1.5 text-xs @[768px]:text-sm font-medium transition-colors disabled:opacity-50 ${
-          range === r
-           ? "bg-gray-900 text-white"
-           : "text-gray-600 hover:bg-gray-100"
-         }`}
-        >
-         {r === "today" ? "Today" : r === "7d" ? "7 days" : r === "30d" ? "30 days" : "Custom"}
-        </button>
-       ))}
-      </div>
-      {range === "custom" && (
-       <div className="flex flex-wrap items-center gap-2">
-        <label className="text-xs text-gray-600">From</label>
-        <input
-         type="date"
-         value={customFrom}
-         onChange={(e) => setCustomFrom(e.target.value)}
-         className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs @[768px]:text-sm"
-        />
-        <label className="text-xs text-gray-600">To</label>
-        <input
-         type="date"
-         value={customTo}
-         onChange={(e) => setCustomTo(e.target.value)}
-         className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs @[768px]:text-sm"
-        />
-       </div>
-      )}
-     </div>
-     <div className="flex items-center gap-2 text-xs text-gray-500">
-      <span>{dateRangeLabel}</span>
+      <span className="font-medium">Today</span>
       <span aria-hidden>·</span>
-      <span>{formatDateLabel(from, to)}</span>
+      <span className="text-gray-500">{formatDateLabel(from, to)}</span>
      </div>
      <div className="flex items-center gap-2">
       <MapPin className="h-4 w-4 shrink-0 text-gray-500" />
