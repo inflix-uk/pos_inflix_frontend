@@ -3,6 +3,7 @@
  * Falls back to browser/current behavior when disabled or agent unreachable.
  */
 
+import { fetchPrintAgent } from "@/lib/printAgentClient";
 import { parseAllowedLoopbackAgentBase } from "@/lib/printAgentLoopbackUrl";
 
 const DEVICE_ID_KEY = "pos_print_device_id";
@@ -109,14 +110,10 @@ export async function checkAgentHealth(
   agentToken: string
 ): Promise<boolean> {
   if (typeof window === "undefined") return false;
-  const base = agentUrl.replace(/\/$/, "");
   try {
-    const headers: HeadersInit = {};
-    if (agentToken) headers["X-Print-Token"] = agentToken;
-    const res = await fetch(`${base}/health`, {
-      method: "GET",
-      headers,
-      signal: AbortSignal.timeout(5000),
+    const res = await fetchPrintAgent(agentUrl, "GET", "/health", {
+      token: agentToken,
+      timeoutMs: 5000,
     });
     const json = (await res.json().catch(() => ({}))) as { ok?: boolean };
     return res.ok && !!json.ok;
@@ -177,19 +174,20 @@ export async function printReceipt(saleId: string): Promise<PrintReceiptResult> 
     if (!json.success || !json.dataBase64) {
       return { sent: false, error: "Backend did not return receipt data." };
     }
-    const agentRes = await fetch(`${settings.agentUrl.replace(/\/$/, "")}/print/receipt/escpos`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Print-Token": settings.agentToken,
-      },
-      body: JSON.stringify({
-        printerName: settings.receiptPrinterName,
-        dataBase64: json.dataBase64,
-        jobName: json.jobName || `receipt-${saleId}`,
-      }),
-      signal: AbortSignal.timeout(30000),
-    });
+    const agentRes = await fetchPrintAgent(
+      settings.agentUrl,
+      "POST",
+      "/print/receipt/escpos",
+      {
+        token: settings.agentToken,
+        timeoutMs: 30000,
+        jsonBody: {
+          printerName: settings.receiptPrinterName,
+          dataBase64: json.dataBase64,
+          jobName: json.jobName || `receipt-${saleId}`,
+        },
+      }
+    );
     const agentJson = await agentRes.json().catch(() => ({}));
     if (agentRes.ok && agentJson.success) {
       return { sent: true };
@@ -282,19 +280,15 @@ export async function printLabelsPdf(
   }
 
   try {
-    const res = await fetch(`${settings.agentUrl.replace(/\/$/, "")}/print/pdf`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(settings.agentToken ? { "X-Print-Token": settings.agentToken } : {}),
-      },
-      body: JSON.stringify({
+    const res = await fetchPrintAgent(settings.agentUrl, "POST", "/print/pdf", {
+      token: settings.agentToken,
+      timeoutMs: 30000,
+      jsonBody: {
         printerName: settings.labelPrinterName,
         pdfBase64,
         jobName,
         scale: options?.scale ?? "noscale",
-      }),
-      signal: AbortSignal.timeout(30000),
+      },
     });
     const json = (await res.json().catch(() => ({}))) as {
       success?: boolean;
@@ -372,21 +366,17 @@ export async function printRepairLabelCanvasPngToAgent(
     return false;
   }
   try {
-    const res = await fetch(`${settings.agentUrl.replace(/\/$/, "")}/print/label-png`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(settings.agentToken ? { "X-Print-Token": settings.agentToken } : {}),
-      },
-      body: JSON.stringify({
+    const res = await fetchPrintAgent(settings.agentUrl, "POST", "/print/label-png", {
+      token: settings.agentToken,
+      timeoutMs: 30000,
+      jsonBody: {
         printerName: settings.labelPrinterName,
         pngBase64,
         jobName,
         copies: 1,
         gdiWidthMm,
         gdiHeightMm,
-      }),
-      signal: AbortSignal.timeout(30000),
+      },
     });
     const json = await res.json().catch(() => ({}));
     const success = res.ok && !!json.success;
@@ -417,18 +407,14 @@ export async function printInvoicePdf(pdfBase64: string): Promise<boolean> {
   const ok = await checkAgentHealth(settings.agentUrl, settings.agentToken);
   if (!ok) return false;
   try {
-    const res = await fetch(`${settings.agentUrl.replace(/\/$/, "")}/print/pdf`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(settings.agentToken ? { "X-Print-Token": settings.agentToken } : {}),
-      },
-      body: JSON.stringify({
+    const res = await fetchPrintAgent(settings.agentUrl, "POST", "/print/pdf", {
+      token: settings.agentToken,
+      timeoutMs: 30000,
+      jsonBody: {
         printerName: settings.a4PrinterName,
         pdfBase64,
         jobName: "invoice",
-      }),
-      signal: AbortSignal.timeout(30000),
+      },
     });
     const json = await res.json().catch(() => ({}));
     return res.ok && !!json.success;

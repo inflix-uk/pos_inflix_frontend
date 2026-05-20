@@ -9,6 +9,7 @@ import {
  updatePrintingSettings,
  type PrintingSettingsData,
 } from "./service/printingSettingsApi";
+import { fetchPrintAgent } from "@/lib/printAgentClient";
 import { getDeviceId, invalidatePrintingSettingsCache } from "@/services/printService";
 
 const AGENT_TOKEN_KEY = "pos_print_agent_token";
@@ -44,12 +45,16 @@ function buildEscposTestPayload(): string {
  return btoa(bin);
 }
 
-/** Browser → Print Bridge directly. Chrome treats http://127.0.0.1 as a secure origin so HTTPS pages may load it; Print Bridge must respond with CORS headers (Access-Control-Allow-Origin). */
-function fetchStatus(agentUrl: string): Promise<{ tokenPresent?: boolean; token?: string } | null> {
- const base = agentUrl.replace(/\/$/, "");
- return fetch(`${base}/status`, { method: "GET", signal: AbortSignal.timeout(8000) })
- .then((r) => (r.ok ? r.json() : null))
- .catch(() => null);
+/** Browser → Print Bridge (direct, or same-origin proxy if CORS blocks). */
+async function fetchStatus(
+ agentUrl: string
+): Promise<{ tokenPresent?: boolean; token?: string } | null> {
+ try {
+  const r = await fetchPrintAgent(agentUrl, "GET", "/status", { timeoutMs: 8000 });
+  return r.ok ? ((await r.json()) as { tokenPresent?: boolean; token?: string }) : null;
+ } catch {
+  return null;
+ }
 }
 
 export default function PrintingSettingsPage() {
@@ -119,14 +124,10 @@ export default function PrintingSettingsPage() {
  setPrinters([]);
  return;
  }
- const printersRes = await fetch(
- `${agentUrl.replace(/\/$/, "")}/printers`,
- {
-  method: "GET",
-  headers: token ? { "X-Print-Token": token } : {},
-  signal: AbortSignal.timeout(8000),
- }
- );
+ const printersRes = await fetchPrintAgent(agentUrl, "GET", "/printers", {
+  token: token || undefined,
+  timeoutMs: 8000,
+ });
  if (printersRes.status === 401) {
  setTokenNotPaired(true);
  setPrinters([]);
@@ -160,18 +161,14 @@ export default function PrintingSettingsPage() {
   setTestResult({ ok: false, text: "Select a Receipt printer first." });
   return;
   }
-  const res = await fetch(`${agentUrl.replace(/\/$/, "")}/print/receipt/escpos`, {
-  method: "POST",
-  headers: {
-   "Content-Type": "application/json",
-   ...(token ? { "X-Print-Token": token } : {}),
-  },
-  body: JSON.stringify({
-   printerName: receiptPrinterName.trim(),
-   dataBase64: buildEscposTestPayload(),
-   jobName: "print-bridge-test",
-  }),
-  signal: AbortSignal.timeout(15000),
+  const res = await fetchPrintAgent(agentUrl, "POST", "/print/receipt/escpos", {
+   token: token || undefined,
+   timeoutMs: 15000,
+   jsonBody: {
+    printerName: receiptPrinterName.trim(),
+    dataBase64: buildEscposTestPayload(),
+    jobName: "print-bridge-test",
+   },
   });
   const j = (await res.json().catch(() => ({}))) as { success?: boolean; message?: string };
   if (res.ok && j.success) {
