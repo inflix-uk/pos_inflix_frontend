@@ -155,7 +155,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   "/settings/icons": ["settings.view", "settings.edit"],
   "/settings/activity-log": ["audit.view"],
   "/settings/admin": ["user.manage", "role.manage", "audit.view"],
-  "/settings/billing": [],
+  "/settings/billing": ["settings.manage", "user.manage", "role.manage", "audit.view"],
 
   // Platform (guard by isPlatformAdmin in layout; backend returns 403 for non-admins)
   "/platform": [],
@@ -292,7 +292,7 @@ export const NAV_CONFIG: NavSection[] = [
     items: [
       { title: "Settings", path: "/settings", icon: Settings, requiredPermsAnyOf: ["audit.view", "user.manage", "role.manage", "settings.view", "settings.printing"] },
       { title: "Printing", path: "/settings/printing", icon: Printer, requiredPermsAnyOf: ["settings.view", "settings.printing", "settings.manage"] },
-      { title: "Billing & plan", path: "/settings/billing", icon: Receipt, requiredPermsAnyOf: [] },
+      { title: "Billing & plan", path: "/settings/billing", icon: Receipt, requiredPermsAnyOf: ["settings.manage", "user.manage", "role.manage", "audit.view"] },
       { title: "About", path: "/settings/about", icon: Info, requiredPermsAnyOf: ["settings.view", "settings.edit"] },
       { title: "Notes & Terms", path: "/settings/notes-terms", icon: FileText, requiredPermsAnyOf: ["settings.view", "settings.edit"] },
       { title: "Email", path: "/settings/email", icon: Mail, requiredPermsAnyOf: ["settings.view", "settings.edit"] },

@@ -1,22 +1,40 @@
 "use client";
 
 import { useEntitlements } from "@/hooks/useEntitlements";
+import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeEntitlements, USAGE_LIMIT_ROWS } from "@/lib/entitlements";
 import { Loader2, CreditCard } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+const BILLING_PERMS = ["settings.manage", "user.manage", "role.manage", "audit.view"] as const;
+
 export default function BillingPage() {
  const router = useRouter();
+ const { can, loading: permLoading } = usePermissions();
+ const canViewBilling = BILLING_PERMS.some((p) => can(p));
  const { data: rawData, loading, error } = useEntitlements();
  const data = normalizeEntitlements(rawData ?? undefined);
 
  useEffect(() => {
+ if (permLoading) return;
+ if (!canViewBilling) {
+  router.replace("/403");
+  return;
+ }
  if (!loading && data?.status === "suspended") {
  router.replace("/suspended");
  }
- }, [loading, data?.status, router]);
+ }, [loading, data?.status, router, permLoading, canViewBilling]);
+
+ if (permLoading || !canViewBilling) {
+ return (
+  <div className="@container min-h-screen bg-gray-50 p-3 @[480px]:p-4 @[768px]:p-6 flex items-center gap-2 text-gray-500">
+   <Loader2 className="h-5 w-5 animate-spin" /> Loading…
+  </div>
+ );
+ }
 
  if (loading) {
  return (
