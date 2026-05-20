@@ -117,7 +117,9 @@ function resolveShopVisibility(p: {
   showShopName?: boolean;
   showShopAddress?: boolean;
 }): { showShopName: boolean; showShopAddress: boolean } {
-  if (p.showShopHeader === false) {
+  const nameSet = typeof p.showShopName === "boolean";
+  const addrSet = typeof p.showShopAddress === "boolean";
+  if (p.showShopHeader === false && !nameSet && !addrSet) {
     return { showShopName: false, showShopAddress: false };
   }
   return {
