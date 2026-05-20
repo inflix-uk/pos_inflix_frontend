@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { X, Banknote, CreditCard, Wallet, Landmark, Printer, Mail, Receipt, CheckCircle, Download } from "lucide-react";
+import { X, Banknote, CreditCard, Wallet, Landmark, Printer, Mail, Receipt, CheckCircle, Download, Loader2 } from "lucide-react";
 import { downloadInvoiceA4, printInvoiceA4, printReceipt80mm, type SaleForPrint } from "@/lib/invoicePrint";
-import { printReceipt as printReceiptSilent } from "@/services/printService";
+import { printReceipt as printReceiptSilent, openCashDrawer } from "@/services/printService";
 import { useAppCurrency } from "@/lib/app-currency-context";
 import { bankAccountApi } from "../../bank-accounts/service/bankAccountApi";
 
@@ -45,6 +45,16 @@ function makeRequestId(): string {
   return crypto.randomUUID();
  }
  return `cr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/** Show manual drawer button when sale was paid with cash and/or card (no receipt needed). */
+function saleUsedCashOrCard(sale: SaleForPrint | null | undefined): boolean {
+ if (!sale) return false;
+ const pm = String(sale.paymentMethod || "").toLowerCase();
+ if (pm === "cash" || pm === "card") return true;
+ const p = sale.payments;
+ if (p) return Number(p.cash) > 0 || Number(p.card) > 0;
+ return false;
 }
 
 interface WholesalePaymentModalProps {
@@ -116,6 +126,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  const [defaultBankName, setDefaultBankName] = useState<string>("");
  const [error, setError] = useState<string | null>(null);
  const [submitting, setSubmitting] = useState(false);
+ const [drawerOpening, setDrawerOpening] = useState(false);
  // One idempotency key per modal session. Same key is reused across retries inside this
  // modal (e.g. user clicks again after a perceived network failure) so the backend can
  // dedupe instead of erroring out. Regenerated when the modal is freshly opened.
@@ -374,11 +385,27 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  };
 
  const handleEmailInvoice = () => {
- const to = customerEmail ? encodeURIComponent(customerEmail) : "";
- const subject = encodeURIComponent(`Invoice - Order for ${customerName || "Customer"}`);
- const body = encodeURIComponent(`Please find your invoice attached.\n\nOrder for: ${customerName || "Customer"}\nTotal: ${formatMoney(total)}`);
- window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+  const to = customerEmail ? encodeURIComponent(customerEmail) : "";
+  const subject = encodeURIComponent(`Invoice - Order for ${customerName || "Customer"}`);
+  const body = encodeURIComponent(`Please find your invoice attached.\n\nOrder for: ${customerName || "Customer"}\nTotal: ${formatMoney(total)}`);
+  window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
  };
+
+ const handleOpenDrawer = async () => {
+  setDrawerOpening(true);
+  try {
+   const result = await openCashDrawer();
+   if (result.sent) {
+    onMessage?.("success", "Cash drawer opened");
+   } else {
+    onMessage?.("error", result.error ?? "Could not open cash drawer");
+   }
+  } finally {
+   setDrawerOpening(false);
+  }
+ };
+
+ const showOpenDrawerBtn = saleUsedCashOrCard(saleForPrint);
 
  if (!open) return null;
 
@@ -417,7 +444,15 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   <div className="px-5 pb-5">
   <p className="text-gray-600 text-sm mb-4">What would you like to do next?</p>
   <div
-  className={`grid grid-cols-1 gap-3 ${retailMode ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}
+  className={`grid grid-cols-1 gap-3 ${
+   retailMode
+    ? showOpenDrawerBtn
+     ? "sm:grid-cols-3"
+     : "sm:grid-cols-2"
+    : showOpenDrawerBtn
+     ? "sm:grid-cols-2 lg:grid-cols-4"
+     : "sm:grid-cols-3"
+  }`}
   >
   {!retailMode && (
   <>
@@ -468,6 +503,23 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   </span>
   <span className="text-sm">Email invoice</span>
   </button>
+  {showOpenDrawerBtn && (
+  <button
+   type="button"
+   onClick={handleOpenDrawer}
+   disabled={drawerOpening}
+   className="group flex flex-col items-center gap-3 p-4 rounded-xl border-2 border-gray-200 bg-gray-50/50 text-gray-700 font-medium hover:border-amber-200 hover:bg-amber-50/50 hover:text-amber-800 active:scale-[0.98] transition-all touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+   <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-gray-200 group-hover:border-amber-200 group-hover:bg-amber-100 text-gray-500 group-hover:text-amber-700">
+    {drawerOpening ? (
+     <Loader2 className="h-6 w-6 animate-spin" />
+    ) : (
+     <Banknote className="h-6 w-6" />
+    )}
+   </span>
+   <span className="text-sm">Open drawer</span>
+  </button>
+  )}
   </div>
   </div>
   <div className="p-5 pt-0">
