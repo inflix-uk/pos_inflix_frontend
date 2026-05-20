@@ -11,13 +11,13 @@ export const SALES_RECEIPT_SECTION_IDS = [
   "location_email",
   "receipt_title",
   "ref_date",
-  "reference_qr",
   "customer_name_address",
   "customer_phone",
   "customer_email",
   "items",
   "total",
   "terms",
+  "reference_qr",
   "thank_you",
 ] as const;
 
@@ -239,17 +239,15 @@ function normalizeOrder<T extends string>(input: string[] | null | undefined, de
 
 export function normalizeSalesReceiptSectionOrder(input?: string[] | null): SalesReceiptSectionId[] {
   const raw = Array.isArray(input) ? input : [];
-  const hadReferenceQrInInput = raw.includes("reference_qr");
   let normalized = normalizeOrder(raw, SALES_RECEIPT_SECTION_IDS, SALES_SET);
-  /** Legacy saved orders without this section: place QR right after Reference & date once. */
-  if (!hadReferenceQrInInput) {
-    const qr: SalesReceiptSectionId = "reference_qr";
-    const base: SalesReceiptSectionId[] = normalized.filter((id) => id !== qr);
-    const iRef = base.indexOf("ref_date");
-    if (iRef !== -1) {
-      base.splice(iRef + 1, 0, qr);
-      normalized = base;
-    }
+  /** QR at footer (before thank you), matching 80mm PDF / browser print preview. */
+  const qr: SalesReceiptSectionId = "reference_qr";
+  if (normalized.includes(qr)) {
+    const base = normalized.filter((id) => id !== qr);
+    const iThank = base.indexOf("thank_you");
+    const at = iThank >= 0 ? iThank : base.length;
+    base.splice(at, 0, qr);
+    normalized = base;
   }
   return normalized;
 }
