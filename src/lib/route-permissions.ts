@@ -34,6 +34,7 @@ import {
   Shield,
   Layers,
   Tags,
+  Printer,
 } from "lucide-react";
 
 /** Path → required permissions. Empty array = any authenticated user. No entry = treat as protected by parent or deny. */
@@ -142,11 +143,11 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   "/reports/z-read": ["report.zread"],
 
   // Settings - require at least one admin/settings permission
-  "/settings": ["audit.view", "user.manage", "role.manage", "settings.view"],
+  "/settings": ["audit.view", "user.manage", "role.manage", "settings.view", "settings.printing"],
   "/settings/general": ["settings.view", "settings.edit"],
   "/settings/sales": ["settings.view"],
   "/settings/header-actions": ["settings.view"],
-  "/settings/printing": ["settings.view"],
+  "/settings/printing": ["settings.view", "settings.printing", "settings.manage"],
   "/settings/about": ["settings.view", "settings.edit"],
   "/settings/notes-terms": ["settings.view", "settings.edit"],
   "/settings/email": ["settings.view", "settings.edit"],
@@ -289,7 +290,8 @@ export const NAV_CONFIG: NavSection[] = [
   {
     label: "Settings",
     items: [
-      { title: "Settings", path: "/settings", icon: Settings, requiredPermsAnyOf: ["audit.view", "user.manage", "role.manage", "settings.view"] },
+      { title: "Settings", path: "/settings", icon: Settings, requiredPermsAnyOf: ["audit.view", "user.manage", "role.manage", "settings.view", "settings.printing"] },
+      { title: "Printing", path: "/settings/printing", icon: Printer, requiredPermsAnyOf: ["settings.view", "settings.printing", "settings.manage"] },
       { title: "Billing & plan", path: "/settings/billing", icon: Receipt, requiredPermsAnyOf: [] },
       { title: "About", path: "/settings/about", icon: Info, requiredPermsAnyOf: ["settings.view", "settings.edit"] },
       { title: "Notes & Terms", path: "/settings/notes-terms", icon: FileText, requiredPermsAnyOf: ["settings.view", "settings.edit"] },

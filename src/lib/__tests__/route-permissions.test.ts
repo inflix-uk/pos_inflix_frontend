@@ -33,6 +33,7 @@ describe("route-permissions", () => {
         "user.manage",
         "role.manage",
         "settings.view",
+        "settings.printing",
       ]);
       expect(getRequiredPermsForPath("/sales-online-orders")).toEqual(["sale.view"]);
     });

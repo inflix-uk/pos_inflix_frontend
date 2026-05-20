@@ -59,7 +59,7 @@ const allSettingsItems: SettingsItem[] = [
  icon: Printer,
  path: "/settings/printing",
  color: "bg-neutral-100 text-neutral-600",
- permission: "settings.view",
+ permission: ["settings.view", "settings.printing", "settings.manage"],
  },
  {
  title: "About",
@@ -117,7 +117,12 @@ const allSettingsItems: SettingsItem[] = [
 const SettingsPage = () => {
  const router = useRouter();
  const { can, loading } = usePermissions();
- const canSeeSettings = can("settings.view") || can("audit.view") || can("user.manage") || can("role.manage");
+ const canSeeSettings =
+  can("settings.view") ||
+  can("settings.printing") ||
+  can("audit.view") ||
+  can("user.manage") ||
+  can("role.manage");
 
  useEffect(() => {
  if (loading) return;

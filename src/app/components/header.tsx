@@ -56,7 +56,12 @@ export function Header() {
   const { user, can } = usePermissions();
   const displayName = user?.name ?? "User";
   const displayRole = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : (user?.roles?.[0]?.name ?? "");
-  const canSeeSettings = can("audit.view") || can("user.manage") || can("role.manage") || can("settings.view");
+  const canSeeSettings =
+    can("audit.view") ||
+    can("user.manage") ||
+    can("role.manage") ||
+    can("settings.view") ||
+    can("settings.printing");
   const canManageSettings = can("settings.manage");
   const canSeeReports = can("report.view");
   const [retailModeEnabled, setRetailModeEnabled] = useState(false);

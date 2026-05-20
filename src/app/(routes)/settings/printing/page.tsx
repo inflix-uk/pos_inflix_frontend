@@ -62,8 +62,8 @@ async function fetchStatus(
 
 export default function PrintingSettingsPage() {
  const { can, loading: permLoading } = usePermissions();
- const canManage = can("settings.manage");
- const canView = can("settings.view");
+ const canManage = can("settings.printing") || can("settings.manage");
+ const canView = can("settings.view") || can("settings.printing") || can("settings.manage");
 
  const [loading, setLoading] = useState(true);
  const [saving, setSaving] = useState(false);
