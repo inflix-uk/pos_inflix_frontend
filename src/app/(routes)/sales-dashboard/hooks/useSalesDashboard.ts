@@ -5,6 +5,7 @@ import { useProducts } from "@/lib/products-context";
 import type { CartLineItem, POSProduct, PaymentMethod } from "../types";
 import { salesApi } from "../service/salesApi";
 import { printInvoiceA4 } from "@/lib/invoicePrint";
+import { openCashDrawer } from "@/services/printService";
 import { useCartTaxConfig } from "../components/CartTaxSlotContext";
 
 const parsePrice = (priceStr: string): number => {
@@ -930,6 +931,9 @@ export const useSalesDashboard = (options?: {
      paymentMethod,
     };
     printInvoiceA4(saleForPrint).catch(() => {});
+    if (paymentMethod === "cash") {
+      openCashDrawer().catch(() => {});
+    }
    }
   } else {
    showMessage("error", result.message || "Failed to save sale");

@@ -40,6 +40,10 @@ export interface ReceiptPrinterSalesPrintOptions {
   showTotal: boolean;
   showTermsText: boolean;
   showThankYou: boolean;
+  /** ESC/POS: open cash drawer when sale includes cash (retail or wholesale payments.cash). */
+  openCashDrawerOnCashPayment: boolean;
+  /** 0 = pin 2 (default); 1 = pin 5 if drawer does not open. */
+  cashDrawerPin: 0 | 1;
   /** PDF: QR encoding sale reference; shown with ref/date or at slip end if ref section hidden. */
   showReceiptReferenceQr: boolean;
   /** Square QR size on 80mm PDF (mm). */
@@ -220,6 +224,8 @@ export const DEFAULT_RECEIPT_PRINTER_SALES_PRINT: ReceiptPrinterSalesPrintOption
   showTotal: true,
   showTermsText: true,
   showThankYou: true,
+  openCashDrawerOnCashPayment: true,
+  cashDrawerPin: 0,
   showReceiptReferenceQr: true,
   receiptReferenceQrSizeMm: 22,
   sectionOrder: DEFAULT_SALES_ORDER,
@@ -292,6 +298,8 @@ export function mergeReceiptPrinterSalesPrintOptions(
       30,
       d.receiptReferenceQrSizeMm
     ),
+    openCashDrawerOnCashPayment: p.openCashDrawerOnCashPayment !== false,
+    cashDrawerPin: p.cashDrawerPin === 1 ? 1 : 0,
     sectionFontPt: normalizeSalesSectionFontPt(p.sectionFontPt),
   };
 }

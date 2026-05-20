@@ -25,6 +25,7 @@ import {
 } from "./components";
 import { useOrderWriter } from "./components/OrderWriterContext";
 import { emitInventoryEvent } from "@/lib/inventoryEvents";
+import { openCashDrawer } from "@/services/printService";
 import type { CartLineItem } from "../sales-dashboard/types";
 import { salesApi, formatAddressForInvoice } from "../sales-dashboard/service/salesApi";
 import { customerApi } from "../peoples/customers/service/customerApi";
@@ -1351,6 +1352,9 @@ const Page = () => {
   refetchProducts();
   // Broadcast to other tabs (e.g. /inventory/products) so their stock displays refresh too.
   emitInventoryEvent({ type: "sale-created", saleId: result.data?._id });
+  if ((details.payments?.cash ?? 0) > 0) {
+   openCashDrawer().catch(() => {});
+  }
   } else {
   showMessage("error", result.message || "Failed to save order");
   }

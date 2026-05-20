@@ -50,6 +50,7 @@ function proxyPathForAgentPath(agentPath: string): string | null {
   if (p === "/printers") return "/api/print-agent/printers";
   if (p === "/print/pdf") return "/api/print-agent/print/pdf";
   if (p === "/print/receipt/escpos") return "/api/print-agent/print/receipt/escpos";
+  if (p === "/print/drawer/kick") return "/api/print-agent/print/drawer/kick";
   if (p === "/print/label-png") return "/api/print-agent/print/label-png";
   return null;
 }

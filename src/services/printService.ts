@@ -414,4 +414,61 @@ export async function printInvoicePdf(pdfBase64: string): Promise<boolean> {
   }
 }
 
+/** ESC/POS cash drawer pulse (ESC @ init + ESC p). Pin 0 = connector pin 2 on most printers. */
+export function buildCashDrawerKickBase64(pin: 0 | 1 = 0): string {
+  const ESC = 0x1b;
+  const m = pin === 1 ? 1 : 0;
+  const bytes = new Uint8Array([ESC, 0x40, ESC, 0x70, m, 25, 250]);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+/** Open cash drawer via receipt printer (RAW ESC/POS). Requires silent printing configured. */
+export async function openCashDrawer(pin: 0 | 1 = 0): Promise<PrintReceiptResult> {
+  const settings = await loadPrintingSettings();
+  if (!settings) {
+    return { sent: false, error: "Printing settings not loaded." };
+  }
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("pos_print_agent_token");
+    if (stored !== null) settings.agentToken = stored;
+  }
+  if (!settings.silentPrintingEnabled) {
+    return { sent: false, error: "Enable silent printing in Settings → Printing." };
+  }
+  if (!settings.receiptPrinterName?.trim()) {
+    return { sent: false, error: "Select a receipt printer in Settings → Printing." };
+  }
+  if (!settings.agentToken?.trim()) {
+    return { sent: false, error: "Print agent token not set in Settings → Printing." };
+  }
+  const ok = await checkAgentHealth(settings.agentUrl, settings.agentToken);
+  if (!ok) {
+    return { sent: false, error: "Cannot reach Print Bridge on this PC." };
+  }
+  try {
+    const agentRes = await fetchPrintAgent(settings.agentUrl, "POST", "/print/drawer/kick", {
+      token: settings.agentToken,
+      timeoutMs: 10000,
+      jsonBody: {
+        printerName: settings.receiptPrinterName.trim(),
+        dataBase64: buildCashDrawerKickBase64(pin),
+        jobName: "cash-drawer",
+      },
+    });
+    const agentJson = await agentRes.json().catch(() => ({}));
+    if (agentRes.ok && agentJson.success) {
+      return { sent: true };
+    }
+    return {
+      sent: false,
+      error: (agentJson as { message?: string }).message || `Drawer kick failed (${agentRes.status}).`,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { sent: false, error: msg };
+  }
+}
+
 export { getDeviceId };
