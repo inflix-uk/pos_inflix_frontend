@@ -56,12 +56,7 @@ const AddSalesReturnModal: React.FC<AddSalesReturnModalProps> = ({
   initialInvoiceRef = "",
   initialCustomerName = "",
 }) => {
-  const customerOptions = Array.from(
-    new Set(
-      ((customerNames && customerNames.length > 0) ? customerNames : DEFAULT_CUSTOMER_OPTIONS)
-        .filter((n): n is string => typeof n === "string" && n.trim().length > 0)
-    )
-  );
+  const customerOptions = (customerNames && customerNames.length > 0) ? customerNames : DEFAULT_CUSTOMER_OPTIONS;
   const [form, setForm] = useState<Omit<SalesReturn, 'id'>>({
     customer: {
       name: "",
