@@ -139,6 +139,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   "/reports/dashboard": ["report.view"],
   "/reports/dashboard/locations": ["report.view"],
   "/reports/takings": ["report.view"],
+  "/reports/z-read": ["report.zread", "report.view"],
 
   // Settings - require at least one admin/settings permission
   "/settings": ["audit.view", "user.manage", "role.manage", "settings.view"],
@@ -266,6 +267,7 @@ export const NAV_CONFIG: NavSection[] = [
     items: [
       { title: "Dashboard", path: "/reports/dashboard", icon: LayoutDashboard, requiredPermsAnyOf: ["report.view"], featureKey: "reports" },
       { title: "Takings Dashboard", path: "/reports/takings", icon: TrendingUp, requiredPermsAnyOf: ["report.view"] },
+      { title: "Daily Closing Till Reading (Z-Read)", path: "/reports/z-read", icon: Receipt, requiredPermsAnyOf: ["report.zread", "report.view"] },
     ],
   },
   {
