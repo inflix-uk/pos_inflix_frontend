@@ -91,11 +91,11 @@ export default function PrintingSettingsPage() {
 
  const loadPrinters = useCallback(async (opts?: { url?: string; token?: string }) => {
  const url = (opts?.url ?? agentUrl).trim();
- const token =
-  opts?.token ??
-  agentToken ||
-  (typeof window !== "undefined" ? localStorage.getItem(AGENT_TOKEN_KEY) : null) ||
-  "";
+ let token = opts?.token ?? agentToken;
+ if (!token && typeof window !== "undefined") {
+  token = localStorage.getItem(AGENT_TOKEN_KEY) || "";
+ }
+ token = token || "";
  if (!url) return;
  setPrintersLoading(true);
  setAgentReachable(null);
