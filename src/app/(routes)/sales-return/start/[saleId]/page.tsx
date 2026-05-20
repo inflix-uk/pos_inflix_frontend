@@ -12,6 +12,8 @@ import {
  Plus,
  Trash2,
  FileText,
+ ShieldCheck,
+ X,
 } from "lucide-react";
 import { salesApi } from "../../../sales-dashboard/service/salesApi";
 import type { SaleRecord } from "../../../sales-dashboard/service/salesApi";
@@ -72,6 +74,11 @@ export default function StartReturnPage() {
  const [refundMethod, setRefundMethod] = useState<"cash" | "card" | "bank">("cash");
  const [refundAccountId, setRefundAccountId] = useState("");
  const [paymentAccounts, setPaymentAccounts] = useState<Array<{ _id: string; name: string; type: string; balance: number }>>([]);
+ const [otpModalOpen, setOtpModalOpen] = useState(false);
+ const [otpThreshold, setOtpThreshold] = useState<number>(50);
+ const [otpCode, setOtpCode] = useState("");
+ const [otpError, setOtpError] = useState<string | null>(null);
+ const [otpSubmitting, setOtpSubmitting] = useState(false);
 
  const reference = sale?.reference ?? "";
  const customerName = sale?.customerName ?? "";
@@ -202,18 +209,7 @@ export default function StartReturnPage() {
 
  const basketSubtotal = basket.reduce((sum, b) => sum + b.price * b.qtyToReturn, 0);
 
- const handleCreateReturn = async () => {
- if (basket.length === 0) {
- setMessage({ type: "error", text: "Add at least one item to the return basket." });
- return;
- }
- if (returnType === "refund" && !refundAccountId) {
- setMessage({ type: "error", text: "Please select the account (pot) to refund from." });
- return;
- }
- setSubmitting(true);
- setMessage({ type: "success", text: "" });
- try {
+ const submitReturn = async (adminOtpCode?: string) => {
  const items = basket.map((b) => ({
  id: `basket-${b.lineIndex}`,
  product: b.name,
@@ -247,13 +243,63 @@ export default function StartReturnPage() {
  customerId,
  refundMethod: returnType === "refund" ? refundMethod : undefined,
  refundAccountId: returnType === "refund" ? refundAccountId || undefined : undefined,
+ adminOtpCode,
  });
+ };
+
+ const handleCreateReturn = async () => {
+ if (basket.length === 0) {
+ setMessage({ type: "error", text: "Add at least one item to the return basket." });
+ return;
+ }
+ if (returnType === "refund" && !refundAccountId) {
+ setMessage({ type: "error", text: "Please select the account (pot) to refund from." });
+ return;
+ }
+ setSubmitting(true);
+ setMessage({ type: "success", text: "" });
+ try {
+ await submitReturn();
  setMessage({ type: "success", text: "Return created. Redirecting…" });
  setTimeout(() => router.push("/sales-return"), 1500);
  } catch (e) {
- setMessage({ type: "error", text: e instanceof Error ? e.message : "Failed to create return" });
+ const err = e as Error & { code?: string; refundOtpThreshold?: number };
+ if (err.code === "ADMIN_OTP_REQUIRED") {
+ setOtpThreshold(err.refundOtpThreshold ?? 50);
+ setOtpCode("");
+ setOtpError(null);
+ setOtpModalOpen(true);
+ } else if (err.code === "ADMIN_2FA_NOT_SETUP") {
+ setMessage({ type: "error", text: err.message });
+ } else {
+ setMessage({ type: "error", text: err.message || "Failed to create return" });
+ }
  } finally {
  setSubmitting(false);
+ }
+ };
+
+ const handleSubmitOtp = async () => {
+ if (otpCode.length !== 6) {
+ setOtpError("Enter the 6-digit code from Google Authenticator");
+ return;
+ }
+ setOtpSubmitting(true);
+ setOtpError(null);
+ try {
+ await submitReturn(otpCode);
+ setOtpModalOpen(false);
+ setMessage({ type: "success", text: "Return created. Redirecting…" });
+ setTimeout(() => router.push("/sales-return"), 1500);
+ } catch (e) {
+ const err = e as Error & { code?: string };
+ if (err.code === "ADMIN_OTP_INVALID" || err.code === "ADMIN_OTP_REQUIRED") {
+ setOtpError(err.message || "Invalid code");
+ } else {
+ setOtpError(err.message || "Failed to create return");
+ }
+ } finally {
+ setOtpSubmitting(false);
  }
  };
 
@@ -562,6 +608,65 @@ export default function StartReturnPage() {
   </div>
  </div>
  </div>
+
+ {otpModalOpen && (
+ <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 relative">
+  <button
+   type="button"
+   onClick={() => { if (!otpSubmitting) { setOtpModalOpen(false); setOtpCode(""); setOtpError(null); } }}
+   className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+   aria-label="Close"
+  >
+   <X size={20} />
+  </button>
+  <div className="flex items-center gap-3 mb-3">
+   <div className="p-2 bg-orange-50 rounded-lg">
+   <ShieldCheck className="h-6 w-6 text-orange-500" />
+   </div>
+   <div>
+   <h3 className="text-lg font-semibold text-gray-900">Admin approval required</h3>
+   <p className="text-xs text-gray-500">Refund of {formatMoney(basketSubtotal)} exceeds {formatMoney(otpThreshold)}.</p>
+   </div>
+  </div>
+  <p className="text-sm text-gray-600 mb-4">
+   Ask the admin to open <strong>Google Authenticator</strong> and enter the current 6-digit code.
+  </p>
+  <input
+   type="text"
+   inputMode="numeric"
+   autoComplete="one-time-code"
+   maxLength={6}
+   autoFocus
+   value={otpCode}
+   onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError(null); }}
+   onKeyDown={(e) => { if (e.key === "Enter" && otpCode.length === 6 && !otpSubmitting) handleSubmitOtp(); }}
+   placeholder="123456"
+   className="w-full rounded-lg border border-gray-300 px-4 py-3 text-2xl text-center tracking-[0.5em] font-mono text-gray-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+  />
+  {otpError && <p className="text-sm text-red-600 mt-2">{otpError}</p>}
+  <div className="flex items-center justify-end gap-2 mt-5">
+   <button
+   type="button"
+   onClick={() => { setOtpModalOpen(false); setOtpCode(""); setOtpError(null); }}
+   disabled={otpSubmitting}
+   className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900"
+   >
+   Cancel
+   </button>
+   <button
+   type="button"
+   onClick={handleSubmitOtp}
+   disabled={otpCode.length !== 6 || otpSubmitting}
+   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white font-medium hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+   >
+   {otpSubmitting && <Loader2 size={16} className="animate-spin" />}
+   Approve refund
+   </button>
+  </div>
+  </div>
+ </div>
+ )}
  </div>
  );
 }

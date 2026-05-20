@@ -14,6 +14,8 @@ import {
  RotateCcw,
  User,
  X,
+ ShieldCheck,
+ Loader2,
 } from "lucide-react";
 import { TableLoader } from "@/app/components/ui/Loader";
 import type { SalesReturn } from "./types";
@@ -187,6 +189,13 @@ const Page = () => {
  setSelectedReturns([]);
  };
 
+ const [pendingReturn, setPendingReturn] = useState<SalesReturn | null>(null);
+ const [otpModalOpen, setOtpModalOpen] = useState(false);
+ const [otpThreshold, setOtpThreshold] = useState<number>(50);
+ const [otpCode, setOtpCode] = useState("");
+ const [otpError, setOtpError] = useState<string | null>(null);
+ const [otpSubmitting, setOtpSubmitting] = useState(false);
+
  const handleAddSalesReturn = async (newSalesReturn: SalesReturn) => {
  try {
  await salesReturnApi.create(newSalesReturn);
@@ -194,7 +203,42 @@ const Page = () => {
  setShowAddModal(false);
  fetchList();
  } catch (e) {
- showMessage("error", e instanceof Error ? e.message : "Failed to create sales return");
+ const err = e as Error & { code?: string; refundOtpThreshold?: number };
+ if (err.code === "ADMIN_OTP_REQUIRED") {
+ setPendingReturn(newSalesReturn);
+ setOtpThreshold(err.refundOtpThreshold ?? 50);
+ setOtpCode("");
+ setOtpError(null);
+ setOtpModalOpen(true);
+ } else if (err.code === "ADMIN_2FA_NOT_SETUP") {
+ showMessage("error", err.message);
+ } else {
+ showMessage("error", err.message || "Failed to create sales return");
+ }
+ }
+ };
+
+ const handleSubmitOtp = async () => {
+ if (!pendingReturn) return;
+ if (otpCode.length !== 6) {
+ setOtpError("Enter the 6-digit code from Google Authenticator");
+ return;
+ }
+ setOtpSubmitting(true);
+ setOtpError(null);
+ try {
+ await salesReturnApi.create({ ...pendingReturn, adminOtpCode: otpCode });
+ setOtpModalOpen(false);
+ setPendingReturn(null);
+ setOtpCode("");
+ setShowAddModal(false);
+ showMessage("success", "Sales return created.");
+ fetchList();
+ } catch (e) {
+ const err = e as Error & { code?: string };
+ setOtpError(err.message || "Invalid code");
+ } finally {
+ setOtpSubmitting(false);
  }
  };
 
@@ -736,6 +780,67 @@ const Page = () => {
  onDelete={handleDeleteSalesReturn}
  reference={salesReturns.find(ret => ret.id === selectedReturnForDelete)?.reference}
  />
+
+ {otpModalOpen && (
+ <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 relative">
+  <button
+   type="button"
+   onClick={() => { if (!otpSubmitting) { setOtpModalOpen(false); setOtpCode(""); setOtpError(null); setPendingReturn(null); } }}
+   className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+   aria-label="Close"
+  >
+   <X size={20} />
+  </button>
+  <div className="flex items-center gap-3 mb-3">
+   <div className="p-2 bg-orange-50 rounded-lg">
+   <ShieldCheck className="h-6 w-6 text-orange-500" />
+   </div>
+   <div>
+   <h3 className="text-lg font-semibold text-gray-900">Admin approval required</h3>
+   <p className="text-xs text-gray-500">
+   Return of {formatMoney(Number(pendingReturn?.grandTotal ?? pendingReturn?.total ?? 0))} exceeds {formatMoney(otpThreshold)}.
+   </p>
+   </div>
+  </div>
+  <p className="text-sm text-gray-600 mb-4">
+   Ask the admin to open <strong>Google Authenticator</strong> and enter the current 6-digit code.
+  </p>
+  <input
+   type="text"
+   inputMode="numeric"
+   autoComplete="one-time-code"
+   maxLength={6}
+   autoFocus
+   value={otpCode}
+   onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setOtpError(null); }}
+   onKeyDown={(e) => { if (e.key === "Enter" && otpCode.length === 6 && !otpSubmitting) handleSubmitOtp(); }}
+   placeholder="123456"
+   className="w-full rounded-lg border border-gray-300 px-4 py-3 text-2xl text-center tracking-[0.5em] font-mono text-gray-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+  />
+  {otpError && <p className="text-sm text-red-600 mt-2">{otpError}</p>}
+  <div className="flex items-center justify-end gap-2 mt-5">
+   <button
+   type="button"
+   onClick={() => { setOtpModalOpen(false); setOtpCode(""); setOtpError(null); setPendingReturn(null); }}
+   disabled={otpSubmitting}
+   className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900"
+   >
+   Cancel
+   </button>
+   <button
+   type="button"
+   onClick={handleSubmitOtp}
+   disabled={otpCode.length !== 6 || otpSubmitting}
+   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 text-white font-medium hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+   >
+   {otpSubmitting && <Loader2 size={16} className="animate-spin" />}
+   Approve return
+   </button>
+  </div>
+  </div>
+ </div>
+ )}
  </div>
  );
 };

@@ -73,24 +73,28 @@ export const salesReturnApi = {
  },
 
  create: async (
-  data: Partial<SalesReturn> & { returnType?: "store_credit" | "refund"; customerId?: string; refundMethod?: string; refundAccountId?: string }
+  data: Partial<SalesReturn> & { returnType?: "store_credit" | "refund"; customerId?: string; refundMethod?: string; refundAccountId?: string; adminOtpCode?: string }
  ): Promise<{ success: boolean; data: SalesReturn; message?: string }> => {
   const body: Record<string, unknown> = { ...toPayload(data) };
   if (data.returnType) body.returnType = data.returnType;
   if (data.customerId) body.customerId = data.customerId;
   if (data.refundMethod) body.refundMethod = data.refundMethod;
   if (data.refundAccountId) body.refundAccountId = data.refundAccountId;
+  if (data.adminOtpCode) body.adminOtpCode = data.adminOtpCode;
   const res = await fetch(`${API_URL}/api/sales-returns`, {
    method: "POST",
    headers: getAuthHeaders(),
    credentials: "include",
    body: JSON.stringify(body),
   });
+  const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-   const err = await res.json().catch(() => ({}));
-   throw new Error(err.message || "Failed to create sales return");
+   const err = new Error(json.message || "Failed to create sales return") as Error & { code?: string; refundOtpThreshold?: number };
+   if (json.code) err.code = json.code;
+   if (typeof json.refundOtpThreshold === "number") err.refundOtpThreshold = json.refundOtpThreshold;
+   throw err;
   }
-  return res.json();
+  return json;
  },
 
  update: async (id: string, data: Partial<SalesReturn>): Promise<{ success: boolean; data: SalesReturn; message?: string }> => {
