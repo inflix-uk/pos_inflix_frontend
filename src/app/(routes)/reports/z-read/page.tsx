@@ -17,6 +17,7 @@ import {
 } from "../takings/service/takingsDashboardApi";
 import { locationApi } from "@/app/(routes)/peoples/locations/service/locationApi";
 import { usePermissionsContext } from "@/contexts/PermissionsContext";
+import { openZReadPdfInNewTab } from "@/lib/zReadPdf";
 
 const STORAGE_KEY = "z-read-dashboard-locationId";
 
@@ -153,10 +154,18 @@ export default function ZReadDashboardPage() {
      </button>
      <button
       type="button"
-      onClick={() => window.print()}
+      onClick={() => {
+       if (!data) return;
+       openZReadPdfInNewTab({
+        data,
+        locationName,
+        dateRangeLabel,
+        rangeText: formatDateLabel(from, to),
+       });
+      }}
       disabled={loading || !data}
       className="inline-flex items-center gap-2 rounded-lg bg-orange-500 text-white px-3 py-1.5 text-xs @[768px]:text-sm hover:bg-orange-600 disabled:opacity-50"
-      title="Print Z-Read"
+      title="Open Z-Read PDF"
      >
       <Printer className="h-4 w-4" />
       Print Z-Read
