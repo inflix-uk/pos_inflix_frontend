@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, Printer, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Printer, Loader2, RefreshCw, CheckCircle2, XCircle, AlertCircle, Send } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
  getPrintingSettings,
@@ -12,6 +12,37 @@ import {
 import { getDeviceId, invalidatePrintingSettingsCache } from "@/services/printService";
 
 const AGENT_TOKEN_KEY = "pos_print_agent_token";
+
+function isLoopbackUrl(raw: string): boolean {
+ try {
+  const u = new URL(raw.trim().replace(/\/+$/, ""));
+  if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+  const h = u.hostname.toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "::1";
+ } catch {
+  return false;
+ }
+}
+
+/** Build minimal ESC/POS test payload: init + text lines + feed + cut. Returns base64. */
+function buildEscposTestPayload(): string {
+ const ESC = 0x1b;
+ const GS = 0x1d;
+ const text = "POS PRINT BRIDGE\nTEST PRINT OK\n\nIf you see this,\nsilent printing works.\n\n\n";
+ const textBytes = new TextEncoder().encode(text);
+ const bytes = new Uint8Array(2 + textBytes.length + 3);
+ let i = 0;
+ bytes[i++] = ESC;
+ bytes[i++] = 0x40; // ESC @ init
+ bytes.set(textBytes, i);
+ i += textBytes.length;
+ bytes[i++] = GS;
+ bytes[i++] = 0x56;
+ bytes[i++] = 0x00; // GS V 0 — full cut
+ let bin = "";
+ for (let j = 0; j < bytes.length; j++) bin += String.fromCharCode(bytes[j]);
+ return btoa(bin);
+}
 
 /** Same-origin proxy avoids browser CORS (localhost:3001 → 127.0.0.1:9123 is cross-origin). */
 function fetchStatus(agentUrl: string): Promise<{ tokenPresent?: boolean; token?: string } | null> {
@@ -41,6 +72,8 @@ export default function PrintingSettingsPage() {
  const [printersLoading, setPrintersLoading] = useState(false);
  const [agentReachable, setAgentReachable] = useState<boolean | null>(null);
  const [tokenNotPaired, setTokenNotPaired] = useState(false);
+ const [testing, setTesting] = useState(false);
+ const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
  const deviceId = getDeviceId();
 
@@ -113,6 +146,93 @@ export default function PrintingSettingsPage() {
  if (!agentUrl.trim()) return;
  loadPrinters();
  }, [agentUrl, agentToken]);
+
+ const handleTestReceipt = async () => {
+ setTesting(true);
+ setTestResult(null);
+ try {
+  const token = agentToken || (typeof window !== "undefined" ? localStorage.getItem(AGENT_TOKEN_KEY) || "" : "");
+  if (!isLoopbackUrl(agentUrl)) {
+  setTestResult({ ok: false, text: "Agent URL must be http://127.0.0.1:PORT or http://localhost:PORT." });
+  return;
+  }
+  if (!receiptPrinterName.trim()) {
+  setTestResult({ ok: false, text: "Select a Receipt printer first." });
+  return;
+  }
+  const res = await fetch(`/api/print-agent/print/receipt/escpos`, {
+  method: "POST",
+  headers: {
+   "Content-Type": "application/json",
+   ...(token ? { "X-Print-Token": token } : {}),
+  },
+  body: JSON.stringify({
+   agentBase: agentUrl.replace(/\/$/, ""),
+   payload: {
+   printerName: receiptPrinterName.trim(),
+   dataBase64: buildEscposTestPayload(),
+   jobName: "print-bridge-test",
+   },
+  }),
+  signal: AbortSignal.timeout(15000),
+  });
+  const j = (await res.json().catch(() => ({}))) as { success?: boolean; message?: string };
+  if (res.ok && j.success) {
+  setTestResult({ ok: true, text: "Test sent. Check the receipt printer." });
+  } else if (res.status === 401) {
+  setTestResult({ ok: false, text: "Agent token invalid. Copy it from Print Bridge Status and Save." });
+  } else if (res.status === 502) {
+  setTestResult({ ok: false, text: "Cannot reach Print Bridge. Is it running on this PC?" });
+  } else {
+  setTestResult({ ok: false, text: j.message || `Agent error (${res.status}). Check printer name.` });
+  }
+ } catch (e) {
+  setTestResult({ ok: false, text: e instanceof Error ? e.message : "Test print failed." });
+ } finally {
+  setTesting(false);
+ }
+ };
+
+ const diagnostics = useMemo(() => {
+ const token = agentToken || (typeof window !== "undefined" ? localStorage.getItem(AGENT_TOKEN_KEY) || "" : "");
+ return [
+  {
+  label: "Silent printing toggle is ON",
+  ok: enabled,
+  hint: "Turn on the toggle above.",
+  },
+  {
+  label: "Agent URL is loopback (127.0.0.1 / localhost)",
+  ok: isLoopbackUrl(agentUrl),
+  hint: "LAN IPs are blocked by the proxy. Use http://127.0.0.1:9123.",
+  },
+  {
+  label: "Print Bridge is reachable",
+  ok: agentReachable === true,
+  hint: "Install/start POS Print Bridge on this PC, then click Refresh printers.",
+  },
+  {
+  label: "Agent token is present on this device",
+  ok: !!token.trim(),
+  hint: "Open http://127.0.0.1:9123/status, copy the token, paste above and Save.",
+  },
+  {
+  label: "Agent token is paired (no 401)",
+  ok: !tokenNotPaired,
+  hint: "The token does not match this Print Bridge install. Re-copy and Save.",
+  },
+  {
+  label: "Receipt printer selected",
+  ok: !!receiptPrinterName.trim(),
+  hint: "Pick the receipt printer below.",
+  },
+  {
+  label: "Label printer selected",
+  ok: !!labelPrinterName.trim(),
+  hint: "Pick the label printer below (e.g. DYMO).",
+  },
+ ];
+ }, [enabled, agentUrl, agentReachable, agentToken, tokenNotPaired, receiptPrinterName, labelPrinterName]);
 
  const handleSave = async () => {
  if (!canManage) return;
@@ -337,6 +457,49 @@ export default function PrintingSettingsPage() {
    </option>
   ))}
   </select>
+  </div>
+
+  <div className="border-t border-gray-200 pt-4">
+  <div className="flex items-center justify-between mb-3">
+  <p className="font-medium text-gray-800">Silent Print Diagnostics</p>
+  <button
+   type="button"
+   onClick={handleTestReceipt}
+   disabled={testing || !receiptPrinterName.trim()}
+   className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+   title="Sends a small ESC/POS test job to the selected receipt printer"
+  >
+   {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+   Send Test Receipt
+  </button>
+  </div>
+
+  <ul className="space-y-1.5">
+  {diagnostics.map((d) => (
+   <li key={d.label} className="flex items-start gap-2 text-sm">
+   {d.ok ? (
+   <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+   ) : (
+   <XCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+   )}
+   <div>
+   <span className={d.ok ? "text-gray-700" : "text-gray-900 font-medium"}>{d.label}</span>
+   {!d.ok && <span className="text-gray-500"> — {d.hint}</span>}
+   </div>
+   </li>
+  ))}
+  </ul>
+
+  {testResult && (
+  <div
+   className={`mt-3 px-3 py-2 rounded-lg text-sm flex items-start gap-2 ${
+   testResult.ok ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"
+   }`}
+  >
+   <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+   <span>{testResult.text}</span>
+  </div>
+  )}
   </div>
 
   {canManage && (
