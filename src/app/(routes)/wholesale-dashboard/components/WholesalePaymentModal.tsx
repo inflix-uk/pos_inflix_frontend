@@ -394,9 +394,9 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  const handleOpenDrawer = async () => {
   setDrawerOpening(true);
   try {
-   const result = await openCashDrawer();
+   const result = await openCashDrawer({ tryBothPins: true });
    if (result.sent) {
-    onMessage?.("success", "Cash drawer opened");
+    onMessage?.("success", "Cash drawer pulse sent — if it did not open, check receipt printer and drawer cable.");
    } else {
     onMessage?.("error", result.error ?? "Could not open cash drawer");
    }

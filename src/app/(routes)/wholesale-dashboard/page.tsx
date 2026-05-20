@@ -1353,7 +1353,10 @@ const Page = () => {
   // Broadcast to other tabs (e.g. /inventory/products) so their stock displays refresh too.
   emitInventoryEvent({ type: "sale-created", saleId: result.data?._id });
   if ((details.payments?.cash ?? 0) > 0) {
-   openCashDrawer().catch(() => {});
+   const drawer = await openCashDrawer({ tryBothPins: true });
+   if (!drawer.sent) {
+    showMessage("error", drawer.error ?? "Cash drawer did not open. Check Settings → Printing.");
+   }
   }
   } else {
   showMessage("error", result.message || "Failed to save order");

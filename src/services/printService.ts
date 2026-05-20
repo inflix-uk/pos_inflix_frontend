@@ -419,18 +419,104 @@ export async function printInvoicePdf(pdfBase64: string): Promise<boolean> {
   }
 }
 
-/** ESC/POS cash drawer pulse (ESC @ init + ESC p). Pin 0 = connector pin 2 on most printers. */
+let cachedDrawerPin: 0 | 1 | undefined;
+
+/** Drawer kick pin from Notes & Terms → Receipt (0 = pin 2, 1 = pin 5 on most Epson/Star). */
+export async function getCashDrawerPin(): Promise<0 | 1> {
+  if (cachedDrawerPin !== undefined) return cachedDrawerPin;
+  try {
+    const res = await fetch(`${API_URL}/api/settings/notes-terms`, { headers: getAuthHeaders() });
+    const json = await res.json().catch(() => ({}));
+    const pin = json?.data?.receiptPrinterSalesPrint?.cashDrawerPin;
+    cachedDrawerPin = pin === 1 ? 1 : 0;
+  } catch {
+    cachedDrawerPin = 0;
+  }
+  return cachedDrawerPin;
+}
+
+export function invalidateCashDrawerPinCache(): void {
+  cachedDrawerPin = undefined;
+}
+
+/**
+ * ESC/POS drawer pulse: init + ESC p (longer pulse) + real-time DLE DC4 (Epson/Star).
+ * Pin 0 = drawer kick connector 2 on most printers; pin 1 = alternate connector.
+ */
 export function buildCashDrawerKickBase64(pin: 0 | 1 = 0): string {
   const ESC = 0x1b;
   const m = pin === 1 ? 1 : 0;
-  const bytes = new Uint8Array([ESC, 0x40, ESC, 0x70, m, 25, 250]);
+  const bytes = new Uint8Array([
+    ESC,
+    0x40,
+    ESC,
+    0x70,
+    m,
+    60,
+    120,
+    0x10,
+    0x14,
+    0x01,
+    m,
+    0x19,
+  ]);
   let bin = "";
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
   return btoa(bin);
 }
 
+const DRAWER_PRINTER_HINT =
+  "Use the thermal receipt printer (not DYMO/label/PDF). In Windows, the driver must support RAW ESC/POS.";
+
+async function sendDrawerKickToAgent(
+  settings: PrintingSettings,
+  pin: 0 | 1
+): Promise<PrintReceiptResult> {
+  const drawerPayload = {
+    printerName: settings.receiptPrinterName.trim(),
+    dataBase64: buildCashDrawerKickBase64(pin),
+    jobName: `cash-drawer-pin${pin}`,
+  };
+  const agentRes = await fetchPrintAgent(settings.agentUrl, "POST", "/print/drawer/kick", {
+    token: settings.agentToken,
+    timeoutMs: 10000,
+    jsonBody: drawerPayload,
+  });
+  const agentJson = (await agentRes.json().catch(() => ({}))) as { success?: boolean; message?: string };
+  if (agentRes.ok && agentJson.success) {
+    return { sent: true };
+  }
+  if (agentRes.status === 404) {
+    const legacyRes = await fetchPrintAgent(settings.agentUrl, "POST", "/print/receipt/escpos", {
+      token: settings.agentToken,
+      timeoutMs: 10000,
+      jsonBody: drawerPayload,
+    });
+    const legacyJson = (await legacyRes.json().catch(() => ({}))) as { success?: boolean; message?: string };
+    if (legacyRes.ok && legacyJson.success) {
+      return { sent: true };
+    }
+    return {
+      sent: false,
+      error:
+        legacyJson.message ||
+        `Drawer kick failed (${legacyRes.status}). Reinstall POS Print Bridge on this PC. ${DRAWER_PRINTER_HINT}`,
+    };
+  }
+  return {
+    sent: false,
+    error:
+      agentJson.message ||
+      `Drawer kick failed (${agentRes.status}). ${DRAWER_PRINTER_HINT}`,
+  };
+}
+
 /** Open cash drawer via receipt printer (RAW ESC/POS). Requires silent printing configured. */
-export async function openCashDrawer(pin: 0 | 1 = 0): Promise<PrintReceiptResult> {
+export async function openCashDrawer(options?: {
+  pin?: 0 | 1;
+  /** Try pin 0 then pin 1 when the first kick fails or for test (some drawers use pin 5). */
+  tryBothPins?: boolean;
+}): Promise<PrintReceiptResult> {
   const settings = await loadPrintingSettings();
   if (!settings) {
     return { sent: false, error: "Printing settings not loaded." };
@@ -443,7 +529,7 @@ export async function openCashDrawer(pin: 0 | 1 = 0): Promise<PrintReceiptResult
     return { sent: false, error: "Enable silent printing in Settings → Printing." };
   }
   if (!settings.receiptPrinterName?.trim()) {
-    return { sent: false, error: "Select a receipt printer in Settings → Printing." };
+    return { sent: false, error: `Select a receipt printer in Settings → Printing. ${DRAWER_PRINTER_HINT}` };
   }
   if (!settings.agentToken?.trim()) {
     return { sent: false, error: "Print agent token not set in Settings → Printing." };
@@ -452,43 +538,20 @@ export async function openCashDrawer(pin: 0 | 1 = 0): Promise<PrintReceiptResult
   if (!ok) {
     return { sent: false, error: "Cannot reach Print Bridge on this PC." };
   }
-  const drawerPayload = {
-    printerName: settings.receiptPrinterName.trim(),
-    dataBase64: buildCashDrawerKickBase64(pin),
-    jobName: "cash-drawer",
-  };
+
+  const primary = options?.pin ?? (await getCashDrawerPin());
+  const pinsToTry: (0 | 1)[] = options?.tryBothPins ? [primary, primary === 0 ? 1 : 0] : [primary];
+
   try {
-    const agentRes = await fetchPrintAgent(settings.agentUrl, "POST", "/print/drawer/kick", {
-      token: settings.agentToken,
-      timeoutMs: 10000,
-      jsonBody: drawerPayload,
-    });
-    const agentJson = await agentRes.json().catch(() => ({}));
-    if (agentRes.ok && agentJson.success) {
-      return { sent: true };
-    }
-    // Older Print Bridge builds lack /print/drawer/kick — send pulse as raw ESC/POS instead.
-    if (agentRes.status === 404) {
-      const legacyRes = await fetchPrintAgent(settings.agentUrl, "POST", "/print/receipt/escpos", {
-        token: settings.agentToken,
-        timeoutMs: 10000,
-        jsonBody: drawerPayload,
-      });
-      const legacyJson = await legacyRes.json().catch(() => ({}));
-      if (legacyRes.ok && legacyJson.success) {
-        return { sent: true };
+    let last: PrintReceiptResult = { sent: false, error: "Drawer kick failed." };
+    for (const pin of pinsToTry) {
+      last = await sendDrawerKickToAgent(settings, pin);
+      if (last.sent) return last;
+      if (options?.tryBothPins && pin !== pinsToTry[pinsToTry.length - 1]) {
+        await new Promise((r) => setTimeout(r, 400));
       }
-      return {
-        sent: false,
-        error:
-          (legacyJson as { message?: string }).message ||
-          `Drawer kick failed (${legacyRes.status}). Update POS Print Bridge on this PC.`,
-      };
     }
-    return {
-      sent: false,
-      error: (agentJson as { message?: string }).message || `Drawer kick failed (${agentRes.status}).`,
-    };
+    return last;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { sent: false, error: msg };

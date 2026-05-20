@@ -932,7 +932,11 @@ export const useSalesDashboard = (options?: {
     };
     printInvoiceA4(saleForPrint).catch(() => {});
     if (paymentMethod === "cash") {
-      openCashDrawer().catch(() => {});
+      openCashDrawer({ tryBothPins: true }).then((drawer) => {
+        if (!drawer.sent) {
+          showMessage("error", drawer.error ?? "Cash drawer did not open. Check Settings → Printing.");
+        }
+      });
     }
    }
   } else {

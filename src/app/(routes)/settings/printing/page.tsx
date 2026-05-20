@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, Printer, Loader2, RefreshCw, CheckCircle2, XCircle, AlertCircle, Send } from "lucide-react";
+import { ArrowLeft, Printer, Loader2, RefreshCw, CheckCircle2, XCircle, AlertCircle, Send, Banknote } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
  getPrintingSettings,
@@ -13,7 +13,7 @@ import {
   checkPrintAgentReachable,
   fetchPrintAgent,
 } from "@/lib/printAgentClient";
-import { getDeviceId, invalidatePrintingSettingsCache } from "@/services/printService";
+import { getDeviceId, invalidatePrintingSettingsCache, openCashDrawer } from "@/services/printService";
 
 const AGENT_TOKEN_KEY = "pos_print_agent_token";
 
@@ -84,6 +84,7 @@ export default function PrintingSettingsPage() {
  const [agentReachable, setAgentReachable] = useState<boolean | null>(null);
  const [tokenNotPaired, setTokenNotPaired] = useState(false);
  const [testing, setTesting] = useState(false);
+ const [testingDrawer, setTestingDrawer] = useState(false);
  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
  const deviceId = getDeviceId();
@@ -331,6 +332,24 @@ export default function PrintingSettingsPage() {
  ];
  }, [enabled, agentUrl, agentReachable, agentToken, tokenNotPaired, receiptPrinterName, labelPrinterName]);
 
+ const handleTestDrawer = async () => {
+  setTestingDrawer(true);
+  setTestResult(null);
+  try {
+   const result = await openCashDrawer({ tryBothPins: true });
+   if (result.sent) {
+    setTestResult({
+     ok: true,
+     text: "Drawer pulse sent (tried both pin 0 and pin 1). If the drawer did not move, check the RJ11 cable to the printer and set Cash drawer pin in Settings → Notes & Terms → Receipt.",
+    });
+   } else {
+    setTestResult({ ok: false, text: result.error ?? "Drawer test failed." });
+   }
+  } finally {
+   setTestingDrawer(false);
+  }
+ };
+
  const handleSave = () => {
   if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
   void persistSettings();
@@ -548,18 +567,30 @@ export default function PrintingSettingsPage() {
   </div>
 
   <div className="border-t border-gray-200 pt-4">
-  <div className="flex items-center justify-between mb-3">
+  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
   <p className="font-medium text-gray-800">Silent Print Diagnostics</p>
+  <div className="flex flex-wrap gap-2">
+  <button
+   type="button"
+   onClick={handleTestDrawer}
+   disabled={testingDrawer || testing || !receiptPrinterName.trim() || !enabled}
+   className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-amber-300 bg-amber-50 text-amber-900 rounded-lg hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
+   title="Pulse cash drawer without printing a receipt"
+  >
+   {testingDrawer ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />}
+   Test drawer
+  </button>
   <button
    type="button"
    onClick={handleTestReceipt}
-   disabled={testing || !receiptPrinterName.trim()}
+   disabled={testing || testingDrawer || !receiptPrinterName.trim()}
    className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
    title="Sends a small ESC/POS test job to the selected receipt printer"
   >
    {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
    Send Test Receipt
   </button>
+  </div>
   </div>
 
   <ul className="space-y-1.5">
