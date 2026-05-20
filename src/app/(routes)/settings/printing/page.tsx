@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { ArrowLeft, Printer, Loader2, RefreshCw, CheckCircle2, XCircle, AlertCircle, Send } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -67,7 +67,10 @@ export default function PrintingSettingsPage() {
 
  const [loading, setLoading] = useState(true);
  const [saving, setSaving] = useState(false);
+ const [autoSaveState, setAutoSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+ const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+ const settingsHydratedRef = useRef(false);
 
  const [enabled, setEnabled] = useState(false);
  const [agentUrl, setAgentUrl] = useState("http://127.0.0.1:9123");
@@ -85,50 +88,32 @@ export default function PrintingSettingsPage() {
 
  const deviceId = getDeviceId();
 
- const loadSettings = useCallback(async () => {
- if (!canView) return;
- setLoading(true);
- try {
- const res = await getPrintingSettings(deviceId);
- if (res.success && res.data) {
- const d = res.data;
- setEnabled(!!d.silentPrintingEnabled);
- setAgentUrl(d.agentUrl || "http://127.0.0.1:9123");
- setReceiptPrinterName(d.receiptPrinterName || "");
- setLabelPrinterName(d.labelPrinterName || "");
- setA4PrinterName(d.a4PrinterName || "");
- const stored = typeof window !== "undefined" ? localStorage.getItem(AGENT_TOKEN_KEY) : null;
- setAgentToken(stored || "");
- }
- } finally {
- setLoading(false);
- }
- }, [canView, deviceId]);
-
- useEffect(() => {
- loadSettings();
- }, [loadSettings]);
-
- const loadPrinters = useCallback(async () => {
- const token = agentToken || (typeof window !== "undefined" ? localStorage.getItem(AGENT_TOKEN_KEY) : null) || "";
+ const loadPrinters = useCallback(async (opts?: { url?: string; token?: string }) => {
+ const url = (opts?.url ?? agentUrl).trim();
+ const token =
+  opts?.token ??
+  agentToken ||
+  (typeof window !== "undefined" ? localStorage.getItem(AGENT_TOKEN_KEY) : null) ||
+  "";
+ if (!url) return;
  setPrintersLoading(true);
  setAgentReachable(null);
  setTokenNotPaired(false);
  try {
- const healthy = await checkPrintAgentReachable(agentUrl, token || undefined);
+ const healthy = await checkPrintAgentReachable(url, token || undefined);
  if (!healthy) {
  setAgentReachable(false);
  setPrinters([]);
  return;
  }
  setAgentReachable(true);
- const status = await fetchStatus(agentUrl);
+ const status = await fetchStatus(url);
  if (status?.tokenPresent && !token) {
  setTokenNotPaired(true);
  setPrinters([]);
  return;
  }
- const printersRes = await fetchPrintAgent(agentUrl, "GET", "/printers", {
+ const printersRes = await fetchPrintAgent(url, "GET", "/printers", {
   token: token || undefined,
   timeoutMs: 8000,
  });
@@ -147,10 +132,117 @@ export default function PrintingSettingsPage() {
  }
  }, [agentUrl, agentToken]);
 
+ const loadSettings = useCallback(async () => {
+ if (!canView) return;
+ setLoading(true);
+ settingsHydratedRef.current = false;
+ try {
+ const res = await getPrintingSettings(deviceId);
+ if (res.success && res.data) {
+ const d = res.data;
+ setEnabled(!!d.silentPrintingEnabled);
+ setAgentUrl(d.agentUrl || "http://127.0.0.1:9123");
+ setReceiptPrinterName(d.receiptPrinterName || "");
+ setLabelPrinterName(d.labelPrinterName || "");
+ setA4PrinterName(d.a4PrinterName || "");
+ const url = d.agentUrl || "http://127.0.0.1:9123";
+ const fromApi = typeof d.agentToken === "string" ? d.agentToken : "";
+ const stored = typeof window !== "undefined" ? localStorage.getItem(AGENT_TOKEN_KEY) : null;
+ const token = fromApi || stored || "";
+ setAgentToken(token);
+ if (token && typeof window !== "undefined") {
+  localStorage.setItem(AGENT_TOKEN_KEY, token);
+ }
+ settingsHydratedRef.current = true;
+ await loadPrinters({ url, token });
+ }
+ } finally {
+ setLoading(false);
+ }
+ }, [canView, deviceId, loadPrinters]);
+
  useEffect(() => {
- if (!agentUrl.trim()) return;
- loadPrinters();
- }, [agentUrl, agentToken]);
+ loadSettings();
+ }, [loadSettings]);
+
+ const persistSettings = useCallback(
+ async (opts?: { silent?: boolean }) => {
+  if (!canManage || !settingsHydratedRef.current) return;
+  if (!opts?.silent) setSaving(true);
+  else setAutoSaveState("saving");
+  try {
+   if (agentToken && typeof window !== "undefined") {
+    localStorage.setItem(AGENT_TOKEN_KEY, agentToken);
+   }
+   const payload: Parameters<typeof updatePrintingSettings>[1] = {
+    silentPrintingEnabled: enabled,
+    agentUrl: agentUrl.trim() || "http://127.0.0.1:9123",
+    receiptPrinterName: receiptPrinterName.trim(),
+    labelPrinterName: labelPrinterName.trim(),
+    a4PrinterName: a4PrinterName.trim(),
+    agentToken,
+   };
+   const res = await updatePrintingSettings(deviceId, payload);
+   if (res.success) {
+    invalidatePrintingSettingsCache();
+    if (opts?.silent) {
+     setAutoSaveState("saved");
+     setTimeout(() => setAutoSaveState("idle"), 2000);
+    } else {
+     setMessage({ type: "success", text: "Printing settings saved." });
+     setTimeout(() => setMessage(null), 3000);
+    }
+   } else if (opts?.silent) {
+    setAutoSaveState("error");
+   } else {
+    setMessage({ type: "error", text: res.message || "Failed to save." });
+   }
+  } catch {
+   if (opts?.silent) setAutoSaveState("error");
+   else setMessage({ type: "error", text: "Failed to save." });
+  } finally {
+   if (!opts?.silent) setSaving(false);
+  }
+ },
+ [
+  canManage,
+  deviceId,
+  enabled,
+  agentUrl,
+  agentToken,
+  receiptPrinterName,
+  labelPrinterName,
+  a4PrinterName,
+ ]
+ );
+
+ const scheduleAutoSave = useCallback(() => {
+  if (!canManage || !settingsHydratedRef.current) return;
+  if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+  autoSaveTimerRef.current = setTimeout(() => {
+   persistSettings({ silent: true });
+  }, 700);
+ }, [canManage, persistSettings]);
+
+ useEffect(() => {
+  return () => {
+   if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+   if (canManage && settingsHydratedRef.current) {
+    void persistSettings({ silent: true });
+   }
+  };
+ }, [canManage, persistSettings]);
+
+ useEffect(() => {
+  const onVis = () => {
+   if (document.visibilityState === "hidden") {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    if (canManage && settingsHydratedRef.current) void persistSettings({ silent: true });
+   }
+  };
+  document.addEventListener("visibilitychange", onVis);
+  return () => document.removeEventListener("visibilitychange", onVis);
+ }, [canManage, persistSettings]);
 
  const handleTestReceipt = async () => {
  setTesting(true);
@@ -239,35 +331,9 @@ export default function PrintingSettingsPage() {
  ];
  }, [enabled, agentUrl, agentReachable, agentToken, tokenNotPaired, receiptPrinterName, labelPrinterName]);
 
- const handleSave = async () => {
- if (!canManage) return;
- setSaving(true);
- setMessage(null);
- try {
- if (agentToken) {
- if (typeof window !== "undefined") localStorage.setItem(AGENT_TOKEN_KEY, agentToken);
- }
- const payload: Parameters<typeof updatePrintingSettings>[1] = {
- silentPrintingEnabled: enabled,
- agentUrl: agentUrl.trim() || "http://127.0.0.1:9123",
- receiptPrinterName: receiptPrinterName.trim(),
- labelPrinterName: labelPrinterName.trim(),
- a4PrinterName: a4PrinterName.trim(),
- };
- if (agentToken !== undefined) payload.agentToken = agentToken;
- const res = await updatePrintingSettings(deviceId, payload);
- if (res.success) {
- invalidatePrintingSettingsCache();
- setMessage({ type: "success", text: "Printing settings saved." });
- setTimeout(() => setMessage(null), 3000);
- } else {
- setMessage({ type: "error", text: res.message || "Failed to save." });
- }
- } catch {
- setMessage({ type: "error", text: "Failed to save." });
- } finally {
- setSaving(false);
- }
+ const handleSave = () => {
+  if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+  void persistSettings();
  };
 
  if (permLoading || !canView) {
@@ -335,7 +401,11 @@ export default function PrintingSettingsPage() {
   role="switch"
   aria-checked={enabled}
   disabled={!canManage}
-  onClick={() => canManage && setEnabled((e) => !e)}
+  onClick={() => {
+   if (!canManage) return;
+   setEnabled((e) => !e);
+   scheduleAutoSave();
+  }}
   className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
    enabled ? "bg-orange-500" : "bg-gray-200"
   }`}
@@ -366,6 +436,7 @@ export default function PrintingSettingsPage() {
   type="url"
   value={agentUrl}
   onChange={(e) => setAgentUrl(e.target.value)}
+  onBlur={() => scheduleAutoSave()}
   disabled={!canManage}
   placeholder="http://127.0.0.1:9123"
   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-60"
@@ -377,7 +448,10 @@ export default function PrintingSettingsPage() {
   <input
   type="password"
   value={agentToken}
-  onChange={(e) => setAgentToken(e.target.value)}
+  onChange={(e) => {
+   setAgentToken(e.target.value);
+   scheduleAutoSave();
+  }}
   disabled={!canManage}
   placeholder="Optional; set if agent requires token"
   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-60"
@@ -405,7 +479,7 @@ export default function PrintingSettingsPage() {
   ) : null}
   <button
   type="button"
-  onClick={loadPrinters}
+  onClick={() => loadPrinters()}
   disabled={printersLoading || !agentUrl.trim()}
   className="inline-flex items-center gap-1 text-sm text-orange-600 hover:text-orange-700 disabled:opacity-50"
   >
@@ -417,7 +491,10 @@ export default function PrintingSettingsPage() {
   <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Printer (ESC/POS)</label>
   <select
   value={receiptPrinterName}
-  onChange={(e) => setReceiptPrinterName(e.target.value)}
+  onChange={(e) => {
+   setReceiptPrinterName(e.target.value);
+   scheduleAutoSave();
+  }}
   disabled={!canManage}
   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-60"
   >
@@ -434,7 +511,10 @@ export default function PrintingSettingsPage() {
   <label className="block text-sm font-medium text-gray-700 mb-1">Label Printer (e.g. DYMO)</label>
   <select
   value={labelPrinterName}
-  onChange={(e) => setLabelPrinterName(e.target.value)}
+  onChange={(e) => {
+   setLabelPrinterName(e.target.value);
+   scheduleAutoSave();
+  }}
   disabled={!canManage}
   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-60"
   >
@@ -451,7 +531,10 @@ export default function PrintingSettingsPage() {
   <label className="block text-sm font-medium text-gray-700 mb-1">A4 Printer (optional, for invoice)</label>
   <select
   value={a4PrinterName}
-  onChange={(e) => setA4PrinterName(e.target.value)}
+  onChange={(e) => {
+   setA4PrinterName(e.target.value);
+   scheduleAutoSave();
+  }}
   disabled={!canManage}
   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-60"
   >
@@ -508,16 +591,28 @@ export default function PrintingSettingsPage() {
   </div>
 
   {canManage && (
-  <div className="pt-2">
+  <div className="pt-2 flex flex-wrap items-center gap-3">
   <button
    type="button"
    onClick={handleSave}
-   disabled={saving}
+   disabled={saving || autoSaveState === "saving"}
    className="inline-flex items-center gap-2 px-4 py-2.5 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
   >
    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-   Save
+   Save now
   </button>
+  {autoSaveState === "saving" && (
+   <span className="text-sm text-gray-500 inline-flex items-center gap-1">
+    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
+   </span>
+  )}
+  {autoSaveState === "saved" && (
+   <span className="text-sm text-green-600">Saved to server</span>
+  )}
+  {autoSaveState === "error" && (
+   <span className="text-sm text-red-600">Auto-save failed — click Save now</span>
+  )}
+  <span className="text-xs text-gray-500">Changes auto-save when you pick printers or leave a field.</span>
   </div>
   )}
   </div>

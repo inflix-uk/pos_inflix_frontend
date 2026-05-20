@@ -65,7 +65,12 @@ export async function loadPrintingSettings(
       return null;
     }
     const d = json.data;
-    const token = localStorage.getItem("pos_print_agent_token") || "";
+    const fromApi = typeof d.agentToken === "string" ? d.agentToken : "";
+    const fromLs = localStorage.getItem("pos_print_agent_token") || "";
+    const token = fromApi || fromLs;
+    if (fromApi && typeof window !== "undefined") {
+      localStorage.setItem("pos_print_agent_token", fromApi);
+    }
     const settings: PrintingSettings = {
       silentPrintingEnabled: !!d.silentPrintingEnabled,
       agentUrl: (d.agentUrl || "http://127.0.0.1:9123").replace(/\/$/, ""),
@@ -447,19 +452,38 @@ export async function openCashDrawer(pin: 0 | 1 = 0): Promise<PrintReceiptResult
   if (!ok) {
     return { sent: false, error: "Cannot reach Print Bridge on this PC." };
   }
+  const drawerPayload = {
+    printerName: settings.receiptPrinterName.trim(),
+    dataBase64: buildCashDrawerKickBase64(pin),
+    jobName: "cash-drawer",
+  };
   try {
     const agentRes = await fetchPrintAgent(settings.agentUrl, "POST", "/print/drawer/kick", {
       token: settings.agentToken,
       timeoutMs: 10000,
-      jsonBody: {
-        printerName: settings.receiptPrinterName.trim(),
-        dataBase64: buildCashDrawerKickBase64(pin),
-        jobName: "cash-drawer",
-      },
+      jsonBody: drawerPayload,
     });
     const agentJson = await agentRes.json().catch(() => ({}));
     if (agentRes.ok && agentJson.success) {
       return { sent: true };
+    }
+    // Older Print Bridge builds lack /print/drawer/kick — send pulse as raw ESC/POS instead.
+    if (agentRes.status === 404) {
+      const legacyRes = await fetchPrintAgent(settings.agentUrl, "POST", "/print/receipt/escpos", {
+        token: settings.agentToken,
+        timeoutMs: 10000,
+        jsonBody: drawerPayload,
+      });
+      const legacyJson = await legacyRes.json().catch(() => ({}));
+      if (legacyRes.ok && legacyJson.success) {
+        return { sent: true };
+      }
+      return {
+        sent: false,
+        error:
+          (legacyJson as { message?: string }).message ||
+          `Drawer kick failed (${legacyRes.status}). Update POS Print Bridge on this PC.`,
+      };
     }
     return {
       sent: false,

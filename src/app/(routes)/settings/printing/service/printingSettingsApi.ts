@@ -14,6 +14,7 @@ export interface PrintingSettingsData {
  silentPrintingEnabled: boolean;
  agentUrl: string;
  hasAgentToken: boolean;
+ agentToken?: string;
  receiptPrinterName: string;
  labelPrinterName: string;
  a4PrinterName?: string;
