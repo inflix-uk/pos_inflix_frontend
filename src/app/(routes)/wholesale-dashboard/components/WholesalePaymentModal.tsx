@@ -165,6 +165,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  return Math.min(Math.max(0, discountInput), total);
  })();
  const amountDue = Math.max(0, total - discountNum + previousBalanceNum);
+ const dueRounded = Math.round(amountDue * 100) / 100;
 
  useEffect(() => {
  if (!open) {
@@ -197,10 +198,24 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   credit: credit > 0,
   bank: bank > 0,
  });
+ } else if (retailMode) {
+ const dueOpen = Math.max(0, total + Math.max(0, previousBalance));
+ const dueStr = (Math.round(dueOpen * 100) / 100).toFixed(2);
+ setCheckedMethods({ cash: true, card: false, credit: false, bank: false });
+ setAmounts({ cash: dueStr, card: "", credit: "", bank: "" });
  }
  }
  // eslint-disable-next-line react-hooks/exhaustive-deps -- only apply initial values when modal opens
  }, [open]);
+
+ // Retail: keep the active pay method filled to the current amount due (e.g. after discount change)
+ useEffect(() => {
+ if (!open || !retailMode) return;
+ const active = (["cash", "card", "bank"] as const).find((m) => checkedMethods[m]);
+ if (!active) return;
+ const dueStr = dueRounded.toFixed(2);
+ setAmounts({ cash: "", card: "", credit: "", bank: "", [active]: dueStr });
+ }, [open, retailMode, dueRounded, checkedMethods.cash, checkedMethods.card, checkedMethods.bank]);
 
  useEffect(() => {
  if (!open) return;
@@ -215,6 +230,18 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  }, [open]);
 
  const toggleMethod = (id: MethodId) => {
+ if (retailMode && (id === "cash" || id === "card" || id === "bank")) {
+ setCheckedMethods((prev) => {
+  if (prev[id]) {
+  setAmounts((a) => ({ ...a, [id]: "" }));
+  return { ...prev, [id]: false };
+  }
+  const exact = dueRounded.toFixed(2);
+  setAmounts({ cash: "", card: "", credit: "", bank: "", [id]: exact });
+  return { cash: false, card: false, credit: false, bank: false, [id]: true };
+ });
+ return;
+ }
  setCheckedMethods((prev) => {
  const next = { ...prev, [id]: !prev[id] };
  if (next[id]) {
@@ -237,7 +264,6 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  );
  };
 
- const dueRounded = Math.round(amountDue * 100) / 100;
  const paidNow = parseAmount(amounts.cash) + parseAmount(amounts.card) + parseAmount(amounts.bank);
  const creditAuto = retailMode ? 0 : Math.max(0, dueRounded - paidNow);
  const enteredTotal = paidNow + (retailMode ? 0 : parseAmount(amounts.credit));
