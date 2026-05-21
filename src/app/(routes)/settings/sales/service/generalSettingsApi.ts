@@ -14,6 +14,8 @@ export interface GeneralSettingsData {
  defaultAccount?: { _id: string; name: string };
  retailModeEnabled?: boolean;
  allowNegativeStock?: boolean;
+ adminTotpEnabled?: boolean;
+ refundOtpThreshold?: number;
  updatedAtUtc?: string;
 }
 
@@ -69,6 +71,57 @@ export async function updateNegativeStock(body: {
 }> {
  const res = await fetch(`${API_URL}/api/settings/general/negative-stock`, {
   method: "PUT",
+  headers: getAuthHeaders(),
+  body: JSON.stringify(body),
+ });
+ return res.json();
+}
+
+export async function updateRefundOtpThreshold(body: { refundOtpThreshold: number }): Promise<{
+ success: boolean;
+ data?: { refundOtpThreshold: number };
+ message?: string;
+}> {
+ const res = await fetch(`${API_URL}/api/settings/general/refund-otp-threshold`, {
+  method: "PUT",
+  headers: getAuthHeaders(),
+  body: JSON.stringify(body),
+ });
+ return res.json();
+}
+
+export async function setupAdminTotp(): Promise<{
+ success: boolean;
+ data?: { otpauthUrl: string; qrDataUrl: string; secret: string };
+ message?: string;
+}> {
+ const res = await fetch(`${API_URL}/api/settings/general/2fa/setup`, {
+  method: "POST",
+  headers: getAuthHeaders(),
+ });
+ return res.json();
+}
+
+export async function verifyAndEnableAdminTotp(body: { code: string }): Promise<{
+ success: boolean;
+ data?: { adminTotpEnabled: boolean };
+ message?: string;
+}> {
+ const res = await fetch(`${API_URL}/api/settings/general/2fa/verify-enable`, {
+  method: "POST",
+  headers: getAuthHeaders(),
+  body: JSON.stringify(body),
+ });
+ return res.json();
+}
+
+export async function disableAdminTotp(body: { code?: string }): Promise<{
+ success: boolean;
+ data?: { adminTotpEnabled: boolean };
+ message?: string;
+}> {
+ const res = await fetch(`${API_URL}/api/settings/general/2fa/disable`, {
+  method: "POST",
   headers: getAuthHeaders(),
   body: JSON.stringify(body),
  });

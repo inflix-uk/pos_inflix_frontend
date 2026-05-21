@@ -218,10 +218,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  setCheckedMethods((prev) => {
  const next = { ...prev, [id]: !prev[id] };
  if (next[id]) {
- const othersChecked = (PAYMENT_METHODS as readonly { id: MethodId }[])
-  .filter((m) => m.id !== id && next[m.id])
-  .length;
- if (othersChecked === 0) setAmounts((a) => ({ ...a, [id]: amountDue.toFixed(2) }));
+ setAmounts((a) => ({ ...a, [id]: "0.00" }));
  } else {
  setAmounts((a) => ({ ...a, [id]: "" }));
  }

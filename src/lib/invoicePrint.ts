@@ -562,13 +562,13 @@ export async function buildInvoicePdf(
     doc.text("Unit price", colUnit, y);
     doc.text("Amount", right, y, { align: "right" });
     doc.setTextColor(0, 0, 0);
-    y += 2;
+    y += 3;
     doc.setDrawColor(220, 220, 220);
     doc.setLineWidth(0.1);
     doc.line(left, y, right, y);
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.2);
-    y += 4;
+    y += 7;
 
     const itemRowFontPt = Math.min(io.fontTablePt + 2, 11);
     const itemRowStep = itemRowFontPt >= 10 ? 6 : 5;
@@ -589,13 +589,13 @@ export async function buildInvoicePdf(
       y += itemRowStep;
     });
 
-    y += 1;
+    y += 4;
     doc.setDrawColor(220, 220, 220);
     doc.setLineWidth(0.1);
     doc.line(left, y, right, y);
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.2);
-    y += 5;
+    y += 11;
     doc.setFont("helvetica", "bold");
     const grandTotalFontPt = Math.min(io.fontSectionHeadingPt + 4, 18);
     doc.setFontSize(grandTotalFontPt);
@@ -638,13 +638,13 @@ export async function buildInvoicePdf(
       y += 6;
     }
     const balanceDue = totalDueBeforePayments - received;
-    y += 1;
+    y += 5;
     doc.setDrawColor(220, 220, 220);
     doc.setLineWidth(0.1);
     doc.line(left, y, right, y);
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.2);
-    y += 5;
+    y += 11;
     doc.setFont("helvetica", "bold");
     const balanceDueFontPt = Math.min(io.fontSectionHeadingPt + 4, 18);
     doc.setFontSize(balanceDueFontPt);
@@ -699,13 +699,13 @@ export async function buildInvoicePdf(
     doc.text("Item", colSerialItem, y);
     doc.text("Unit price", right, y, { align: "right" });
     doc.setTextColor(0, 0, 0);
-    y += 2;
+    y += 3;
     doc.setDrawColor(220, 220, 220);
     doc.setLineWidth(0.1);
     doc.line(left, y, right, y);
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.2);
-    y += 3;
+    y += 7;
     let rowNum = 0;
     sale.items.forEach((item) => {
       if (!item.serialNumbers || item.serialNumbers.length === 0) return;
@@ -721,10 +721,10 @@ export async function buildInvoicePdf(
         doc.text(String(serial).slice(0, 18), colSerial, y);
         doc.text(itemText, colSerialItem, y);
         doc.text(formatMoney(item.price), right, y, { align: "right" });
-        y += 4;
+        y += 6;
       });
     });
-    y += 6;
+    y += 12;
   }
 
   if (io.showInvoiceSummary) {
@@ -737,7 +737,7 @@ export async function buildInvoicePdf(
     doc.line(left, y, right, y);
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.2);
-    y += 6;
+    y += 11;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(io.fontSectionHeadingPt);
     doc.text("Invoice Summary", left, y);
@@ -819,31 +819,6 @@ export async function buildInvoicePdf(
     if (defaultBank.iban) {
       y += 4;
       doc.text(`IBAN: ${defaultBank.iban}`, left, y);
-    }
-  }
-
-  if (settings.about.logo) {
-    try {
-      const format = (settings.about.logo as string).startsWith("data:image/jpeg") ? "JPEG" : "PNG";
-      const { width: wmW, height: wmH } = await loadImageDimensions(settings.about.logo as string);
-      const aspect = wmW > 0 && wmH > 0 ? wmW / wmH : 1;
-      const targetW = 130;
-      const targetH = targetW / aspect;
-      const pageH = 297;
-      const wmX = (pageW - targetW) / 2;
-      const wmY = (pageH - targetH) / 2;
-      const totalPages = doc.getNumberOfPages();
-      const docAny = doc as unknown as { GState: new (o: { opacity: number }) => unknown; setGState: (g: unknown) => void };
-      const faded = new docAny.GState({ opacity: 0.06 });
-      const solid = new docAny.GState({ opacity: 1 });
-      for (let p = 1; p <= totalPages; p++) {
-        doc.setPage(p);
-        docAny.setGState(faded);
-        doc.addImage(settings.about.logo, format, wmX, wmY, targetW, targetH);
-        docAny.setGState(solid);
-      }
-    } catch {
-      /* ignore watermark failure */
     }
   }
 
