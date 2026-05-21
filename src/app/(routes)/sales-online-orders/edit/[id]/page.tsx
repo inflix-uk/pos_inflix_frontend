@@ -3,13 +3,22 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, RefreshCw, User, FileText, Receipt, RotateCcw, Trash2, PanelRightOpen, Package } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw, FileText, Receipt, RotateCcw, Trash2, PanelRightOpen, Package } from "lucide-react";
 import {
  ProductGrid,
  CartPanel,
  AddManualItemModal,
 } from "../../../sales-dashboard/components";
-import { UnifiedAddInput, WholesalePaymentModal } from "../../../wholesale-dashboard/components";
+import {
+ UnifiedAddInput,
+ WholesalePaymentModal,
+ CustomerAccountSelect,
+ type AccountForSale,
+} from "../../../wholesale-dashboard/components";
+import { customerApi } from "../../../peoples/customers/service/customerApi";
+import { supplierApi } from "../../../peoples/suppliers/service/supplierApi";
+import { AddCustomerModal } from "../../../peoples/customers/components";
+import type { CustomerFormData } from "../../../peoples/customers/types";
 import type { WholesalePaymentDetails } from "../../../wholesale-dashboard/components/WholesalePaymentModal";
 import { salesApi, formatCustomerAddressForInvoice } from "../../../sales-dashboard/service/salesApi";
 import type { SaleRecord, SaleItemPayload, SaleItemRecord } from "../../../sales-dashboard/service/salesApi";
@@ -84,6 +93,9 @@ export default function EditSalePage() {
  const [hardDeleting, setHardDeleting] = useState(false);
  const [categoryIcons, setCategoryIcons] = useState<Record<string, string>>({});
  const [note, setNote] = useState("");
+ const [selectedCustomer, setSelectedCustomer] = useState<AccountForSale | null>(null);
+ const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
+ const [addCustomerLoading, setAddCustomerLoading] = useState(false);
 
  useEffect(() => {
  let cancelled = false;
@@ -138,6 +150,51 @@ export default function EditSalePage() {
  })();
  return () => { cancelled = true; };
  }, [id]);
+
+ useEffect(() => {
+ if (!sale || sale.type !== "wholesale") {
+ setSelectedCustomer(null);
+ return;
+ }
+ let cancelled = false;
+ const cid =
+ typeof sale.customerId === "object" && sale.customerId
+ ? sale.customerId._id
+ : typeof sale.customerId === "string"
+ ? sale.customerId
+ : null;
+ (async () => {
+ if (cid) {
+  try {
+  const custRes = await customerApi.getById(cid);
+  if (!cancelled && custRes.success && custRes.data) {
+   setSelectedCustomer(custRes.data as AccountForSale);
+   return;
+  }
+  } catch {}
+  try {
+  const supRes = await supplierApi.getSupplier(cid);
+  if (!cancelled && supRes.success && supRes.data) {
+   setSelectedCustomer(supRes.data as AccountForSale);
+   return;
+  }
+  } catch {}
+ }
+ if (!cancelled) {
+  if (sale.customerName) {
+  setSelectedCustomer({
+   _id: cid || "",
+   name: sale.customerName,
+  } as AccountForSale);
+  } else {
+  setSelectedCustomer(null);
+  }
+ }
+ })();
+ return () => {
+ cancelled = true;
+ };
+ }, [sale]);
 
  const cartLineItems: CartLineItem[] = items.map(toCartLineItem);
  const cartItemCount = items.reduce((sum, i) => sum + i.quantity, 0);
@@ -351,6 +408,8 @@ export default function EditSalePage() {
   amountDue: details.amountDue,
   payments: details.payments,
   note: note.trim(),
+  customerId: selectedCustomer?._id || null,
+  customerName: selectedCustomer?.name,
  });
  setPaymentModalOpen(false);
  router.push("/sales-online-orders");
@@ -361,7 +420,7 @@ export default function EditSalePage() {
  setSaving(false);
  }
  },
- [sale, items, subtotal, tax, total, discount, note, router]
+ [sale, items, subtotal, tax, total, discount, note, selectedCustomer, router]
  );
 
  const categories = React.useMemo(() => {
@@ -606,17 +665,17 @@ export default function EditSalePage() {
   </div>
  )}
 
- {sale.type === "wholesale" && sale.customerName && (
-  <div className="flex-shrink-0">
-  <div className="flex items-center gap-3 p-3 rounded-xl bg-blue-50 border border-blue-200">
-  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-  <User className="h-5 w-5 text-blue-600" />
-  </div>
-  <div className="min-w-0 flex-1">
-  <p className="text-sm font-semibold text-gray-900 truncate">{sale.customerName}</p>
-  <p className="text-xs text-gray-600 mt-0.5">Customer (read-only)</p>
-  </div>
-  </div>
+ {sale.type === "wholesale" && !sale.hasReturn && (
+  <div className="flex-shrink-0 max-w-md">
+  <label className="block text-xs font-medium text-gray-700 mb-1">Customer / account</label>
+  <CustomerAccountSelect
+   value={selectedCustomer}
+   onChange={setSelectedCustomer}
+   required={false}
+   placeholder="Select customer or supplier"
+   onAddCustomerClick={() => setAddCustomerModalOpen(true)}
+   className="w-full"
+  />
   </div>
  )}
 
@@ -937,11 +996,34 @@ export default function EditSalePage() {
  </div>
  )}
 
+ {addCustomerModalOpen && (
+ <AddCustomerModal
+  open={addCustomerModalOpen}
+  onClose={() => setAddCustomerModalOpen(false)}
+  isLoading={addCustomerLoading}
+  onAdd={async (data: CustomerFormData) => {
+  setAddCustomerLoading(true);
+  try {
+   const res = await customerApi.create(data);
+   if (res.success && res.data) {
+   setSelectedCustomer(res.data as AccountForSale);
+   setAddCustomerModalOpen(false);
+   setMessage({ type: "success", text: `Customer "${res.data.name}" added and selected.` });
+   }
+  } catch (e) {
+   setMessage({ type: "error", text: e instanceof Error ? e.message : "Failed to create customer" });
+  } finally {
+   setAddCustomerLoading(false);
+  }
+  }}
+ />
+ )}
+
  {sale?.type === "wholesale" && (
  <WholesalePaymentModal
   open={paymentModalOpen}
   total={total}
-  customerName={sale.customerName}
+  customerName={selectedCustomer?.name ?? sale.customerName}
   previousBalance={sale.previousBalance ?? 0}
   initialDiscount={discount}
   initialDiscountType={sale.discountType}

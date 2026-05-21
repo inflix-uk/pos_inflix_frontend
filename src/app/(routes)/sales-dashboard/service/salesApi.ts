@@ -249,6 +249,8 @@ export interface UpdateSalePayload {
  amountDue?: number;
  payments?: PaymentBreakdown;
  note?: string;
+ customerId?: string | null;
+ customerName?: string;
 }
 
 export interface GetSalesResponse {
