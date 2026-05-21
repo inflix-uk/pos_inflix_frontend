@@ -211,10 +211,11 @@ export default function SalesSettingsPage() {
  </div>
  )}
 
+ {canManage && (
  <div className="max-w-xl bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
- <h2 className="text-lg font-medium text-gray-800 mb-4">Sales Mode</h2>
+ <h2 className="text-lg font-medium text-gray-800 mb-4">Company default sales mode</h2>
  <p className="text-sm text-gray-500 mb-4">
-  Choose how Create Sales behaves: <strong>Wholesale</strong> requires a customer account and allows credit; <strong>Retail (Walk-in)</strong> uses Walk-in Customer by default and requires full payment (no credit).
+  Default for users who have not set their own mode in <strong>My sales mode</strong>. Staff choose retail or wholesale per account in Settings.
  </p>
  {loading ? (
   <div className="flex items-center gap-2 text-gray-500 py-2">
@@ -246,6 +247,7 @@ export default function SalesSettingsPage() {
   </div>
  )}
  </div>
+ )}
 
  <div className="max-w-xl bg-white rounded-lg shadow-sm border border-gray-200 p-6">
  <h2 className="text-lg font-medium text-gray-800 mb-4">Default Sales Account auto-select</h2>

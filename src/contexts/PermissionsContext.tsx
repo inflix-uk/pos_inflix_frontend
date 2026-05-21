@@ -24,6 +24,8 @@ export interface CurrentUser {
   defaultLocationId?: string | null;
   isPlatformAdmin?: boolean;
   tenantId?: string;
+  preferredRetailModeEnabled?: boolean | null;
+  effectiveRetailModeEnabled?: boolean;
 }
 
 interface PermissionsContextValue {
@@ -32,6 +34,7 @@ interface PermissionsContextValue {
   suspended: boolean;
   permissionKeys: string[];
   can: (key: string) => boolean;
+  refreshUser: () => Promise<void>;
 }
 
 const PermissionsContext = createContext<PermissionsContextValue | null>(null);
@@ -45,57 +48,49 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
   const [loading, setLoading] = useState(true);
   const [suspended, setSuspended] = useState(false);
 
+  const fetchMe = useCallback(async (opts?: { setLoadingFlag?: boolean }) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) {
+      setUser(null);
+      if (opts?.setLoadingFlag) setLoading(false);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, { headers: getAuthHeaders() });
+      const json = await res.json().catch(() => ({}));
+      if (res.status === 403 && json.code === "TENANT_SUSPENDED") {
+        setSuspended(true);
+        return;
+      }
+      if (json.success && json.data) {
+        setUser(json.data);
+        setSuspended(false);
+        try {
+          localStorage.setItem("user", JSON.stringify(json.data));
+        } catch {}
+      }
+    } catch {
+      // Network error — keep current user state intact (offline-tolerant)
+    } finally {
+      if (opts?.setLoadingFlag) setLoading(false);
+    }
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    await fetchMe();
+  }, [fetchMe]);
+
   useEffect(() => {
-    let cancelled = false;
-    // Hydrate immediately from localStorage so a network blip never blanks the user
     if (typeof window !== "undefined") {
       try {
         const cached = localStorage.getItem("user");
         if (cached) setUser(JSON.parse(cached));
       } catch {}
     }
-    function checkMe() {
-      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-      // No token at all → genuine logged-out state
-      if (!token) {
-        if (!cancelled) {
-          setUser(null);
-          setLoading(false);
-        }
-        return;
-      }
-      fetch(`${API_BASE}/auth/me`, { headers: getAuthHeaders() })
-        .then(async (res) => {
-          const json = await res.json().catch(() => ({}));
-          if (cancelled) return;
-          if (res.status === 403 && json.code === "TENANT_SUSPENDED") {
-            setSuspended(true);
-            setLoading(false);
-            return;
-          }
-          if (json.success && json.data) {
-            setUser(json.data);
-            setSuspended(false);
-            try {
-              localStorage.setItem("user", JSON.stringify(json.data));
-            } catch {}
-          }
-          // Do NOT clear user on transient failure responses; only manual /logout clears the token.
-        })
-        .catch(() => {
-          // Network error — keep current user state intact (offline-tolerant)
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }
-    checkMe();
-    const interval = setInterval(checkMe, 60000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
+    fetchMe({ setLoadingFlag: true });
+    const interval = setInterval(() => fetchMe(), 60000);
+    return () => clearInterval(interval);
+  }, [fetchMe]);
 
   const permissionKeys = useMemo(
     () => (Array.isArray(user?.permissionKeys) ? user!.permissionKeys : []),
@@ -111,8 +106,8 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
   );
 
   const value = useMemo<PermissionsContextValue>(
-    () => ({ user, loading, suspended, permissionKeys, can }),
-    [user, loading, suspended, permissionKeys, can]
+    () => ({ user, loading, suspended, permissionKeys, can, refreshUser }),
+    [user, loading, suspended, permissionKeys, can, refreshUser]
   );
 
   return (
@@ -131,5 +126,6 @@ export function usePermissionsContext(): PermissionsContextValue {
     suspended: false,
     permissionKeys: [],
     can: () => false,
+    refreshUser: async () => {},
   };
 }

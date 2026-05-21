@@ -148,6 +148,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   "/settings/sales": ["settings.view"],
   "/settings/header-actions": ["settings.view"],
   "/settings/printing": ["settings.view", "settings.printing", "settings.manage"],
+  "/settings/my-sales-mode": ["settings.sales_mode", "settings.manage"],
   "/settings/about": ["settings.view", "settings.edit"],
   "/settings/notes-terms": ["settings.view", "settings.edit"],
   "/settings/email": ["settings.view", "settings.edit"],

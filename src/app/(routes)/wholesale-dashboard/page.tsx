@@ -39,6 +39,7 @@ import { categoryApi } from "../inventory/category/service/categoryApi";
 import { locationApi } from "../peoples/locations/service/locationApi";
 import { formatDateTimeLondon } from "@/lib/dateUtils";
 import { HelpTip } from "@/components/HelpTip";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const CUSTOMER_DRAFT_KEY = "wholesale-selected-customer-v1";
 const DRAFTS_STORAGE_KEY = "wholesale-drafts-v1";
@@ -164,6 +165,7 @@ type SaleForPrint = {
 
 
 const Page = () => {
+ const { user } = usePermissions();
  const orderWriter = useOrderWriter();
  const [manualItemModalOpen, setManualItemModalOpen] = useState(false);
  const [bulkDrawerOpen, setBulkDrawerOpen] = useState(false);
@@ -277,6 +279,30 @@ const Page = () => {
  if (typeof window === "undefined") return false;
  try { return sessionStorage.getItem("create-sales-retailMode") === "1"; } catch { return false; }
  });
+
+ useEffect(() => {
+ if (typeof user?.effectiveRetailModeEnabled !== "boolean") return;
+ setRetailModeEnabled(user.effectiveRetailModeEnabled);
+ try {
+  sessionStorage.setItem(
+   "create-sales-retailMode",
+   user.effectiveRetailModeEnabled ? "1" : "0"
+  );
+ } catch {}
+ }, [user?.effectiveRetailModeEnabled]);
+
+ useEffect(() => {
+ const onModeChange = (e: Event) => {
+  const ev = e as CustomEvent<boolean>;
+  if (typeof ev.detail !== "boolean") return;
+  setRetailModeEnabled(ev.detail);
+  try {
+   sessionStorage.setItem("create-sales-retailMode", ev.detail ? "1" : "0");
+  } catch {}
+ };
+ window.addEventListener("pos-user-sales-mode-change", onModeChange);
+ return () => window.removeEventListener("pos-user-sales-mode-change", onModeChange);
+ }, []);
  const [blockNegativeStock, setBlockNegativeStock] = useState(() => {
  if (typeof window === "undefined") return false;
  try { return sessionStorage.getItem("create-sales-blockNegStock") === "1"; } catch { return false; }
@@ -427,10 +453,6 @@ const Page = () => {
  if (cancelled) return;
 
  if (setRes && setRes.success && setRes.data) {
- const isRetail = !!setRes.data.retailModeEnabled;
- setRetailModeEnabled(isRetail);
- try { sessionStorage.setItem("create-sales-retailMode", isRetail ? "1" : "0"); } catch {}
-
  const blockNeg = setRes.data.allowNegativeStock === false;
  setBlockNegativeStock(blockNeg);
  try { sessionStorage.setItem("create-sales-blockNegStock", blockNeg ? "1" : "0"); } catch {}
@@ -450,7 +472,7 @@ const Page = () => {
   const sup = supSettled.status === "fulfilled" && supSettled.value?.success && supSettled.value?.data ? supSettled.value.data : null;
   if (cust) setSelectedCustomerState(cust as AccountForSale);
   else if (sup) setSelectedCustomerState(sup as AccountForSale);
-  } else if (isRetail && walkInRes && walkInRes.success && walkInRes.data) {
+  } else if (retailModeEnabled && walkInRes && walkInRes.success && walkInRes.data) {
   setSelectedCustomerState(walkInRes.data as AccountForSale);
   }
  }
@@ -458,7 +480,7 @@ const Page = () => {
  });
 
  return () => { cancelled = true; };
- }, []);
+ }, [retailModeEnabled]);
 
  const clearCartRef = useRef<() => void>(() => {});
 

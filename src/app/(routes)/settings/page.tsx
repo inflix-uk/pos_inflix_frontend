@@ -39,11 +39,20 @@ const allSettingsItems: SettingsItem[] = [
  color: "bg-slate-100 text-slate-600",
  },
  {
+ title: "My sales mode",
+ description: "Retail (walk-in) or wholesale for your account on Create Sales",
+ icon: ShoppingCart,
+ path: "/settings/my-sales-mode",
+ color: "bg-orange-100 text-orange-600",
+ permission: "settings.sales_mode",
+ },
+ {
  title: "Sales",
  description: "Default sales account and Create Sales auto-select",
  icon: ShoppingCart,
  path: "/settings/sales",
  color: "bg-emerald-100 text-emerald-600",
+ permission: "settings.view",
  },
  {
  title: "Header quick actions",
@@ -120,6 +129,7 @@ const SettingsPage = () => {
  const canSeeSettings =
   can("settings.view") ||
   can("settings.printing") ||
+  can("settings.sales_mode") ||
   can("audit.view") ||
   can("user.manage") ||
   can("role.manage");

@@ -9,7 +9,8 @@ import { Search, Command, Menu, User, FileText, Settings, LogOut, PlusCircle, Wr
 import { ProductHistoryModal } from "@/app/(routes)/inventory/product-history/ProductHistoryModal";
 import { usePermissions } from "@/hooks/usePermissions";
 import { globalSearch, type GlobalSearchResult } from "@/app/(routes)/dashboard/service/dashboardApi";
-import { getGeneralSettings, updateSalesMode } from "@/app/(routes)/settings/sales/service/generalSettingsApi";
+import { updateSalesMode } from "@/app/(routes)/settings/sales/service/generalSettingsApi";
+import { updateMySalesMode } from "@/app/(routes)/settings/my-sales-mode/service/mySalesModeApi";
 import { UserInitialsAvatar } from "@/lib/userAvatar";
 import {
   getHeaderQuickActionsVisibility,
@@ -53,7 +54,7 @@ export function Header() {
   useOutsideClick(profileRef, () => setShowProfileDropdown(false));
   useOutsideClick(searchRef, () => setSearchOpen(false));
   const router = useRouter();
-  const { user, can } = usePermissions();
+  const { user, can, refreshUser } = usePermissions();
   const displayName = user?.name ?? "User";
   const displayRole = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : (user?.roles?.[0]?.name ?? "");
   const canSeeSettings =
@@ -61,8 +62,10 @@ export function Header() {
     can("user.manage") ||
     can("role.manage") ||
     can("settings.view") ||
-    can("settings.printing");
+    can("settings.printing") ||
+    can("settings.sales_mode");
   const canManageSettings = can("settings.manage");
+  const canSetOwnSalesMode = can("settings.sales_mode");
   const canSeeReports = can("report.view");
   const [retailModeEnabled, setRetailModeEnabled] = useState(false);
   const [salesModeToast, setSalesModeToast] = useState<string | null>(null);
@@ -70,13 +73,19 @@ export function Header() {
   const [quickActions, setQuickActions] = useState<HeaderQuickActionsVisibility>(HEADER_QUICK_ACTIONS_DEFAULTS);
 
   useEffect(() => {
-    if (!canManageSettings) return;
-    getGeneralSettings().then((res) => {
-      if (res.success && res.data && typeof res.data.retailModeEnabled === "boolean") {
-        setRetailModeEnabled(res.data.retailModeEnabled);
-      }
-    });
-  }, [canManageSettings]);
+    if (typeof user?.effectiveRetailModeEnabled === "boolean") {
+      setRetailModeEnabled(user.effectiveRetailModeEnabled);
+    }
+  }, [user?.effectiveRetailModeEnabled]);
+
+  useEffect(() => {
+    const onModeChange = (e: Event) => {
+      const ev = e as CustomEvent<boolean>;
+      if (typeof ev.detail === "boolean") setRetailModeEnabled(ev.detail);
+    };
+    window.addEventListener("pos-user-sales-mode-change", onModeChange);
+    return () => window.removeEventListener("pos-user-sales-mode-change", onModeChange);
+  }, []);
 
   useEffect(() => {
     setQuickActions(getHeaderQuickActionsVisibility());
@@ -93,19 +102,31 @@ export function Header() {
   }, []);
 
   const handleSalesModeToggle = useCallback(() => {
-    if (!canManageSettings || salesModeLoading) return;
+    if (salesModeLoading) return;
+    if (!canManageSettings && !canSetOwnSalesMode) return;
     setSalesModeLoading(true);
     const next = !retailModeEnabled;
-    updateSalesMode({ retailModeEnabled: next })
-      .then((res) => {
+    const savePromise = canManageSettings
+      ? updateSalesMode({ retailModeEnabled: next })
+      : updateMySalesMode({ retailModeEnabled: next });
+    savePromise
+      .then(async (res) => {
         if (res.success && res.data) {
-          setRetailModeEnabled(!!res.data.retailModeEnabled);
-          setSalesModeToast(next ? "Retail Mode enabled" : "Wholesale Mode enabled");
+          const enabled = canManageSettings
+            ? !!(res.data as { retailModeEnabled?: boolean }).retailModeEnabled
+            : !!(res.data as { effectiveRetailModeEnabled?: boolean }).effectiveRetailModeEnabled;
+          setRetailModeEnabled(enabled);
+          try {
+            sessionStorage.setItem("create-sales-retailMode", enabled ? "1" : "0");
+          } catch {}
+          window.dispatchEvent(new CustomEvent("pos-user-sales-mode-change", { detail: enabled }));
+          await refreshUser();
+          setSalesModeToast(next ? "Retail mode" : "Wholesale mode");
           setTimeout(() => setSalesModeToast(null), 2500);
         }
       })
       .finally(() => setSalesModeLoading(false));
-  }, [canManageSettings, salesModeLoading, retailModeEnabled]);
+  }, [canManageSettings, canSetOwnSalesMode, salesModeLoading, retailModeEnabled, refreshUser]);
 
   const runSearch = useCallback((q: string) => {
     if (q.length < 2) {
@@ -162,7 +183,10 @@ export function Header() {
   const showNewRepair = quickActions.showNewRepair && can("repair.create");
   const showParcel = quickActions.showParcel && (can("purchase.create") || can("parcel.create"));
   const showReturn = quickActions.showReturn && (can("return.create") || can("refund.issue"));
-  const showSalesModeToggle = quickActions.showSalesModeToggle && canManageSettings && can("sale.create");
+  const showSalesModeToggle =
+    quickActions.showSalesModeToggle &&
+    can("sale.create") &&
+    (canManageSettings || canSetOwnSalesMode);
   const showAccounts = quickActions.showAccounts && can("accounts.view");
   const showStockList = quickActions.showStockList && (can("product.view") || can("stock.view"));
   const showSalesOnline = quickActions.showSalesOnline && can("sale.view");
