@@ -21,6 +21,14 @@ const PAYMENT_METHODS = [
 
 type MethodId = (typeof PAYMENT_METHODS)[number]["id"];
 
+/** Retail quick-tender highlight: EXACT or a +£ denomination chip */
+type RetailQuickPick = "exact" | 5 | 10 | 20 | 50 | null;
+
+const RETAIL_QUICK_BTN_ACTIVE =
+ "min-h-[32px] rounded-md border border-blue-600 bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 active:bg-blue-800 transition-colors";
+const RETAIL_QUICK_BTN_INACTIVE =
+ "min-h-[32px] rounded-md border border-blue-200 bg-white text-blue-700 font-semibold text-xs hover:bg-blue-50 active:bg-blue-100 transition-colors";
+
 /** Payment details passed when order is completed (for saving the transaction) */
 export interface WholesalePaymentDetails {
  /** Resolved discount in currency (after percent → £ conversion). */
@@ -127,6 +135,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  const [error, setError] = useState<string | null>(null);
  const [submitting, setSubmitting] = useState(false);
  const [drawerOpening, setDrawerOpening] = useState(false);
+ const [retailQuickPick, setRetailQuickPick] = useState<RetailQuickPick>(null);
  // One idempotency key per modal session. Same key is reused across retries inside this
  // modal (e.g. user clicks again after a perceived network failure) so the backend can
  // dedupe instead of erroring out. Regenerated when the modal is freshly opened.
@@ -173,6 +182,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  setDiscountType("flat");
  setCheckedMethods({ cash: false, card: false, credit: false, bank: false });
  setAmounts({ cash: "", card: "", credit: "", bank: "" });
+ setRetailQuickPick(null);
  setError(null);
  } else {
  if (initialDiscountType) setDiscountType(initialDiscountType);
@@ -203,19 +213,20 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  const dueStr = (Math.round(dueOpen * 100) / 100).toFixed(2);
  setCheckedMethods({ cash: true, card: false, credit: false, bank: false });
  setAmounts({ cash: dueStr, card: "", credit: "", bank: "" });
+ setRetailQuickPick("exact");
  }
  }
  // eslint-disable-next-line react-hooks/exhaustive-deps -- only apply initial values when modal opens
  }, [open]);
 
- // Retail: keep the active pay method filled to the current amount due (e.g. after discount change)
+ // Retail + EXACT: refresh tender when amount due changes (discount); skip when user picked +£ chips
  useEffect(() => {
- if (!open || !retailMode) return;
+ if (!open || !retailMode || retailQuickPick !== "exact") return;
  const active = (["cash", "card", "bank"] as const).find((m) => checkedMethods[m]);
  if (!active) return;
  const dueStr = dueRounded.toFixed(2);
  setAmounts({ cash: "", card: "", credit: "", bank: "", [active]: dueStr });
- }, [open, retailMode, dueRounded, checkedMethods.cash, checkedMethods.card, checkedMethods.bank]);
+ }, [open, retailMode, retailQuickPick, dueRounded, checkedMethods.cash, checkedMethods.card, checkedMethods.bank]);
 
  useEffect(() => {
  if (!open) return;
@@ -238,6 +249,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   }
   const exact = dueRounded.toFixed(2);
   setAmounts({ cash: "", card: "", credit: "", bank: "", [id]: exact });
+  setRetailQuickPick("exact");
   return { cash: false, card: false, credit: false, bank: false, [id]: true };
  });
  return;
@@ -254,6 +266,9 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  };
 
  const setAmount = (id: MethodId, value: string) => {
+ if (retailMode && (id === "cash" || id === "card" || id === "bank")) {
+ setRetailQuickPick(null);
+ }
  setAmounts((prev) => ({ ...prev, [id]: value }));
  };
 
@@ -661,15 +676,16 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
    <span className="text-xl sm:text-2xl font-bold tabular-nums text-slate-900">{formatMoney(amountDue)}</span>
   </div>
   <div className="grid grid-cols-5 gap-1 sm:gap-1.5">
-   {[5, 10, 20, 50].map((v) => (
+   {([5, 10, 20, 50] as const).map((v) => (
    <button
     key={v}
     type="button"
     onClick={() => {
-    setCheckedMethods((prev) => ({ ...prev, cash: true }));
-    setAmounts((a) => ({ ...a, cash: (parseAmount(a.cash) + v).toFixed(2) }));
+    setRetailQuickPick(v);
+    setCheckedMethods({ cash: true, card: false, credit: false, bank: false });
+    setAmounts((a) => ({ ...a, cash: (parseAmount(a.cash) + v).toFixed(2), card: "", bank: "" }));
     }}
-    className="min-h-[32px] rounded-md border border-blue-200 bg-white text-blue-700 font-semibold text-xs hover:bg-blue-50 active:bg-blue-100 transition-colors"
+    className={retailQuickPick === v ? RETAIL_QUICK_BTN_ACTIVE : RETAIL_QUICK_BTN_INACTIVE}
    >
     +£{v}
    </button>
@@ -677,10 +693,11 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
    <button
    type="button"
    onClick={() => {
-    setCheckedMethods((prev) => ({ ...prev, cash: true }));
-    setAmounts((a) => ({ ...a, cash: amountDue.toFixed(2) }));
+   setRetailQuickPick("exact");
+   setCheckedMethods({ cash: true, card: false, credit: false, bank: false });
+   setAmounts({ cash: dueRounded.toFixed(2), card: "", credit: "", bank: "" });
    }}
-   className="min-h-[32px] rounded-md border border-blue-600 bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 active:bg-blue-800 transition-colors"
+   className={retailQuickPick === "exact" ? RETAIL_QUICK_BTN_ACTIVE : RETAIL_QUICK_BTN_INACTIVE}
    >
    EXACT
    </button>
