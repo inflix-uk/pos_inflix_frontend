@@ -12,6 +12,8 @@ import {
  Plus,
  Trash2,
  FileText,
+ ShieldCheck,
+ X,
 } from "lucide-react";
 import { salesApi } from "../../../sales-dashboard/service/salesApi";
 import type { SaleRecord } from "../../../sales-dashboard/service/salesApi";
@@ -72,6 +74,9 @@ export default function StartReturnPage() {
  const [refundMethod, setRefundMethod] = useState<"cash" | "card" | "bank">("cash");
  const [refundAccountId, setRefundAccountId] = useState("");
  const [paymentAccounts, setPaymentAccounts] = useState<Array<{ _id: string; name: string; type: string; balance: number }>>([]);
+ const [otpPrompt, setOtpPrompt] = useState<{ open: boolean; threshold: number | null; error: string | null }>({ open: false, threshold: null, error: null });
+ const [otpCode, setOtpCode] = useState("");
+ const [otpSubmitting, setOtpSubmitting] = useState(false);
 
  const reference = sale?.reference ?? "";
  const customerName = sale?.customerName ?? "";
@@ -202,18 +207,7 @@ export default function StartReturnPage() {
 
  const basketSubtotal = basket.reduce((sum, b) => sum + b.price * b.qtyToReturn, 0);
 
- const handleCreateReturn = async () => {
- if (basket.length === 0) {
- setMessage({ type: "error", text: "Add at least one item to the return basket." });
- return;
- }
- if (returnType === "refund" && !refundAccountId) {
- setMessage({ type: "error", text: "Please select the account (pot) to refund from." });
- return;
- }
- setSubmitting(true);
- setMessage({ type: "success", text: "" });
- try {
+ const submitReturn = async (adminOtpCode?: string) => {
  const items = basket.map((b) => ({
  id: `basket-${b.lineIndex}`,
  product: b.name,
@@ -247,13 +241,63 @@ export default function StartReturnPage() {
  customerId,
  refundMethod: returnType === "refund" ? refundMethod : undefined,
  refundAccountId: returnType === "refund" ? refundAccountId || undefined : undefined,
+ adminOtpCode,
  });
+ };
+
+ const handleCreateReturn = async () => {
+ if (basket.length === 0) {
+ setMessage({ type: "error", text: "Add at least one item to the return basket." });
+ return;
+ }
+ if (returnType === "refund" && !refundAccountId) {
+ setMessage({ type: "error", text: "Please select the account (pot) to refund from." });
+ return;
+ }
+ setSubmitting(true);
+ setMessage({ type: "success", text: "" });
+ try {
+ await submitReturn();
  setMessage({ type: "success", text: "Return created. Redirecting…" });
  setTimeout(() => router.push("/sales-return"), 1500);
  } catch (e) {
- setMessage({ type: "error", text: e instanceof Error ? e.message : "Failed to create return" });
+ const err = e as Error & { code?: string; refundOtpThreshold?: number };
+ if (err.code === "ADMIN_OTP_REQUIRED") {
+ setOtpPrompt({ open: true, threshold: err.refundOtpThreshold ?? null, error: null });
+ setOtpCode("");
+ } else if (err.code === "ADMIN_2FA_NOT_SETUP") {
+ setMessage({ type: "error", text: err.message || "Admin Google Authenticator is not set up. Ask the admin to enable it in Settings > General." });
+ } else {
+ setMessage({ type: "error", text: err.message || "Failed to create return" });
+ }
  } finally {
  setSubmitting(false);
+ }
+ };
+
+ const handleOtpSubmit = async () => {
+ const cleaned = otpCode.replace(/\s+/g, "");
+ if (!/^\d{6}$/.test(cleaned)) {
+ setOtpPrompt((p) => ({ ...p, error: "Enter the 6-digit code from Google Authenticator." }));
+ return;
+ }
+ setOtpSubmitting(true);
+ setOtpPrompt((p) => ({ ...p, error: null }));
+ try {
+ await submitReturn(cleaned);
+ setOtpPrompt({ open: false, threshold: null, error: null });
+ setOtpCode("");
+ setMessage({ type: "success", text: "Return created. Redirecting…" });
+ setTimeout(() => router.push("/sales-return"), 1500);
+ } catch (e) {
+ const err = e as Error & { code?: string };
+ if (err.code === "ADMIN_OTP_INVALID") {
+ setOtpPrompt((p) => ({ ...p, error: "Invalid code — try the current 6-digit code from Google Authenticator." }));
+ } else {
+ setOtpPrompt((p) => ({ ...p, error: err.message || "Failed to verify code." }));
+ }
+ } finally {
+ setOtpSubmitting(false);
  }
  };
 
@@ -562,6 +606,72 @@ export default function StartReturnPage() {
   </div>
  </div>
  </div>
+
+ {otpPrompt.open && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+   <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+    <div className="flex items-start justify-between p-5 border-b border-gray-200">
+     <div className="flex items-center gap-3">
+      <div className="p-2 bg-orange-50 rounded-lg">
+       <ShieldCheck className="h-5 w-5 text-orange-600" />
+      </div>
+      <div>
+       <h3 className="text-base font-semibold text-gray-900">Admin authorization required</h3>
+       <p className="text-xs text-gray-500 mt-0.5">
+        {otpPrompt.threshold != null
+         ? `Returns over ${formatMoney(otpPrompt.threshold)} need an admin Google Authenticator code.`
+         : "Enter the admin Google Authenticator code to continue."}
+       </p>
+      </div>
+     </div>
+     <button
+      type="button"
+      onClick={() => { setOtpPrompt({ open: false, threshold: null, error: null }); setOtpCode(""); }}
+      className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+      aria-label="Close"
+     >
+      <X className="h-5 w-5" />
+     </button>
+    </div>
+    <div className="p-5 space-y-3">
+     <label className="block text-sm font-medium text-gray-700">6-digit code</label>
+     <input
+      type="text"
+      inputMode="numeric"
+      autoFocus
+      maxLength={7}
+      value={otpCode}
+      onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+      onKeyDown={(e) => { if (e.key === "Enter") handleOtpSubmit(); }}
+      placeholder="123456"
+      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-center text-lg font-mono tracking-widest focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+     />
+     {otpPrompt.error && (
+      <p className="text-sm text-red-600">{otpPrompt.error}</p>
+     )}
+     <p className="text-xs text-gray-500">Open Google Authenticator on the admin&apos;s device and enter the current code for this app.</p>
+    </div>
+    <div className="px-5 py-4 bg-gray-50 rounded-b-xl flex items-center justify-end gap-2">
+     <button
+      type="button"
+      onClick={() => { setOtpPrompt({ open: false, threshold: null, error: null }); setOtpCode(""); }}
+      className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100"
+     >
+      Cancel
+     </button>
+     <button
+      type="button"
+      onClick={handleOtpSubmit}
+      disabled={otpSubmitting || otpCode.length !== 6}
+      className="px-4 py-2 rounded-lg text-sm font-semibold bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2"
+     >
+      {otpSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+      {otpSubmitting ? "Verifying…" : "Authorize return"}
+     </button>
+    </div>
+   </div>
+  </div>
+ )}
  </div>
  );
 }

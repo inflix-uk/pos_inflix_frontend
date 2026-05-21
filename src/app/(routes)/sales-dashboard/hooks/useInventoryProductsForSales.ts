@@ -94,7 +94,7 @@ interface FlattenRow {
 }
 
 /** Flatten purchases to one row per serial (IMEI) and one per non-serial item (for sales/wholesale dashboards) */
-function flattenPurchasesToRows(purchases: PurchaseRaw[]): FlattenRow[] {
+function flattenPurchasesToRows(purchases: PurchaseRaw[], allowNegativeStock: boolean): FlattenRow[] {
  const rows: FlattenRow[] = [];
  if (!Array.isArray(purchases)) return rows;
 
@@ -160,9 +160,9 @@ function flattenPurchasesToRows(purchases: PurchaseRaw[]): FlattenRow[] {
      });
     });
    } else {
-    // Skip sold-out non-serial items so they don't show in the create-sales /
-    // create-invoice product grid (parallel to inventory page's "Available only" filter).
-    if (qty <= 0) return;
+    // Hide sold-out non-serial items only when negative stock is NOT allowed.
+    // When negative stock is allowed, show the item even at qty<=0 (cashier can still sell it).
+    if (qty <= 0 && !allowNegativeStock) return;
     rows.push({
      rowKey: `${purchaseId}-${itemId}-no-imei`,
      name: itemName,
@@ -247,10 +247,11 @@ function readProductCache(key: string): InventoryProductForSales[] {
  } catch { return []; }
 }
 
-export function useInventoryProductsForSales(options?: { pricingGroupId?: string | null; locationId?: string | null }) {
+export function useInventoryProductsForSales(options?: { pricingGroupId?: string | null; locationId?: string | null; allowNegativeStock?: boolean }) {
  const pricingGroupId = options?.pricingGroupId ?? undefined;
  const locationId = options?.locationId ?? undefined;
- const cacheKey = salesCacheKey(pricingGroupId, locationId);
+ const allowNegativeStock = options?.allowNegativeStock ?? false;
+ const cacheKey = salesCacheKey(pricingGroupId, locationId) + `|neg=${allowNegativeStock ? 1 : 0}`;
 
  // Hydrate from sessionStorage on the very first render (not in useEffect) so products appear immediately
  const [products, setProducts] = useState<InventoryProductForSales[]>(() => readProductCache(cacheKey));
@@ -289,7 +290,7 @@ export function useInventoryProductsForSales(options?: { pricingGroupId?: string
     setError(res.message || "Failed to load inventory");
     return;
    }
-   const rows = flattenPurchasesToRows(res.data);
+   const rows = flattenPurchasesToRows(res.data, allowNegativeStock);
    const newProducts = rows.map(rowToProduct);
    setProducts(newProducts);
 
@@ -315,7 +316,7 @@ export function useInventoryProductsForSales(options?: { pricingGroupId?: string
   } finally {
    setLoading(false);
   }
- }, [pricingGroupId, locationId, cacheKey]);
+ }, [pricingGroupId, locationId, cacheKey, allowNegativeStock]);
 
  useEffect(() => {
   refetch();

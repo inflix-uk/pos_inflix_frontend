@@ -522,6 +522,7 @@ const Page = () => {
  const { products: inventoryProducts, soldInfoMap, loading: productsLoading, error: productsError, refetch: refetchProducts } = useInventoryProductsForSales({
  pricingGroupId: customerPricingGroupId,
  locationId: inventoryLocationId,
+ allowNegativeStock: !blockNegativeStock,
  });
 
  // On mount: clear serial lookup cache so first add-by-serial uses latest price (e.g. after returning from Rate List).
