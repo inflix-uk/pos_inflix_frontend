@@ -196,14 +196,14 @@ export const NAV_CONFIG: NavSection[] = [
     label: "Main",
     items: [
       { title: "Dashboard", path: "/dashboard", icon: LayoutDashboard, requiredPermsAnyOf: [] },
-      { title: "Create Sales", path: "/create-sales", icon: LayoutDashboard, requiredPermsAnyOf: ["sale.create"] },
+      { title: "Create Sales", path: "/create-sales", icon: LayoutDashboard, requiredPermsAnyOf: ["sale.create"], featureKey: "sales" },
     ],
   },
   {
     label: "Sales",
     items: [
-      { title: "Sales", path: "/sales-online-orders", icon: Grid, requiredPermsAnyOf: ["sale.view"] },
-      { title: "Sales Return", path: "/sales-return", icon: FileText, requiredPermsAnyOf: ["return.create", "refund.issue", "sale.view"] },
+      { title: "Sales", path: "/sales-online-orders", icon: Grid, requiredPermsAnyOf: ["sale.view"], featureKey: "sales" },
+      { title: "Sales Return", path: "/sales-return", icon: FileText, requiredPermsAnyOf: ["return.create", "refund.issue", "sale.view"], featureKey: "sales" },
     ],
   },
   {
