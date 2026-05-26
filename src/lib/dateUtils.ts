@@ -143,7 +143,7 @@ function endOfDayLondonUTC(year: number, month: number, day: number): Date {
   return new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
 }
 
-export type DashboardRange = "today" | "7d" | "30d" | "custom";
+export type DashboardRange = "today" | "yesterday" | "7d" | "30d" | "custom";
 
 export interface DashboardDateRange {
   fromUtc: Date;
@@ -179,6 +179,17 @@ export function getDashboardRangeUtc(
       fromUtc: startOfDayLondonUTC(y, m, d),
       toUtc: endOfDayLondonUTC(y, m, d),
       label: "Today",
+    };
+  }
+
+  if (range === "yesterday") {
+    const startToday = startOfDayLondonUTC(y, m, d);
+    const yesterday = new Date(startToday.getTime() - 24 * 60 * 60 * 1000);
+    const [yy, my, dy] = getLondonDateString(yesterday).split("-").map(Number);
+    return {
+      fromUtc: startOfDayLondonUTC(yy, my, dy),
+      toUtc: endOfDayLondonUTC(yy, my, dy),
+      label: "Yesterday",
     };
   }
 

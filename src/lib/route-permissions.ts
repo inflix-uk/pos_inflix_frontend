@@ -52,6 +52,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   // Sales
   "/sales-online-orders": ["sale.view"],
   "/sales-online-orders/edit": ["sale.view", "sale.edit"],
+  "/sales-item-wise-orders": ["sale.view"],
 
   // Invoices (own flow, mirrors sales but gated by invoice.* perms)
   "/create-invoice": ["invoice.create"],
@@ -204,6 +205,7 @@ export const NAV_CONFIG: NavSection[] = [
     label: "Sales",
     items: [
       { title: "Sales", path: "/sales-online-orders", icon: Grid, requiredPermsAnyOf: ["sale.view"], featureKey: "sales" },
+      { title: "Sales Item-wise", path: "/sales-item-wise-orders", icon: Package, requiredPermsAnyOf: ["sale.view"], featureKey: "sales" },
       { title: "Sales Return", path: "/sales-return", icon: FileText, requiredPermsAnyOf: ["return.create", "refund.issue", "sale.view"], featureKey: "sales" },
     ],
   },

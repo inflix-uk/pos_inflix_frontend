@@ -19,6 +19,10 @@ interface ProductsStockTableProps {
  isLoading?: boolean;
  /** When provided, non-serial rows show editable quantity; call to persist */
  onQuantityChange?: (purchaseId: string, itemId: string, quantity: number) => Promise<void>;
+ /** When provided, non-serial rows show editable cost price; call to persist */
+ onPurchasePriceChange?: (purchaseId: string, itemId: string, purchasePrice: number) => Promise<void>;
+ /** When provided, non-serial rows show editable sale price; call to persist */
+ onSalePriceChange?: (purchaseId: string, itemId: string, salePrice: number) => Promise<void>;
  /** "serial" = IMEI column, no Qty; "non-serial" = Qty column, no IMEI. Omit for legacy single-table (both). */
  variant?: TableVariant;
  /** Optional section title above the table */
@@ -100,6 +104,8 @@ export function ProductsStockTable({
  soldInfoMap = {},
  isLoading,
  onQuantityChange,
+ onPurchasePriceChange,
+ onSalePriceChange,
  variant,
  title,
  onViewHistory,
@@ -172,10 +178,13 @@ export function ProductsStockTable({
   row={row}
   soldInfoMap={soldInfoMap}
   onQuantityChange={onQuantityChange}
+  onPurchasePriceChange={onPurchasePriceChange}
+  onSalePriceChange={onSalePriceChange}
   showQtyColumn={showQtyColumn}
   showImeiColumn={showImeiColumn}
   showNameColumn={showNameColumn}
   showSidColumn={isSerial}
+  isNonSerial={isNonSerial}
   dynamicVariantSlugs={dynamicVariantSlugs}
   onViewHistory={onViewHistory}
   onDeleteNonSerialItem={onDeleteNonSerialItem}
@@ -203,9 +212,12 @@ function ProductsStockTableRow({
  row,
  soldInfoMap,
  onQuantityChange,
+ onPurchasePriceChange,
+ onSalePriceChange,
  showQtyColumn,
  showImeiColumn = true,
  showNameColumn = false,
+ isNonSerial = false,
  dynamicVariantSlugs = [],
  onViewHistory,
  onDeleteNonSerialItem,
@@ -215,17 +227,24 @@ function ProductsStockTableRow({
  row: StockViewRow;
  soldInfoMap: SoldInfoMap;
  onQuantityChange?: (purchaseId: string, itemId: string, quantity: number) => Promise<void>;
+ onPurchasePriceChange?: (purchaseId: string, itemId: string, purchasePrice: number) => Promise<void>;
+ onSalePriceChange?: (purchaseId: string, itemId: string, salePrice: number) => Promise<void>;
  showQtyColumn: boolean;
  showImeiColumn?: boolean;
  showNameColumn?: boolean;
  showSidColumn?: boolean;
+ isNonSerial?: boolean;
  dynamicVariantSlugs?: string[];
  onViewHistory?: (serial: string) => void;
  onDeleteNonSerialItem?: (purchaseId: string, itemId: string) => Promise<void>;
  showViewColumn?: boolean;
 }) {
  const [editingQty, setEditingQty] = useState<number | null>(null);
+ const [editingCost, setEditingCost] = useState<string | null>(null);
+ const [editingSale, setEditingSale] = useState<string | null>(null);
  const [saving, setSaving] = useState(false);
+ const [savingCost, setSavingCost] = useState(false);
+ const [savingSale, setSavingSale] = useState(false);
  const [deleting, setDeleting] = useState(false);
 
  const soldInfo = row.imei ? soldInfoMap[(row.imei || "").trim()] : undefined;
@@ -259,6 +278,67 @@ function ProductsStockTableRow({
  },
  []
  );
+
+ const canEditCost = isNonSerial && row.purchaseId && row.itemId && onPurchasePriceChange;
+ const canEditSale = isNonSerial && row.purchaseId && row.itemId && onSalePriceChange;
+
+ const handleCostBlur = useCallback(async () => {
+ if (editingCost === null || !onPurchasePriceChange || !row.purchaseId || !row.itemId) return;
+ const trimmed = editingCost.trim();
+ const num = trimmed === "" ? 0 : Number(trimmed);
+ if (!Number.isFinite(num) || num < 0) {
+ setEditingCost(null);
+ return;
+ }
+ if (num === (row.purchasePrice ?? 0)) {
+ setEditingCost(null);
+ return;
+ }
+ setSavingCost(true);
+ try {
+ await onPurchasePriceChange(row.purchaseId, row.itemId, num);
+ setEditingCost(null);
+ } catch {
+ setEditingCost(null);
+ } finally {
+ setSavingCost(false);
+ }
+ }, [editingCost, onPurchasePriceChange, row.purchaseId, row.itemId, row.purchasePrice]);
+
+ const handleSaleBlur = useCallback(async () => {
+ if (editingSale === null || !onSalePriceChange || !row.purchaseId || !row.itemId) return;
+ const trimmed = editingSale.trim();
+ const num = trimmed === "" ? 0 : Number(trimmed);
+ if (!Number.isFinite(num) || num < 0) {
+ setEditingSale(null);
+ return;
+ }
+ if (num === (row.salePrice ?? 0)) {
+ setEditingSale(null);
+ return;
+ }
+ setSavingSale(true);
+ try {
+ await onSalePriceChange(row.purchaseId, row.itemId, num);
+ setEditingSale(null);
+ } catch {
+ setEditingSale(null);
+ } finally {
+ setSavingSale(false);
+ }
+ }, [editingSale, onSalePriceChange, row.purchaseId, row.itemId, row.salePrice]);
+
+ const handlePriceKeyDown = useCallback(
+ (e: React.KeyboardEvent) => {
+ if (e.key === "Enter") {
+ (e.currentTarget as HTMLElement).blur();
+ }
+ },
+ []
+ );
+
+ const displayCost = editingCost !== null ? editingCost : String(row.purchasePrice ?? "");
+ const displaySale = editingSale !== null ? editingSale : String(row.salePrice ?? "");
 
  const canDelete = !row.isSerialProduct && row.purchaseId && row.itemId && onDeleteNonSerialItem;
  const handleDeleteClick = useCallback(async () => {
@@ -321,14 +401,48 @@ function ProductsStockTableRow({
  {formatDateTimeLondon(row.createdAt ?? row.date)}
  </td>
  <td className={tdClass}>
- {empty(row.purchasePrice) === "-"
-  ? "-"
-  : `${row.currency ? `${row.currency} ` : ""}${row.purchasePrice}`}
+ {canEditCost ? (
+  <div className="flex items-center gap-1">
+  {row.currency && <span className="text-xs text-gray-500">{row.currency}</span>}
+  <input
+   type="number"
+   step="0.01"
+   min={0}
+   value={displayCost}
+   onChange={(e) => setEditingCost(e.target.value)}
+   onBlur={handleCostBlur}
+   onKeyDown={handlePriceKeyDown}
+   disabled={savingCost}
+   className="w-24 px-2 py-1 text-sm border border-gray-200 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-60"
+  />
+  </div>
+ ) : empty(row.purchasePrice) === "-" ? (
+  "-"
+ ) : (
+  `${row.currency ? `${row.currency} ` : ""}${row.purchasePrice}`
+ )}
  </td>
  <td className={tdClass}>
- {empty(row.salePrice) === "-"
-  ? "-"
-  : `${row.currency ? `${row.currency} ` : ""}${row.salePrice}`}
+ {canEditSale ? (
+  <div className="flex items-center gap-1">
+  {row.currency && <span className="text-xs text-gray-500">{row.currency}</span>}
+  <input
+   type="number"
+   step="0.01"
+   min={0}
+   value={displaySale}
+   onChange={(e) => setEditingSale(e.target.value)}
+   onBlur={handleSaleBlur}
+   onKeyDown={handlePriceKeyDown}
+   disabled={savingSale}
+   className="w-24 px-2 py-1 text-sm border border-gray-200 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-60"
+  />
+  </div>
+ ) : empty(row.salePrice) === "-" ? (
+  "-"
+ ) : (
+  `${row.currency ? `${row.currency} ` : ""}${row.salePrice}`
+ )}
  </td>
  <td className={`${tdClass} max-w-[200px] truncate`} title={row.note || ""}>
  {empty(row.note)}

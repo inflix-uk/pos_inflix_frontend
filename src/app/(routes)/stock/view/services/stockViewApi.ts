@@ -251,6 +251,28 @@ export const stockViewApi = {
   }
  },
 
+ /** Update cost (purchase) price for any purchase item (serial or non-serial) */
+ updateItemPurchasePrice: async (
+  purchaseId: string,
+  itemId: string,
+  purchasePrice: number
+ ): Promise<ApiResponse<PurchaseRaw>> => {
+  try {
+   const response = await fetch(
+    `${API_BASE_URL}/purchases/${purchaseId}/items/${itemId}`,
+    {
+     method: "PATCH",
+     headers: getAuthHeaders(),
+     body: JSON.stringify({ purchasePrice }),
+    }
+   );
+   return await response.json();
+  } catch (error) {
+   console.error("Error updating cost price:", error);
+   return { success: false, message: "Failed to update cost price" };
+  }
+ },
+
  /** Update sale price for any purchase item (serial or non-serial) */
  updateItemSalePrice: async (
   purchaseId: string,
