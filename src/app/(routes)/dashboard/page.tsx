@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
-import { Trash2, User as UserIcon, Mail, Shield, MapPin } from "lucide-react";
+import { Trash2, User as UserIcon, Mail, Shield, MapPin, Package } from "lucide-react";
 import { useDashboard } from "./hooks/useDashboard";
 import { usePermissions } from "@/hooks/usePermissions";
+import { ItemsBreakdownModal } from "@/components/ItemsBreakdownModal";
 import {
  DashboardKpiTiles,
  DashboardAlerts,
@@ -138,6 +139,8 @@ export default function DashboardPage() {
 
 function FullDashboard() {
  const { data, loading, error, range, setRange, dateRange, refresh } = useDashboard();
+ const { can } = usePermissions();
+ const [itemsModalOpen, setItemsModalOpen] = useState(false);
  return (
  <div className="@container min-h-screen bg-gray-50 p-2 @[640px]:p-3 @[768px]:p-4 @[1024px]:p-6">
  <div className="mb-3 @[640px]:mb-4 @[768px]:mb-6 flex flex-col gap-2 @[640px]:gap-3 @[768px]:gap-4 @[1024px]:flex-row @[1024px]:items-center @[1024px]:justify-between">
@@ -169,6 +172,17 @@ function FullDashboard() {
   <Trash2 className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 shrink-0 text-red-600" />
   <span className="hidden @[640px]:inline">Reset Cache</span>
   </button>
+  {can("sale.view") && (
+  <button
+  type="button"
+  onClick={() => setItemsModalOpen(true)}
+  title="View sold items aggregated"
+  className="inline-flex items-center gap-1 @[640px]:gap-1.5 @[768px]:gap-2 px-2 @[640px]:px-2.5 @[768px]:px-3.5 py-1 @[640px]:py-1.5 @[768px]:py-2 rounded-lg text-[10px] @[640px]:text-xs @[768px]:text-sm font-semibold text-orange-700 bg-orange-50 border border-orange-200 hover:bg-orange-100 hover:border-orange-300 active:bg-orange-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 transition-colors whitespace-nowrap"
+  >
+  <Package className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 shrink-0 text-orange-600" />
+  <span className="hidden @[640px]:inline">View by Items</span>
+  </button>
+  )}
   <DashboardDateRange
   range={range}
   setRange={setRange}
@@ -249,6 +263,15 @@ function FullDashboard() {
   <ActivityPreview items={data.activityPreview} />
  </>
  ) : null}
+
+ {itemsModalOpen && (
+ <ItemsBreakdownModal
+  from={dateRange.fromUtc.toISOString()}
+  to={dateRange.toUtc.toISOString()}
+  dateLabel={dateRange.label}
+  onClose={() => setItemsModalOpen(false)}
+ />
+ )}
  </div>
  );
 }

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { ChevronLeft, MapPin, Calendar, RefreshCw, ChevronDown, ChevronUp, X, Eye, Loader2, ArrowLeft, Receipt } from "lucide-react";
+import { ChevronLeft, MapPin, Calendar, RefreshCw, ChevronDown, ChevronUp, X, Eye, Loader2, ArrowLeft, Receipt, Package } from "lucide-react";
 import { useTakingsDashboard } from "./hooks/useTakingsDashboard";
 import {
  formatDateLabel,
@@ -11,6 +11,7 @@ import {
 import { salesApi, type SaleRecord } from "@/app/(routes)/sales-dashboard/service/salesApi";
 import { locationApi } from "@/app/(routes)/peoples/locations/service/locationApi";
 import { usePermissionsContext } from "@/contexts/PermissionsContext";
+import { ItemsBreakdownModal } from "@/components/ItemsBreakdownModal";
 import type { DashboardRange } from "@/lib/dateUtils";
 
 function formatCurrency(n: number): string {
@@ -92,6 +93,8 @@ export default function TakingsDashboardPage() {
  const dateRangeLabel =
  range === "today"
  ? "Today"
+ : range === "yesterday"
+ ? "Yesterday"
  : range === "7d"
  ? "7 days"
  : range === "30d"
@@ -104,6 +107,7 @@ export default function TakingsDashboardPage() {
  );
 
  const [salesModalOpen, setSalesModalOpen] = useState(false);
+ const [itemsModalOpen, setItemsModalOpen] = useState(false);
 
  return (
  <div className="@container min-h-screen bg-gray-50 p-2 @[640px]:p-3 @[768px]:p-4 @[1024px]:p-6">
@@ -130,7 +134,7 @@ export default function TakingsDashboardPage() {
   <div className="flex items-center gap-1.5 @[640px]:gap-2">
   <Calendar className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 shrink-0 text-gray-500" />
   <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1">
-  {(["today", "7d", "30d", "custom"] as const).map((r) => (
+  {(["today", "yesterday", "7d", "30d", "custom"] as const).map((r) => (
   <button
    key={r}
    type="button"
@@ -142,7 +146,15 @@ export default function TakingsDashboardPage() {
    : "text-gray-600 hover:bg-gray-100"
    }`}
   >
-   {r === "today" ? "Today" : r === "7d" ? "7 days" : r === "30d" ? "30 days" : "Custom"}
+   {r === "today"
+    ? "Today"
+    : r === "yesterday"
+    ? "Yesterday"
+    : r === "7d"
+    ? "7 days"
+    : r === "30d"
+    ? "30 days"
+    : "Custom"}
   </button>
   ))}
   </div>
@@ -225,14 +237,25 @@ export default function TakingsDashboardPage() {
   value={data.takings.salesCount}
   sub={formatCurrency(data.takings.grossSales)}
   action={
+   <div className="flex items-center gap-1">
    <button
-   type="button"
-   onClick={() => setSalesModalOpen(true)}
-   className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[10px] @[640px]:text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+    type="button"
+    onClick={() => setSalesModalOpen(true)}
+    className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-[10px] @[640px]:text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"
    >
-   <Eye className="h-3 w-3" />
-   View
+    <Eye className="h-3 w-3" />
+    View
    </button>
+   <button
+    type="button"
+    onClick={() => setItemsModalOpen(true)}
+    className="inline-flex items-center gap-1 rounded-md bg-orange-100 px-2 py-1 text-[10px] @[640px]:text-xs font-medium text-orange-700 hover:bg-orange-200 transition-colors"
+    title="View sold items aggregated"
+   >
+    <Package className="h-3 w-3" />
+    Items
+   </button>
+   </div>
   }
   />
   <KpiCard label="Refunds" value={data.takings.refundsCount} sub={formatCurrency(data.takings.refundsGross)} negative />
@@ -308,6 +331,13 @@ export default function TakingsDashboardPage() {
 
   <section className="flex flex-wrap gap-2 @[640px]:gap-3">
   <Link
+  href={`/sales-item-wise-orders?${drilldownParams}`}
+  className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-2.5 @[640px]:px-3 @[768px]:px-4 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium text-orange-700 hover:bg-orange-100"
+  >
+  <Package className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4" />
+  View by Items
+  </Link>
+  <Link
   href={`/sales-online-orders?${drilldownParams}`}
   className="rounded-lg border border-gray-200 bg-white px-2.5 @[640px]:px-3 @[768px]:px-4 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium text-gray-700 hover:bg-gray-50"
   >
@@ -341,6 +371,16 @@ export default function TakingsDashboardPage() {
   to={to}
   locationId={selectedLocationId}
   onClose={() => setSalesModalOpen(false)}
+ />
+ )}
+
+ {itemsModalOpen && (
+ <ItemsBreakdownModal
+  from={from}
+  to={to}
+  locationId={selectedLocationId}
+  dateLabel={formatDateLabel(from, to)}
+  onClose={() => setItemsModalOpen(false)}
  />
  )}
  </div>

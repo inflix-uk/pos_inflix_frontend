@@ -145,6 +145,24 @@ export default function ProductsPage() {
  [refetchStockView]
  );
 
+ const handlePurchasePriceChange = useCallback(
+ async (purchaseId: string, itemId: string, purchasePrice: number) => {
+ const res = await stockViewApi.updateItemPurchasePrice(purchaseId, itemId, purchasePrice);
+ if (!res.success) throw new Error(res.message || "Failed to update cost price");
+ await refetchStockView();
+ },
+ [refetchStockView]
+ );
+
+ const handleSalePriceChange = useCallback(
+ async (purchaseId: string, itemId: string, salePrice: number) => {
+ const res = await stockViewApi.updateItemSalePrice(purchaseId, itemId, salePrice);
+ if (!res.success) throw new Error(res.message || "Failed to update sale price");
+ await refetchStockView();
+ },
+ [refetchStockView]
+ );
+
  const handleDeleteNonSerialItem = useCallback(
  async (purchaseId: string, itemId: string) => {
  const res = await stockViewApi.deletePurchaseItem(purchaseId, itemId);
@@ -415,6 +433,8 @@ export default function ProductsPage() {
    soldInfoMap={soldInfoMap}
    isLoading={stockViewLoading}
    onQuantityChange={handleQuantityChange}
+   onPurchasePriceChange={handlePurchasePriceChange}
+   onSalePriceChange={handleSalePriceChange}
    variant="non-serial"
    title={`Non-serial products — ${cat}`}
    onViewHistory={handleViewHistory}
@@ -454,6 +474,8 @@ export default function ProductsPage() {
    soldInfoMap={soldInfoMap}
    isLoading={stockViewLoading}
    onQuantityChange={handleQuantityChange}
+   onPurchasePriceChange={handlePurchasePriceChange}
+   onSalePriceChange={handleSalePriceChange}
    variant="non-serial"
    title={category}
    onViewHistory={handleViewHistory}
@@ -466,6 +488,8 @@ export default function ProductsPage() {
    soldInfoMap={soldInfoMap}
    isLoading={stockViewLoading}
    onQuantityChange={handleQuantityChange}
+   onPurchasePriceChange={handlePurchasePriceChange}
+   onSalePriceChange={handleSalePriceChange}
    variant="non-serial"
    onViewHistory={handleViewHistory}
    onDeleteNonSerialItem={handleDeleteNonSerialItem}
