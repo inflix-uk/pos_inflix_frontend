@@ -17,6 +17,7 @@ import {
  ShoppingCart,
  Printer,
  LayoutPanelTop,
+ MessageCircle,
 } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -104,6 +105,13 @@ const allSettingsItems: SettingsItem[] = [
  icon: Receipt,
  path: "/settings/tax",
  color: "bg-yellow-100 text-yellow-600",
+ },
+ {
+ title: "WhatsApp",
+ description: "Connect WhatsApp via QR and send a test message",
+ icon: MessageCircle,
+ path: "/settings/whatsapp",
+ color: "bg-green-100 text-green-600",
  },
  {
  title: "Activity Log",
