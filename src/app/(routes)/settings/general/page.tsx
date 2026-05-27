@@ -290,9 +290,9 @@ const GeneralSettingsPage = () => {
  </div>
  </div>
 
- <form onSubmit={handleSave} className="max-w-4xl">
- {/* Row 1: Display + Cache side by side */}
- <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+ <form onSubmit={handleSave} className="w-full">
+ {/* Row 1: Display + Cache + Sales mode (3-up on xl) */}
+ <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-6">
   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
   <h2 className="text-lg font-medium text-gray-800 mb-4">Display</h2>
   <div>
@@ -363,10 +363,6 @@ const GeneralSettingsPage = () => {
   </button>
   </div>
   </div>
- </div>
-
- {/* Row 2: Sales Mode + Inventory side by side */}
- <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
   <h2 className="text-lg font-medium text-gray-800 mb-4 flex items-center gap-2">
   <ShoppingBag className="h-5 w-5 text-orange-500" />
@@ -437,6 +433,10 @@ const GeneralSettingsPage = () => {
   )}
   </div>
 
+ </div>
+
+ {/* Row 2: Inventory + Negative stock + Location scope (3-up) */}
+ <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-6">
   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
   <h2 className="text-lg font-medium text-gray-800 mb-4 flex items-center gap-2">
   <Package className="h-5 w-5 text-orange-500" />
@@ -469,10 +469,8 @@ const GeneralSettingsPage = () => {
   Turn off to keep each purchase&apos;s price independent.
   </p>
   </div>
- </div>
 
- {/* Row 2.5: Negative stock allowance */}
- <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
   <h2 className="text-lg font-medium text-gray-800 mb-2 flex items-center gap-2">
   <AlertTriangle className="h-5 w-5 text-orange-500" />
   Negative stock on Create Sales
@@ -538,8 +536,7 @@ const GeneralSettingsPage = () => {
   )}
  </div>
 
- {/* Row 2.6: Sync inventory across all locations */}
- <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+ <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
  <h2 className="text-lg font-medium text-gray-800 mb-2 flex items-center gap-2">
   <Globe className="h-5 w-5 text-orange-500" />
   Inventory location scope on Create Sales
@@ -593,8 +590,9 @@ const GeneralSettingsPage = () => {
   </div>
  )}
  </div>
+ </div>
 
- {/* Row 2.7: Refund authorization (admin Google Authenticator) */}
+ {/* Refund authorization (admin Google Authenticator) */}
  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
   <h2 className="text-lg font-medium text-gray-800 mb-2 flex items-center gap-2">
   <ShieldCheck className="h-5 w-5 text-orange-500" />
@@ -793,6 +791,7 @@ const GeneralSettingsPage = () => {
   })}
   </div>
  </div>
+
  </form>
  </div>
  );
