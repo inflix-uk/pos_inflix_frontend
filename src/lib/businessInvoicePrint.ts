@@ -39,13 +39,41 @@ function formatDate(d: string) {
 function getLocationHeaderLines(loc: LocationForHeader | null): string[] {
   if (!loc) return [];
   const lines: string[] = [];
-  if (loc.address?.trim()) lines.push(loc.address.trim());
+  const addr = (loc.address || "").trim();
+  const hasStructuredPlace = Boolean(
+    (loc.city || "").trim() || (loc.postcode || "").trim() || (loc.country || "").trim()
+  );
+  if (addr) {
+    if (!hasStructuredPlace && addr.includes(",")) {
+      addr
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .forEach((part) => lines.push(part));
+    } else {
+      lines.push(addr);
+    }
+  }
   if (loc.city?.trim()) lines.push(loc.city.trim());
   if (loc.postcode?.trim()) lines.push(loc.postcode.trim());
   if (loc.country?.trim()) lines.push(loc.country.trim());
   if (loc.phone?.trim()) lines.push(`Tel: ${loc.phone.trim()}`);
   if (loc.email?.trim()) lines.push(loc.email.trim());
   return lines.slice(0, 8);
+}
+
+/** Branch/location lines first; fall back to Settings → About address when the sale has no location. */
+function resolveHeaderAddressLines(
+  location: LocationForHeader | null,
+  about: { companyAddress?: string }
+): string[] {
+  const fromLocation = getLocationHeaderLines(location);
+  if (fromLocation.length > 0) return fromLocation;
+  return (about.companyAddress || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 8);
 }
 
 function loadImageDimensions(src: string): Promise<{ width: number; height: number }> {
@@ -222,9 +250,7 @@ export async function buildBusinessInvoicePdf(
 
   const companyName = settings.about.appName ?? "Company";
   const tradingName = location?.name?.trim() || companyName;
-  const headerAddressLines = location
-    ? getLocationHeaderLines(location)
-    : (settings.about.companyAddress || "").split("\n").filter(Boolean);
+  const headerAddressLines = resolveHeaderAddressLines(location ?? null, settings.about);
   const legalSource = resolveRegistrationSource(settings.about, location);
   const legalLines = companyRegistrationLines(legalSource, io);
   const taxLine = taxForPrintLine(sale, settings.defaultTax);
@@ -266,15 +292,12 @@ export async function buildBusinessInvoicePdf(
 
   const nameBaselineY = headerLeftY > y + 2 ? headerLeftY : y + 6;
   let addrY = nameBaselineY;
-  // Keep the invoice visually branded even if the print option was disabled accidentally.
-  // Without this fallback, the left header starts with the address and looks broken.
-  if (io.showCompanyName || !settings.about.logo) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(io.fontCompanyNamePt);
-    doc.setTextColor(SLATE.r, SLATE.g, SLATE.b);
-    doc.text(tradingName, left, nameBaselineY);
-    addrY = nameBaselineY + 7;
-  }
+  // Always show trading / branch name under the logo (live tenants often had this hidden when the toggle was off).
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(io.fontCompanyNamePt);
+  doc.setTextColor(SLATE.r, SLATE.g, SLATE.b);
+  doc.text(tradingName, left, nameBaselineY);
+  addrY = nameBaselineY + 7;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(Math.max(io.fontBodyPt - 1, 8));
   doc.setTextColor(MUTED.r, MUTED.g, MUTED.b);
@@ -388,9 +411,10 @@ export async function buildBusinessInvoicePdf(
     doc.setTextColor(NAVY.r, NAVY.g, NAVY.b);
     doc.text(sale.customerName || (retailLike ? "Walk-in Customer" : "—"), left + 4, billY);
     billY += 5;
-    // Always show the sender name in FROM. Otherwise the panel looks empty and starts with an address.
-    doc.text(tradingName, fromX + 4, fromY);
-    fromY += 5;
+    if (io.showCompanyName) {
+      doc.text(tradingName, fromX + 4, fromY);
+      fromY += 5;
+    }
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(io.fontTablePt);
