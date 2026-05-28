@@ -41,6 +41,7 @@ import { FileText, ChevronDown, Package, PanelRightOpen, MapPin, Trash2, Buildin
 import { categoryApi } from "../inventory/category/service/categoryApi";
 import { locationApi } from "../peoples/locations/service/locationApi";
 import { formatDateTimeLondon } from "@/lib/dateUtils";
+import type { SaleForPrint } from "@/lib/invoicePrint";
 import { HelpTip } from "@/components/HelpTip";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -145,30 +146,6 @@ function loadDraftCustomer(): AccountForSale | null {
  return null;
  }
 }
-
-type SaleForPrint = {
- _id: string;
- reference: string;
- type: "wholesale";
- createdAt: string;
- customerName?: string;
- customerAddress?: string;
- items: Array<{ name: string; sku?: string; price: number; quantity: number; unit?: string; serialNumbers?: string[]; serialColours?: Record<string, string>; grade?: string; brand?: string; colour?: string; brandModel?: string; capacity?: string }>;
- subtotal: number;
- tax: number;
- taxName?: string;
- taxRate?: number;
- taxType?: "percentage" | "flat" | "";
- discount: number;
- discountType?: "flat" | "percent";
- discountValue?: number;
- total: number;
- payments?: { cash?: number; card?: number; credit?: number; bank?: number };
- previousBalance?: number;
- amountDue?: number;
- balanceAfter?: number;
-};
-
 
 const Page = () => {
  const defaultCartTax = useDefaultCartTax();

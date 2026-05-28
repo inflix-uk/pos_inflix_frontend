@@ -161,7 +161,14 @@ export default function CustomerPortalInvoices() {
         tax: Number(sale.tax) || 0,
         taxName: sale.taxName ? String(sale.taxName) : undefined,
         taxRate: sale.taxRate != null ? Number(sale.taxRate) : undefined,
-        taxType: sale.taxType ? String(sale.taxType) : undefined,
+        taxType:
+          sale.taxType === "flat" ||
+          sale.taxType === "fixed" ||
+          sale.taxType === "percentage"
+            ? sale.taxType
+            : sale.taxType === ""
+              ? ""
+              : undefined,
         discount: Number(sale.discount) || 0,
         total: Number(sale.total) || 0,
         paymentMethod: sale.paymentMethod || "",
