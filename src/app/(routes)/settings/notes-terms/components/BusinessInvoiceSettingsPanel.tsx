@@ -70,10 +70,20 @@ export function BusinessInvoiceSettingsPanel({
      </p>
     </HelpTip>
    </div>
-   <p className="mb-4 text-sm font-medium text-slate-600">
-    Configure this layout when <strong className="font-medium text-slate-800">Business invoice (A4)</strong> is
-    selected at the top of this page. The dispatch template tab keeps its own settings.
-   </p>
+   {formData.a4InvoiceTemplate !== "business" ? (
+    <p
+     className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+     role="status"
+    >
+     <strong>Not active for printing yet.</strong> Choose{" "}
+     <strong>Business invoice (A4)</strong> in the template dropdown at the top of this page (or change any
+     option here — we select it automatically when you save).
+    </p>
+   ) : (
+    <p className="mb-4 text-sm font-medium text-slate-600">
+     This layout is selected for printing and downloads. The dispatch template tab keeps its own settings.
+    </p>
+   )}
 
    <div className="mb-4 grid gap-3 @[640px]:grid-cols-2">
     <div>

@@ -273,12 +273,23 @@ export const useNotesTermsSettings = () => {
    return;
   }
 
+  if (name === "businessInvoiceTerms") {
+   const { value } = target as HTMLTextAreaElement;
+   setFormData((prev) => ({
+    ...prev,
+    businessInvoiceTerms: value,
+    a4InvoiceTemplate: "business",
+   }));
+   return;
+  }
+
   if (name.startsWith("businessInvoicePdfPrint.")) {
    const key = name.slice("businessInvoicePdfPrint.".length);
    if (key === "documentTitle") {
     const { value } = target as HTMLInputElement;
     setFormData((prev) => ({
      ...prev,
+     a4InvoiceTemplate: "business",
      businessInvoicePdfPrint: { ...prev.businessInvoicePdfPrint, documentTitle: value },
     }));
     return;
@@ -293,6 +304,7 @@ export const useNotesTermsSettings = () => {
      const next = Number.isFinite(n) ? n : fallback;
      return {
       ...prev,
+      a4InvoiceTemplate: "business",
       businessInvoicePdfPrint: { ...cur, [k]: next },
      };
     });
@@ -303,6 +315,7 @@ export const useNotesTermsSettings = () => {
    const checked = (target as HTMLInputElement).checked;
    setFormData((prev) => ({
     ...prev,
+    a4InvoiceTemplate: "business",
     businessInvoicePdfPrint: { ...prev.businessInvoicePdfPrint, [boolKey]: checked },
    }));
    return;
@@ -495,7 +508,11 @@ export const useNotesTermsSettings = () => {
   setMessage({ type: "", text: "" });
 
   try {
-   const response = await notesTermsApi.saveSettings(formData);
+   const payload: NotesTermsFormData = {
+    ...formData,
+    businessInvoicePdfPrint: mergeBusinessInvoicePdfPrintOptions(formData.businessInvoicePdfPrint),
+   };
+   const response = await notesTermsApi.saveSettings(payload);
 
    if (response.success && response.data) {
     setOriginalData(response.data);
