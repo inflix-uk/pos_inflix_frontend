@@ -47,10 +47,36 @@ export default function AddRepairTicketPage() {
  deviceDescription: string;
  serialNumber: string;
  problemTypes: string[];
- estimatedPrice: string;
+ /** Est. price (£) per selected problem label */
+ problemPrices: Record<string, string>;
  devicePassword: string;
  notes: string;
  };
+
+ const sumProblemPrices = (problemTypes: string[], problemPrices: Record<string, string>): number | null => {
+ let sum = 0;
+ let any = false;
+ for (const label of problemTypes) {
+  const raw = (problemPrices[label] ?? "").trim();
+  if (!raw) continue;
+  const n = parseFloat(raw);
+  if (Number.isFinite(n) && n >= 0) {
+   sum += n;
+   any = true;
+  }
+ }
+ return any ? Math.round(sum * 100) / 100 : null;
+ };
+
+ const formatProblemTypeWithPrices = (problemTypes: string[], problemPrices: Record<string, string>) =>
+ problemTypes
+  .map((label) => {
+   const raw = (problemPrices[label] ?? "").trim();
+   const n = raw ? parseFloat(raw) : NaN;
+   if (Number.isFinite(n) && n > 0) return `${label} (£${n.toFixed(2)})`;
+   return label;
+  })
+  .join(", ");
  const [devices, setDevices] = useState<DeviceEntry[]>([]);
  const [newDeviceModalOpen, setNewDeviceModalOpen] = useState(false);
  const [problemOptions, setProblemOptions] = useState<string[]>(DEFAULT_PROBLEMS);
@@ -61,7 +87,7 @@ export default function AddRepairTicketPage() {
  const addDevice = (deviceDescription: string, serialNumber: string) => {
  setDevices((prev) => [
  ...prev,
- { id: `d-${Date.now()}-${prev.length}`, deviceDescription: deviceDescription.trim(), serialNumber: serialNumber.trim(), problemTypes: [], estimatedPrice: "", devicePassword: "", notes: "" },
+ { id: `d-${Date.now()}-${prev.length}`, deviceDescription: deviceDescription.trim(), serialNumber: serialNumber.trim(), problemTypes: [], problemPrices: {}, devicePassword: "", notes: "" },
  ]);
  };
  const updateDevice = (id: string, updates: Partial<Omit<DeviceEntry, "id">>) => {
@@ -74,11 +100,22 @@ export default function AddRepairTicketPage() {
  setDevices((prev) => prev.map((d) => {
  if (d.id !== deviceId) return d;
  const has = d.problemTypes.includes(problem);
- return { ...d, problemTypes: has ? d.problemTypes.filter((p) => p !== problem) : [...d.problemTypes, problem] };
+ if (has) {
+  const { [problem]: _removed, ...restPrices } = d.problemPrices;
+  return { ...d, problemTypes: d.problemTypes.filter((p) => p !== problem), problemPrices: restPrices };
+ }
+ return { ...d, problemTypes: [...d.problemTypes, problem], problemPrices: { ...d.problemPrices, [problem]: d.problemPrices[problem] ?? "" } };
  }));
  };
  const removeProblem = (deviceId: string, problem: string) => {
- setDevices((prev) => prev.map((d) => d.id === deviceId ? { ...d, problemTypes: d.problemTypes.filter((p) => p !== problem) } : d));
+ setDevices((prev) => prev.map((d) => {
+ if (d.id !== deviceId) return d;
+ const { [problem]: _removed, ...restPrices } = d.problemPrices;
+ return { ...d, problemTypes: d.problemTypes.filter((p) => p !== problem), problemPrices: restPrices };
+ }));
+ };
+ const setProblemPrice = (deviceId: string, problem: string, value: string) => {
+ setDevices((prev) => prev.map((d) => (d.id === deviceId ? { ...d, problemPrices: { ...d.problemPrices, [problem]: value } } : d)));
  };
 
  // Options
@@ -147,15 +184,26 @@ export default function AddRepairTicketPage() {
  setMessage({ type: "success", text: "" });
  try {
  const first = devices[0];
- const firstEstimated = first.estimatedPrice.trim() ? (parseFloat(first.estimatedPrice) || null) : null;
- const deviceList = devices.map((d) => ({
-  deviceDescription: d.deviceDescription.trim(),
-  serialNumber: d.serialNumber.trim(),
-  problemType: d.problemTypes.join(", "),
-  devicePassword: d.devicePassword.trim(),
-  estimatedCost: d.estimatedPrice.trim() ? (parseFloat(d.estimatedPrice) || null) : null,
-  notes: d.notes.trim(),
- }));
+ const deviceList = devices.map((d) => {
+  const problems = d.problemTypes.map((label) => {
+   const raw = (d.problemPrices[label] ?? "").trim();
+   return {
+    label,
+    estimatedCost: raw ? (parseFloat(raw) || null) : null,
+   };
+  });
+  return {
+   deviceDescription: d.deviceDescription.trim(),
+   serialNumber: d.serialNumber.trim(),
+   problems,
+   problemType: formatProblemTypeWithPrices(d.problemTypes, d.problemPrices),
+   devicePassword: d.devicePassword.trim(),
+   estimatedCost: sumProblemPrices(d.problemTypes, d.problemPrices),
+   notes: d.notes.trim(),
+  };
+ });
+ const ticketEstimated = deviceList.reduce((sum, d) => sum + (Number(d.estimatedCost) || 0), 0);
+ const firstEstimated = ticketEstimated > 0 ? ticketEstimated : (deviceList[0]?.estimatedCost ?? null);
  const combinedNotes = devices
   .map((d, i) => {
   const head = devices.length > 1 ? `Device ${i + 1}: ` : "";
@@ -348,15 +396,36 @@ export default function AddRepairTicketPage() {
    <div className="sm:col-span-2">
    <label className={labelCls}>Problems <span className="text-red-500">*</span> <span className="text-gray-400 normal-case font-normal">(select one or more)</span></label>
    {d.problemTypes.length > 0 && (
-    <div className="flex flex-wrap gap-1.5 mb-2">
+    <div className="mb-3 space-y-2 rounded-lg border border-orange-100 bg-orange-50/40 p-2.5">
+    <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-800/80">Est. price per problem (£)</p>
     {d.problemTypes.map((p) => (
-    <span key={p} className="inline-flex items-center gap-1 rounded-full bg-orange-100 text-orange-800 border border-orange-200 px-2 py-0.5 text-xs font-medium">
-    {p}
-    <button type="button" onClick={() => removeProblem(d.id, p)} className="hover:text-orange-900" title="Remove">
-    <X className="h-3 w-3" />
-    </button>
-    </span>
+    <div key={p} className="flex flex-wrap items-center gap-2">
+     <span className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-full bg-orange-100 text-orange-800 border border-orange-200 px-2 py-0.5 text-xs font-medium">
+     {p}
+     <button type="button" onClick={() => removeProblem(d.id, p)} className="hover:text-orange-900 shrink-0" title="Remove">
+     <X className="h-3 w-3" />
+     </button>
+     </span>
+     <input
+     type="number"
+     min="0"
+     step="0.01"
+     value={d.problemPrices[p] ?? ""}
+     onChange={(e) => setProblemPrice(d.id, p, e.target.value)}
+     placeholder="0.00"
+     aria-label={`Estimated price for ${p}`}
+     className={`${inputCls} w-28 py-1.5`}
+     />
+    </div>
     ))}
+    {(() => {
+     const deviceTotal = sumProblemPrices(d.problemTypes, d.problemPrices);
+     return deviceTotal != null ? (
+      <p className="text-xs font-medium text-gray-600 pt-1 border-t border-orange-100">
+       Device estimate total: £{deviceTotal.toFixed(2)}
+      </p>
+     ) : null;
+    })()}
     </div>
    )}
    <div className="flex flex-wrap gap-1.5 mb-2">
@@ -377,10 +446,6 @@ export default function AddRepairTicketPage() {
     + New problem
     </button>
    </div>
-   </div>
-   <div>
-   <label className={labelCls}>Est. price (£)</label>
-   <input type="number" min="0" step="0.01" value={d.estimatedPrice} onChange={(e) => updateDevice(d.id, { estimatedPrice: e.target.value })} placeholder="0.00" className={inputCls} />
    </div>
    <div>
    <label className={labelCls}>Device password</label>

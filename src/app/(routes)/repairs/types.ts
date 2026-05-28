@@ -7,10 +7,17 @@ export type RepairStatus =
  | "collected"
  | "redo";
 
+export interface RepairDeviceProblem {
+ label: string;
+ estimatedCost?: number | null;
+}
+
 export interface RepairDevice {
  deviceDescription: string;
  serialNumber?: string;
  problemType?: string;
+ /** Per-problem estimates when captured on create (repairs/add). */
+ problems?: RepairDeviceProblem[];
  devicePassword?: string;
  estimatedCost?: number | null;
  notes?: string;

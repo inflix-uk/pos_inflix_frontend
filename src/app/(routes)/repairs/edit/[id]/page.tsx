@@ -225,6 +225,7 @@ export default function RepairEditPage() {
   deviceDescription: d.deviceDescription ?? "",
   serialNumber: d.serialNumber ?? "",
   problemType: d.problemType ?? "",
+  problems: Array.isArray(d.problems) ? d.problems : [],
   devicePassword: d.devicePassword ?? "",
   estimatedCost: d.estimatedCost ?? null,
   notes: d.notes ?? "",
@@ -301,7 +302,12 @@ export default function RepairEditPage() {
  }, [customerOpen, customerSearch]);
 
  const grandTotal = repairItems.reduce((sum, i) => sum + i.amount, 0);
- const devicesEstTotal = devices.reduce((s, d) => s + (Number(d.estimatedCost) || 0), 0);
+ const devicesEstTotal = devices.reduce((s, d) => {
+  if (d.problems?.length) {
+   return s + d.problems.reduce((ps, p) => ps + (Number(p.estimatedCost) || 0), 0);
+  }
+  return s + (Number(d.estimatedCost) || 0);
+ }, 0);
  const amountDue = grandTotal > 0 ? grandTotal : (devicesEstTotal || (form?.estimatedCost ?? form?.actualCost ?? 0));
  const totalTaken =
  repair?.totalTaken ??
@@ -517,7 +523,7 @@ export default function RepairEditPage() {
  if (!id || !formRef.current) return;
  const newDevices: RepairDevice[] = [
  ...devices,
- { deviceDescription: "", serialNumber: "", problemType: "", devicePassword: "", estimatedCost: null, notes: "" },
+ { deviceDescription: "", serialNumber: "", problemType: "", problems: [], devicePassword: "", estimatedCost: null, notes: "" },
  ];
  setDevices(newDevices);
  devicesRef.current = newDevices;
@@ -1029,6 +1035,18 @@ export default function RepairEditPage() {
     </button>
    )}
    </div>
+   {device.problems && device.problems.length > 0 && (
+    <ul className="ml-16 space-y-0.5 text-xs text-slate-600">
+     {device.problems.map((p) => (
+      <li key={p.label} className="flex justify-between gap-2">
+       <span>{p.label}</span>
+       <span className="font-medium tabular-nums">
+        {p.estimatedCost != null ? `£${Number(p.estimatedCost).toFixed(2)}` : "—"}
+       </span>
+      </li>
+     ))}
+    </ul>
+   )}
    <div className="flex items-center gap-2 pt-1.5 mt-1.5 border-t border-slate-200/60">
    <span className="text-xs text-gray-500 shrink-0 w-16">Est. cost</span>
    {editingField === `d-${idx}-estimatedCost` ? (
