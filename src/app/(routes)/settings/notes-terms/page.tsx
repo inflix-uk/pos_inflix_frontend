@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { Suspense, useState } from "react";
 import { useNotesTermsSettings } from "./hooks/useNotesTermsSettings";
 import {
  NotesTermsForm,
@@ -47,18 +47,20 @@ const NotesTermsSettingsPage = () => {
 
  <MessageAlert message={message} />
 
- <NotesTermsForm
- formData={formData}
- isSaving={isSaving}
- hasExistingData={hasExistingData}
- onChange={handleChange}
- onReorderSalesReceiptSections={reorderSalesReceiptSections}
- onReorderRepairTicketSections={reorderRepairTicketSections}
- onReorderRepairLabelFields={reorderRepairLabelFields}
- onSubmit={saveSettings}
- onReset={resetForm}
- onDelete={handleDeleteClick}
- />
+ <Suspense fallback={<LoadingSpinner />}>
+  <NotesTermsForm
+   formData={formData}
+   isSaving={isSaving}
+   hasExistingData={hasExistingData}
+   onChange={handleChange}
+   onReorderSalesReceiptSections={reorderSalesReceiptSections}
+   onReorderRepairTicketSections={reorderRepairTicketSections}
+   onReorderRepairLabelFields={reorderRepairLabelFields}
+   onSubmit={saveSettings}
+   onReset={resetForm}
+   onDelete={handleDeleteClick}
+  />
+ </Suspense>
 
  <DeleteConfirmModal
  isOpen={showDeleteConfirm}

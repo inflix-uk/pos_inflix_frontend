@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useId, useState } from "react";
+import React, { useCallback, useEffect, useId, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import {
  Save,
@@ -451,10 +451,17 @@ export const NotesTermsForm: React.FC<NotesTermsFormProps> = ({
  const pathname = usePathname();
 
  const tabFromUrl = searchParams.get("tab");
- const activeTab: NotesTermsTabId = isValidTabId(tabFromUrl) ? tabFromUrl : "delivery";
+ const urlTab: NotesTermsTabId = isValidTabId(tabFromUrl) ? tabFromUrl : "delivery";
+ /** Local tab state updates immediately; URL syncs for shareable links (admin settings uses the same pattern). */
+ const [activeTab, setActiveTabState] = useState<NotesTermsTabId>(urlTab);
+
+ useEffect(() => {
+ setActiveTabState(urlTab);
+ }, [urlTab]);
 
  const setActiveTab = useCallback(
  (id: NotesTermsTabId) => {
+ setActiveTabState(id);
  const params = new URLSearchParams(searchParams.toString());
  params.set("tab", id);
  router.replace(`${pathname}?${params.toString()}`, { scroll: false });
