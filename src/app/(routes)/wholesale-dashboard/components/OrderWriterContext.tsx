@@ -28,6 +28,12 @@ export interface OrderWriter {
   reference: string,
   signal?: AbortSignal,
  ) => Promise<{ success: boolean; data: { reference: string; exists: boolean; valid: boolean; reason?: string } }>;
+ /** Save / Drafts toolbar and empty-cart draft actions (off on create-invoice). */
+ enableDrafts?: boolean;
+ /** Always wholesale UI (customer required, no walk-in retail layout). Used by create-invoice. */
+ forceWholesaleMode?: boolean;
+ /** Optional invoice date field in toolbar (create-invoice). */
+ enableInvoiceDate?: boolean;
 }
 
 const DEFAULT_WRITER: OrderWriter = {
@@ -36,6 +42,7 @@ const DEFAULT_WRITER: OrderWriter = {
  referencePrefix: "INV-",
  createSale: (payload) => salesApi.createSale(payload),
  checkReference: (reference, signal) => salesApi.checkReference(reference, signal),
+ enableDrafts: true,
 };
 
 const OrderWriterContext = createContext<OrderWriter>(DEFAULT_WRITER);

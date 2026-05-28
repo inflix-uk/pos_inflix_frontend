@@ -95,6 +95,8 @@ interface WholesalePaymentModalProps {
  onMessage?: (type: "success" | "error", text: string) => void;
  /** When true (Retail/Walk-in mode): hide Credit, require full payment (no balance due). */
  retailMode?: boolean;
+ /** Success step heading (e.g. "Invoice created"). */
+ completedTitle?: string;
 }
 
 export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
@@ -115,6 +117,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  initialPayments,
  onMessage,
  retailMode = false,
+ completedTitle = "Order created",
 }) => {
  const { formatMoney } = useAppCurrency();
  const [discount, setDiscount] = useState("");
@@ -443,7 +446,8 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   }
  };
 
- const showOpenDrawerBtn = saleUsedCashOrCard(saleForPrint);
+ /** Cash drawer is retail POS only — not wholesale / create-invoice. */
+ const showOpenDrawerBtn = retailMode && saleUsedCashOrCard(saleForPrint);
 
  if (!open) return null;
 
@@ -464,7 +468,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   </div>
   <div>
   <h2 id="wholesale-invoice-title" className="text-xl font-semibold text-gray-900">
-   Order created
+   {completedTitle}
   </h2>
   {saleForPrint?.reference && (
    <p className="text-sm text-gray-500 mt-0.5 font-mono">Ref: {saleForPrint.reference}</p>

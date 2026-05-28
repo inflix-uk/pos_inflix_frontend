@@ -1,6 +1,6 @@
 import { EmailSettings, EmailFormData } from "../types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { API_BASE_URL as API_URL } from "@/lib/apiBase";
 
 interface ApiResponse<T = unknown> {
  success: boolean;

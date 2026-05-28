@@ -799,9 +799,11 @@ export const useSalesDashboard = (options?: {
 
  const taxConfig = useCartTaxConfig();
  const tax = useMemo(() => {
-  if (!taxConfig || !taxConfig.rate) return 0;
-  if (taxConfig.type === "percentage") return Math.round(subtotal * (taxConfig.rate / 100) * 100) / 100;
-  return Math.round(taxConfig.rate * 100) / 100;
+  if (!taxConfig) return 0;
+  const rate = Number(taxConfig.rate);
+  if (!Number.isFinite(rate)) return 0;
+  if (taxConfig.type === "percentage") return Math.round(subtotal * (rate / 100) * 100) / 100;
+  return Math.round(rate * 100) / 100;
  }, [subtotal, taxConfig]);
  const total = subtotal + tax;
 

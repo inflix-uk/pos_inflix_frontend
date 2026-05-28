@@ -11,6 +11,8 @@ const initialFormData: AboutFormData = {
  logoPreview: null,
  loginPageTitle: "THANK YOU",
  companyAddress: "Manchester",
+ companyNumber: "",
+ vatNumber: "",
  orderPdfTitle: "Sale Order",
  invoicePdfTitle: "Dispatch Note",
 };
@@ -46,6 +48,8 @@ export const useAboutSettings = () => {
      logoPreview: logoPreview,
      loginPageTitle: data.loginPageTitle || "THANK YOU",
      companyAddress: data.companyAddress || "Manchester",
+     companyNumber: data.companyNumber || "",
+     vatNumber: data.vatNumber || "",
      orderPdfTitle: data.orderPdfTitle || "Sale Order",
      invoicePdfTitle: data.invoicePdfTitle || "Dispatch Note",
     });
@@ -219,6 +223,8 @@ export const useAboutSettings = () => {
     logoPreview: logoPreview,
     loginPageTitle: originalData.loginPageTitle || "THANK YOU",
     companyAddress: originalData.companyAddress || "Manchester",
+    companyNumber: originalData.companyNumber || "",
+    vatNumber: originalData.vatNumber || "",
     orderPdfTitle: originalData.orderPdfTitle || "Sale Order",
     invoicePdfTitle: originalData.invoicePdfTitle || "Dispatch Note",
    });
@@ -251,6 +257,8 @@ export const useAboutSettings = () => {
      logoPreview: logoPreview,
      loginPageTitle: response.data.loginPageTitle || "THANK YOU",
      companyAddress: response.data.companyAddress || "Manchester",
+     companyNumber: response.data.companyNumber || "",
+     vatNumber: response.data.vatNumber || "",
      orderPdfTitle: response.data.orderPdfTitle || "Sale Order",
      invoicePdfTitle: response.data.invoicePdfTitle || "Dispatch Note",
     });

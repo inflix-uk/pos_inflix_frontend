@@ -9,7 +9,7 @@ import React, { createContext, useContext } from "react";
  */
 const CartTaxSlotContext = createContext<React.ReactNode | null>(null);
 
-export type CartTaxConfig = { rate: number; type: "percentage" | "flat" } | null;
+export type CartTaxConfig = { rate: number; type: "percentage" | "flat"; name?: string } | null;
 const CartTaxConfigContext = createContext<CartTaxConfig>(null);
 
 export function CartTaxSlotProvider({

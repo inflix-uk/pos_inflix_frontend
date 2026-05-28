@@ -23,12 +23,19 @@ function getAuthHeaders(): HeadersInit {
 }
 
 export type InvoiceRecord = SaleRecord & {
+ /** Business invoice date chosen at create; when absent, UI uses createdAt. */
+ occurredAt?: string;
  taxId?: string | null;
  taxName?: string;
  taxRate?: number;
  taxType?: "percentage" | "flat" | "";
  status?: "active" | "voided" | string;
 };
+
+/** Date to show in lists, PDFs, and detail (selected invoice date or record created time). */
+export function invoiceDisplayDate(inv: Pick<InvoiceRecord, "occurredAt" | "createdAt">): string {
+ return inv.occurredAt || inv.createdAt;
+}
 
 export interface GetInvoicesResponse {
  success: boolean;

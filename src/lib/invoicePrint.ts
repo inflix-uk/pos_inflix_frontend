@@ -21,6 +21,12 @@ import {
 } from "./receiptPrinterPrintOptions";
 import { mergeInvoicePdfPrintOptions, type InvoicePdfPrintOptions } from "./invoicePdfPrintOptions";
 import {
+  mergeBusinessInvoicePdfPrintOptions,
+  type BusinessInvoicePdfPrintOptions,
+} from "./businessInvoicePdfPrintOptions";
+import { normalizeA4InvoiceTemplate, type A4InvoiceTemplateId } from "./a4InvoiceTemplate";
+import type { BusinessInvoiceSettings } from "./businessInvoicePrint";
+import {
   printLabelsPdf,
   printRepairLabelCanvasPngToAgent,
   loadPrintingSettings,
@@ -34,7 +40,9 @@ import {
 import { buildRepairLabelPngForDymoAgent } from "./repairLabelCanvasPng";
 import type { RepairLabelTextFieldId, RepairTicketFontSizeKey, SalesReceiptFontSizeKey } from "./receiptPrintLayout";
 
-const API_BASE = typeof window !== "undefined" ? (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000") : "";
+import { API_BASE_URL } from "./apiBase";
+
+const API_BASE = typeof window !== "undefined" ? API_BASE_URL : "";
 
 function getAuthHeaders(): HeadersInit {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -51,6 +59,8 @@ export interface InvoiceSettings {
     companyAddress?: string;
     logo?: string | null;
     invoicePdfTitle?: string;
+    companyNumber?: string;
+    vatNumber?: string;
   };
   notesTerms: {
     pdfSalesTerms?: string;
@@ -61,6 +71,9 @@ export interface InvoiceSettings {
     receiptPrinterRepairPrint: ReceiptPrinterRepairPrintOptions;
     repairLabelPrint: RepairLabelPrintSettings;
     invoicePdfPrint: InvoicePdfPrintOptions;
+    businessInvoicePdfPrint: BusinessInvoicePdfPrintOptions;
+    businessInvoiceTerms: string;
+    a4InvoiceTemplate: A4InvoiceTemplateId;
   };
   bankAccounts: Array<{
     accountName: string;
@@ -70,6 +83,35 @@ export interface InvoiceSettings {
     iban?: string;
     isDefault?: boolean;
   }>;
+  /** Default tax from Settings → Tax (for invoice labelling). */
+  defaultTax: TaxForPrint | null;
+}
+
+export interface TaxForPrint {
+  name: string;
+  rate: number;
+  type: "percentage" | "fixed";
+  code: string;
+}
+
+function pickDefaultTaxForPrint(taxes: unknown): TaxForPrint | null {
+  if (!Array.isArray(taxes) || taxes.length === 0) return null;
+  const active = taxes.filter((t) => t && typeof t === "object" && (t as { isActive?: boolean }).isActive !== false);
+  const list = active.length > 0 ? active : taxes;
+  const raw =
+    list.find((t) => (t as { isDefault?: boolean }).isDefault) ??
+    list.find((t) => String((t as { name?: string }).name || "").toLowerCase().includes("vat")) ??
+    list[0];
+  if (!raw || typeof raw !== "object") return null;
+  const t = raw as { name?: string; rate?: number; type?: string; code?: string };
+  const rate = Number(t.rate);
+  if (!Number.isFinite(rate)) return null;
+  return {
+    name: String(t.name || "VAT").trim() || "VAT",
+    rate,
+    type: t.type === "fixed" ? "fixed" : "percentage",
+    code: String(t.code || "").trim(),
+  };
 }
 
 export interface SaleForPrint {
@@ -77,6 +119,8 @@ export interface SaleForPrint {
   reference: string;
   type: "retail" | "wholesale" | "repair";
   createdAt: string;
+  /** Business invoice date when set (otherwise use createdAt). */
+  occurredAt?: string;
   customerName?: string;
   /** Formatted customer address (multi-line string) for Bill To section */
   customerAddress?: string;
@@ -114,6 +158,79 @@ export interface SaleForPrint {
   amountDue?: number;
   /** Wholesale: account balance after this invoice (amountDue - payments) */
   balanceAfter?: number;
+  /** Tax snapshot at sale/invoice time (preferred over Settings default for labels). */
+  taxName?: string;
+  taxRate?: number;
+  taxType?: "percentage" | "flat" | "fixed" | "";
+}
+
+/** Tax line label on PDFs — uses sale snapshot when present, else Settings default. */
+/** True when the sale/invoice stored a tax category (including 0% e.g. marginal VAT). */
+export function saleHasTaxSnapshot(sale: SaleForPrint): boolean {
+  if ((sale.taxName ?? "").trim()) return true;
+  if (sale.taxRate != null && Number.isFinite(Number(sale.taxRate))) return true;
+  return false;
+}
+
+export function taxForPrintLine(sale: SaleForPrint, fallback: TaxForPrint | null): TaxForPrint | null {
+  const name = (sale.taxName ?? "").trim();
+  const hasRate = sale.taxRate != null && Number.isFinite(Number(sale.taxRate));
+  if (name || hasRate) {
+    const rate = hasRate ? Number(sale.taxRate) : 0;
+    const type =
+      sale.taxType === "flat" || sale.taxType === "fixed" ? ("fixed" as const) : ("percentage" as const);
+    return {
+      name: name || "VAT",
+      rate,
+      type,
+      code: "",
+    };
+  }
+  return fallback;
+}
+
+export function mergeSaleTaxSnapshot(client: SaleForPrint, fromApi?: SaleForPrint | null): SaleForPrint {
+  if (!fromApi) return client;
+  return {
+    ...client,
+    taxName: fromApi.taxName ?? client.taxName,
+    taxRate: fromApi.taxRate ?? client.taxRate,
+    taxType: fromApi.taxType ?? client.taxType,
+    customerPhone: fromApi.customerPhone ?? client.customerPhone,
+    customerEmail: fromApi.customerEmail ?? client.customerEmail,
+    occurredAt: fromApi.occurredAt ?? client.occurredAt,
+    createdAt: fromApi.occurredAt || fromApi.createdAt || client.createdAt,
+  };
+}
+
+const MONEY_EPS = 0.004;
+
+/** Wholesale account summary — hide when no prior balance and invoice is settled (e.g. paid in full). */
+/** Date shown on invoice PDFs (business date when set). */
+export function saleInvoiceDisplayDate(sale: SaleForPrint): string {
+  const raw = sale.occurredAt || sale.createdAt;
+  return raw || new Date().toISOString();
+}
+
+export function shouldShowWholesaleAccountSummary(sale: SaleForPrint): boolean {
+  const prevBal = Math.max(0, Number(sale.previousBalance) || 0);
+  if (prevBal > MONEY_EPS) return true;
+
+  const invTotal = Math.max(0, (Number(sale.total) || 0) - (Number(sale.discount) || 0));
+  const totalDueBeforePayments = prevBal + invTotal;
+  const payments = sale.payments || {};
+  const received =
+    (Number(payments.cash) || 0) + (Number(payments.card) || 0) + (Number(payments.bank) || 0);
+  const credit = Number(payments.credit) || 0;
+  const balanceDue = Math.max(0, totalDueBeforePayments - received);
+
+  if (sale.balanceAfter != null && Number.isFinite(Number(sale.balanceAfter))) {
+    return Number(sale.balanceAfter) > MONEY_EPS;
+  }
+
+  if (credit > MONEY_EPS && balanceDue > MONEY_EPS) return true;
+
+  return balanceDue > MONEY_EPS;
 }
 
 /** Location details for invoice/receipt header (from Sale.locationId) */
@@ -125,6 +242,8 @@ export interface LocationForHeader {
   country?: string;
   phone?: string;
   email?: string;
+  companyNumber?: string;
+  vatNumber?: string;
 }
 
 /** Repair ticket data for 80mm print (ref + QR and key details) */
@@ -172,6 +291,8 @@ export async function fetchLocationHeaderById(
     country: loc.country ? String(loc.country) : undefined,
     phone: loc.phone ? String(loc.phone) : undefined,
     email: loc.email ? String(loc.email) : undefined,
+    companyNumber: loc.companyNumber ? String(loc.companyNumber) : undefined,
+    vatNumber: loc.vatNumber ? String(loc.vatNumber) : undefined,
   };
 }
 
@@ -201,14 +322,17 @@ export async function getSalePrintContext(saleId: string): Promise<{
 }
 
 export async function getInvoiceSettings(): Promise<InvoiceSettings> {
-  const [aboutRes, notesRes, bankRes] = await Promise.all([
+  const [aboutRes, notesRes, bankRes, taxesRes] = await Promise.all([
     fetch(`${API_BASE}/api/settings/about`, { headers: getAuthHeaders() }),
     fetch(`${API_BASE}/api/settings/notes-terms`, { headers: getAuthHeaders() }),
     fetch(`${API_BASE}/api/settings/bank-accounts`, { headers: getAuthHeaders() }),
+    fetch(`${API_BASE}/api/settings/taxes`, { headers: getAuthHeaders() }),
   ]);
   const aboutData = await aboutRes.json().catch(() => ({}));
   const notesData = await notesRes.json().catch(() => ({}));
   const bankData = await bankRes.json().catch(() => ({}));
+  const taxesData = await taxesRes.json().catch(() => ({}));
+  const taxList = Array.isArray(taxesData?.data) ? taxesData.data : [];
   const about = aboutData?.data ?? aboutData ?? {};
   const notesTerms = notesData?.data ?? notesData ?? {};
   const bankList = Array.isArray(bankData?.data) ? bankData.data : [];
@@ -219,6 +343,8 @@ export async function getInvoiceSettings(): Promise<InvoiceSettings> {
       companyAddress: about.companyAddress ?? "",
       logo: about.logo ?? null,
       invoicePdfTitle: about.invoicePdfTitle ?? "INVOICE",
+      companyNumber: about.companyNumber ?? "",
+      vatNumber: about.vatNumber ?? "",
     },
     notesTerms: {
       pdfSalesTerms: notesTerms.pdfSalesTerms ?? "",
@@ -229,9 +355,31 @@ export async function getInvoiceSettings(): Promise<InvoiceSettings> {
       receiptPrinterRepairPrint: mergeReceiptPrinterRepairPrintOptions(notesTerms.receiptPrinterRepairPrint),
       repairLabelPrint: mergeRepairLabelPrintSettings(notesTerms.repairLabelPrint),
       invoicePdfPrint: mergeInvoicePdfPrintOptions(notesTerms.invoicePdfPrint),
+      businessInvoicePdfPrint: mergeBusinessInvoicePdfPrintOptions(notesTerms.businessInvoicePdfPrint),
+      businessInvoiceTerms: notesTerms.businessInvoiceTerms ?? "",
+      a4InvoiceTemplate: normalizeA4InvoiceTemplate(notesTerms.a4InvoiceTemplate),
     },
     bankAccounts: bankList,
+    defaultTax: pickDefaultTaxForPrint(taxList),
   };
+}
+
+export async function buildA4InvoicePdfUrl(
+  sale: SaleForPrint,
+  settings: InvoiceSettings,
+  location: LocationForHeader | null | undefined,
+  variantAttributeSlugsOrderBySku: Record<string, string[]>
+): Promise<string> {
+  if (settings.notesTerms.a4InvoiceTemplate === "business") {
+    const { buildBusinessInvoicePdf } = await import("./businessInvoicePrint");
+    return buildBusinessInvoicePdf(
+      sale,
+      settings as BusinessInvoiceSettings,
+      location,
+      variantAttributeSlugsOrderBySku
+    );
+  }
+  return buildInvoicePdf(sale, settings, location, variantAttributeSlugsOrderBySku);
 }
 
 /**
@@ -362,6 +510,22 @@ function invoiceItemsSummaryLine(item: SaleItemPrint, slugOrder: string[] | unde
   return out;
 }
 
+const FALLBACK_ITEM_ATTR_SLUGS = ["brand", "model", "capacity", "colour", "grade"] as const;
+
+/** Rich line description for A4 invoices (category variant order, then flat item fields). */
+export function invoiceItemDescriptionForPrint(
+  item: SaleForPrint["items"][number],
+  variantAttributeSlugsOrderBySku?: Record<string, string[]>
+): string {
+  const skuOrder =
+    item.sku && variantAttributeSlugsOrderBySku?.[item.sku]?.length
+      ? variantAttributeSlugsOrderBySku[item.sku]
+      : undefined;
+  const fallbackOrder = FALLBACK_ITEM_ATTR_SLUGS.filter((s) => saleItemValueForSlug(item, s));
+  const slugOrder = skuOrder?.length ? skuOrder : fallbackOrder.length ? fallbackOrder : undefined;
+  return invoiceItemsSummaryLine(item, slugOrder);
+}
+
 /** Serial detail row: description + variant values in category order (per-serial colour when slug is colour). */
 function invoiceSerialDetailLine(item: SaleItemPrint, serial: string, slugOrder: string[] | undefined): string {
   const nm = serialDetailItemText(item, serial).trim() || "—";
@@ -461,7 +625,7 @@ export async function buildInvoicePdf(
     }
   }
 
-  if (!logoRendered) {
+  if (!logoRendered && io.showCompanyName) {
     doc.setFontSize(io.fontCompanyNamePt);
     doc.setFont("helvetica", "bold");
     doc.text(headerName, left, y);
@@ -608,7 +772,7 @@ export async function buildInvoicePdf(
   }
 
   const isWholesaleEarly = sale.type === "wholesale";
-  if (io.showAccountSummary && isWholesaleEarly) {
+  if (io.showAccountSummary && isWholesaleEarly && shouldShowWholesaleAccountSummary(sale)) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(io.fontSectionHeadingPt);
     doc.text("Account Summary", left, y);
@@ -1909,8 +2073,9 @@ export async function printInvoiceA4(sale: SaleForPrint): Promise<void> {
       variantAttributeSlugsOrderBySku: {},
     })),
   ]);
-  const url = await buildInvoicePdf(
-    sale,
+  const saleForPdf = mergeSaleTaxSnapshot(sale, context.sale);
+  const url = await buildA4InvoicePdfUrl(
+    saleForPdf,
     settings,
     context.location,
     context.variantAttributeSlugsOrderBySku ?? {}
@@ -1957,15 +2122,18 @@ export async function downloadInvoiceA4(sale: SaleForPrint): Promise<void> {
       variantAttributeSlugsOrderBySku: {},
     })),
   ]);
-  const url = await buildInvoicePdf(
-    sale,
+  const saleForPdf = mergeSaleTaxSnapshot(sale, context.sale);
+  const url = await buildA4InvoicePdfUrl(
+    saleForPdf,
     settings,
     context.location,
     context.variantAttributeSlugsOrderBySku ?? {}
   );
+  const prefix =
+    settings.notesTerms.a4InvoiceTemplate === "business" ? "business-invoice" : "invoice";
   const a = document.createElement("a");
   a.href = url;
-  a.download = `invoice-${safeInvoiceFilename(sale.reference)}.pdf`;
+  a.download = `${prefix}-${safeInvoiceFilename(sale.reference)}.pdf`;
   a.rel = "noopener";
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);

@@ -5,6 +5,8 @@ export interface AboutSettings {
  logo: string | null;
  loginPageTitle: string;
  companyAddress: string;
+ companyNumber: string;
+ vatNumber: string;
  orderPdfTitle: string;
  invoicePdfTitle: string;
  createdBy?: string;
@@ -20,6 +22,8 @@ export interface AboutFormData {
  logoPreview: string | null;
  loginPageTitle: string;
  companyAddress: string;
+ companyNumber: string;
+ vatNumber: string;
  orderPdfTitle: string;
  invoicePdfTitle: string;
 }

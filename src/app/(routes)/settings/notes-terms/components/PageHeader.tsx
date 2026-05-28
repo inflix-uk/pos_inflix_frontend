@@ -17,7 +17,8 @@ export const PageHeader: React.FC = () => {
   <h1 className="text-lg font-bold tracking-tight text-gray-900">Notes & Terms</h1>
   <p className="mt-0.5 text-xs text-gray-500">
   One place for delivery text, legal/PDF wording, 80mm receipts, repair tickets and labels, A4 invoice
-  layout, and payment notes. Use the tabs inside the form;{" "}
+  layouts, and payment notes. Pick which A4 template is active at the top of the form; use the tabs to
+  configure each;{" "}
   <strong className="font-semibold text-gray-700">Save</strong> stores <em>all</em> tabs together.
   </p>
   </div>
@@ -53,9 +54,13 @@ export const PageHeader: React.FC = () => {
   dimensions, QR, which fields, column swap for silent print.
   </li>
   <li>
-  <strong className="font-medium text-gray-800">A4 invoice / dispatch</strong> — which blocks appear on the
-  full-page PDF. Title, company name, logo come from{" "}
+  <strong className="font-medium text-gray-800">A4 invoice / dispatch</strong> — legacy full-page dispatch
+  PDF (unchanged). Title, company name, logo come from{" "}
   <strong className="font-medium text-gray-800">Settings → About</strong>.
+  </li>
+  <li>
+  <strong className="font-medium text-gray-800">Business invoice (A4)</strong> — separate professional
+  invoice template with its own layout toggles and terms.
   </li>
   <li>
   <strong className="font-medium text-gray-800">Payment</strong> — payment note text appended on PDFs.

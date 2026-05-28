@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import { mergeRepairLabelPrintSettings, type RepairLabelPrintSettings } from "@/lib/repairLabelPrintConfig";
 import { mergeInvoicePdfPrintOptions, type InvoicePdfPrintOptions } from "@/lib/invoicePdfPrintOptions";
 import {
+ mergeBusinessInvoicePdfPrintOptions,
+ type BusinessInvoicePdfPrintOptions,
+} from "@/lib/businessInvoicePdfPrintOptions";
+import { normalizeA4InvoiceTemplate, type A4InvoiceTemplateId } from "@/lib/a4InvoiceTemplate";
+import {
  mergeReceiptPrinterSalesPrintOptions,
  mergeReceiptPrinterRepairPrintOptions,
  type ReceiptPrinterSalesPrintOptions,
@@ -36,6 +41,9 @@ const initialFormData: NotesTermsFormData = {
  paymentNote: "",
  repairLabelPrint: mergeRepairLabelPrintSettings(),
  invoicePdfPrint: mergeInvoicePdfPrintOptions(),
+ businessInvoicePdfPrint: mergeBusinessInvoicePdfPrintOptions(),
+ businessInvoiceTerms: "",
+ a4InvoiceTemplate: "dispatch",
 };
 
 const buildFormData = (data: NotesTermsSettings): NotesTermsFormData => ({
@@ -49,6 +57,9 @@ const buildFormData = (data: NotesTermsSettings): NotesTermsFormData => ({
  paymentNote: data.paymentNote || "",
  repairLabelPrint: mergeRepairLabelPrintSettings(data.repairLabelPrint),
  invoicePdfPrint: mergeInvoicePdfPrintOptions(data.invoicePdfPrint),
+ businessInvoicePdfPrint: mergeBusinessInvoicePdfPrintOptions(data.businessInvoicePdfPrint),
+ businessInvoiceTerms: data.businessInvoiceTerms || "",
+ a4InvoiceTemplate: normalizeA4InvoiceTemplate(data.a4InvoiceTemplate),
 });
 
 const REPAIR_LABEL_NUM_KEYS = new Set<keyof RepairLabelPrintSettings>([
@@ -155,6 +166,7 @@ type InvoicePdfPrintToggleKey = {
 
 const INVOICE_PDF_BOOL_KEYS = new Set<InvoicePdfPrintToggleKey>([
  "showLogo",
+ "showCompanyName",
  "showBillTo",
  "showItemsSummary",
  "showSerialDetails",
@@ -166,6 +178,33 @@ const INVOICE_PDF_BOOL_KEYS = new Set<InvoicePdfPrintToggleKey>([
  "showBankDetails",
  "showInvoiceReferenceQr",
 ]);
+
+type BusinessInvoicePdfPrintToggleKey = {
+ [K in keyof BusinessInvoicePdfPrintOptions]-?: BusinessInvoicePdfPrintOptions[K] extends boolean
+  ? K
+  : never;
+}[keyof BusinessInvoicePdfPrintOptions];
+
+const BUSINESS_INVOICE_PDF_BOOL_KEYS = new Set<BusinessInvoicePdfPrintToggleKey>([
+ "showLogo",
+ "showCompanyName",
+ "showBillTo",
+ "showItemsSummary",
+ "showSerialDetails",
+ "showInvoiceSummary",
+ "showAccountSummary",
+ "showPayments",
+ "showPdfSalesTerms",
+ "showPaymentNote",
+ "showBankDetails",
+ "showInvoiceReferenceQr",
+ "showCompanyNumber",
+ "showVatNumber",
+ "showFooterLegalLine",
+ "showTax",
+]);
+
+const BUSINESS_INVOICE_PDF_NUM_KEYS = new Set([...INVOICE_PDF_NUM_KEYS]);
 
 function moveOrderItem<T>(list: T[], fromIndex: number, toIndex: number): T[] {
  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= list.length || toIndex >= list.length) {
@@ -224,6 +263,50 @@ export const useNotesTermsSettings = () => {
  ) => {
   const target = e.target;
   const name = target.name;
+
+  if (name === "a4InvoiceTemplate") {
+   const value = (target as HTMLSelectElement).value as A4InvoiceTemplateId;
+   setFormData((prev) => ({
+    ...prev,
+    a4InvoiceTemplate: normalizeA4InvoiceTemplate(value),
+   }));
+   return;
+  }
+
+  if (name.startsWith("businessInvoicePdfPrint.")) {
+   const key = name.slice("businessInvoicePdfPrint.".length);
+   if (key === "documentTitle") {
+    const { value } = target as HTMLInputElement;
+    setFormData((prev) => ({
+     ...prev,
+     businessInvoicePdfPrint: { ...prev.businessInvoicePdfPrint, documentTitle: value },
+    }));
+    return;
+   }
+   if (BUSINESS_INVOICE_PDF_NUM_KEYS.has(key)) {
+    const raw = (target as HTMLInputElement).value;
+    const n = parseFloat(raw);
+    setFormData((prev) => {
+     const cur = prev.businessInvoicePdfPrint;
+     const k = key as keyof BusinessInvoicePdfPrintOptions;
+     const fallback = cur[k] as number;
+     const next = Number.isFinite(n) ? n : fallback;
+     return {
+      ...prev,
+      businessInvoicePdfPrint: { ...cur, [k]: next },
+     };
+    });
+    return;
+   }
+   const boolKey = key as keyof BusinessInvoicePdfPrintOptions;
+   if (!BUSINESS_INVOICE_PDF_BOOL_KEYS.has(boolKey as BusinessInvoicePdfPrintToggleKey)) return;
+   const checked = (target as HTMLInputElement).checked;
+   setFormData((prev) => ({
+    ...prev,
+    businessInvoicePdfPrint: { ...prev.businessInvoicePdfPrint, [boolKey]: checked },
+   }));
+   return;
+  }
 
   if (name.startsWith("invoicePdfPrint.")) {
    const key = name.slice("invoicePdfPrint.".length);

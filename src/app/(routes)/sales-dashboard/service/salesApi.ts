@@ -64,6 +64,8 @@ export interface CreateWholesaleSalePayload {
  note?: string;
  /** Optional user-supplied invoice number. Empty → backend auto-generates INV-XXXXXX. */
  reference?: string;
+ /** Business date for the order/invoice (ISO); omit for current date/time. */
+ occurredAt?: string;
  /** Idempotency key for one checkout attempt — same id on retry returns the original sale instead of failing with "already sold". */
  clientRequestId?: string;
 }

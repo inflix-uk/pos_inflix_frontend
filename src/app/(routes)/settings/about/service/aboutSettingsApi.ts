@@ -1,6 +1,6 @@
 import { AboutSettings, AboutFormData } from "../types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 interface ApiResponse<T = unknown> {
  success: boolean;
@@ -53,6 +53,8 @@ export const aboutSettingsApi = {
      logo: data.logoPreview,
      loginPageTitle: data.loginPageTitle,
      companyAddress: data.companyAddress,
+     companyNumber: data.companyNumber ?? "",
+     vatNumber: data.vatNumber ?? "",
      orderPdfTitle: data.orderPdfTitle,
      invoicePdfTitle: data.invoicePdfTitle,
     }),
@@ -77,6 +79,8 @@ export const aboutSettingsApi = {
      logo: data.logoPreview,
      loginPageTitle: data.loginPageTitle,
      companyAddress: data.companyAddress,
+     companyNumber: data.companyNumber ?? "",
+     vatNumber: data.vatNumber ?? "",
      orderPdfTitle: data.orderPdfTitle,
      invoicePdfTitle: data.invoicePdfTitle,
     }),

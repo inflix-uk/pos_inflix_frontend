@@ -5,6 +5,8 @@
 
 export interface InvoicePdfPrintOptions {
   showLogo: boolean;
+  /** Company / branch name in header and FROM block (from About or location). */
+  showCompanyName: boolean;
   showBillTo: boolean;
   showItemsSummary: boolean;
   /** Extra table when line items have serials */
@@ -39,6 +41,7 @@ function clamp(n: number, min: number, max: number, fallback: number): number {
 
 export const DEFAULT_INVOICE_PDF_PRINT: InvoicePdfPrintOptions = {
   showLogo: true,
+  showCompanyName: true,
   showBillTo: true,
   showItemsSummary: true,
   showSerialDetails: true,
@@ -68,6 +71,7 @@ export function mergeInvoicePdfPrintOptions(
   const d = DEFAULT_INVOICE_PDF_PRINT;
   return {
     showLogo: p.showLogo !== false,
+    showCompanyName: p.showCompanyName !== false,
     showBillTo: p.showBillTo !== false,
     showItemsSummary: p.showItemsSummary !== false,
     showSerialDetails: p.showSerialDetails !== false,

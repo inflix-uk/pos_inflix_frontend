@@ -661,6 +661,7 @@ export default function AccountStatementPage() {
    <th className="text-left py-3 px-4 font-medium text-gray-700">Date</th>
    <th className="text-left py-3 px-4 font-medium text-gray-700">Type</th>
    <th className="text-left py-3 px-4 font-medium text-gray-700">Reference</th>
+   <th className="text-left py-3 px-4 font-medium text-gray-700 min-w-[8rem]">Notes</th>
    <th className="text-right py-3 px-4 font-medium text-gray-700">Amount</th>
    <th className="text-right py-3 px-4 font-medium text-gray-700 w-24">Actions</th>
   </tr>
@@ -671,6 +672,7 @@ export default function AccountStatementPage() {
    <td className="py-3 px-4"><div className="animate-pulse bg-gray-200 rounded h-4 w-32" /></td>
    <td className="py-3 px-4"><div className="animate-pulse bg-gray-200 rounded h-4 w-20" /></td>
    <td className="py-3 px-4"><div className="animate-pulse bg-gray-200 rounded h-4 w-24" /></td>
+   <td className="py-3 px-4"><div className="animate-pulse bg-gray-200 rounded h-4 w-28" /></td>
    <td className="py-3 px-4 text-right"><div className="animate-pulse bg-gray-200 rounded h-4 w-16 ml-auto" /></td>
    <td className="py-3 px-4 text-right"><div className="animate-pulse bg-gray-200 rounded h-4 w-12 ml-auto" /></td>
    </tr>
@@ -792,6 +794,7 @@ export default function AccountStatementPage() {
    <th className="text-left py-3 px-4 font-medium text-gray-700">Date</th>
    <th className="text-left py-3 px-4 font-medium text-gray-700">Type</th>
    <th className="text-left py-3 px-4 font-medium text-gray-700">Reference</th>
+   <th className="text-left py-3 px-4 font-medium text-gray-700 min-w-[8rem]">Notes</th>
    <th className="text-right py-3 px-4 font-medium text-gray-700">Amount</th>
    <th className="text-right py-3 px-4 font-medium text-gray-700 w-24">Actions</th>
    </tr>
@@ -812,6 +815,15 @@ export default function AccountStatementPage() {
     )}
    </td>
    <td className="py-3 px-4 text-gray-700">{line.referenceLabel || "—"}</td>
+   <td className="py-3 px-4 text-gray-600 max-w-xs">
+    {line.note?.trim() ? (
+     <span className="whitespace-pre-wrap break-words" title={line.note.trim()}>
+      {line.note.trim()}
+     </span>
+    ) : (
+     <span className="text-gray-400">—</span>
+    )}
+   </td>
    <td className="py-3 px-4 text-right font-medium">
     <span className={amt >= 0 ? "text-emerald-600" : "text-neutral-600"}>
     {amt >= 0 ? "+" : ""}{formatMoney(amt)}

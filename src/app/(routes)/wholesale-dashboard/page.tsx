@@ -3,6 +3,8 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useSalesDashboard } from "../sales-dashboard/hooks/useSalesDashboard";
+import { CartTaxConfigProvider, useCartTaxConfig } from "../sales-dashboard/components/CartTaxSlotContext";
+import { useDefaultCartTax } from "./hooks/useDefaultCartTax";
 import { useInventoryProductsForSales } from "../sales-dashboard/hooks/useInventoryProductsForSales";
 import { useSalesItemTypeahead } from "../sales-dashboard/hooks/useSalesItemTypeahead";
 import {
@@ -24,6 +26,7 @@ import {
  CustomerContextStrip,
 } from "./components";
 import { useOrderWriter } from "./components/OrderWriterContext";
+import { useInvoiceDate, invoiceDateToOccurredAt } from "./components/InvoiceDateContext";
 import { emitInventoryEvent } from "@/lib/inventoryEvents";
 import { openCashDrawer } from "@/services/printService";
 import type { CartLineItem } from "../sales-dashboard/types";
@@ -153,6 +156,9 @@ type SaleForPrint = {
  items: Array<{ name: string; sku?: string; price: number; quantity: number; unit?: string; serialNumbers?: string[]; serialColours?: Record<string, string>; grade?: string; brand?: string; colour?: string; brandModel?: string; capacity?: string }>;
  subtotal: number;
  tax: number;
+ taxName?: string;
+ taxRate?: number;
+ taxType?: "percentage" | "flat" | "";
  discount: number;
  discountType?: "flat" | "percent";
  discountValue?: number;
@@ -165,8 +171,14 @@ type SaleForPrint = {
 
 
 const Page = () => {
+ const defaultCartTax = useDefaultCartTax();
+ const cartTax = useCartTaxConfig();
  const { user } = usePermissions();
  const orderWriter = useOrderWriter();
+ const draftsEnabled = orderWriter.enableDrafts !== false;
+ const forceWholesaleMode = orderWriter.forceWholesaleMode === true;
+ const { invoiceDate, setInvoiceDate, enabled: invoiceDateCtxEnabled } = useInvoiceDate();
+ const showInvoiceDatePicker = orderWriter.enableInvoiceDate === true && invoiceDateCtxEnabled;
  const [manualItemModalOpen, setManualItemModalOpen] = useState(false);
  const [bulkDrawerOpen, setBulkDrawerOpen] = useState(false);
  const [selectedCustomer, setSelectedCustomerState] = useState<AccountForSale | null>(null);
@@ -234,6 +246,7 @@ const Page = () => {
 
  // On load: move auto-saved session (cart + customer) into Drafts list so user restores from Drafts instead of auto-loading
  useEffect(() => {
+ if (!draftsEnabled) return;
  if (typeof window === "undefined") return;
  try {
  const rawCart = window.localStorage.getItem("wholesale-cart-v1");
@@ -273,36 +286,39 @@ const Page = () => {
  } catch {
  setDrafts(loadDraftsFromStorage());
  }
- }, []);
+ }, [draftsEnabled]);
 
- const [retailModeEnabled, setRetailModeEnabled] = useState(() => {
+ const [retailModeFromPrefs, setRetailModeFromPrefs] = useState(() => {
  if (typeof window === "undefined") return false;
  try { return sessionStorage.getItem("create-sales-retailMode") === "1"; } catch { return false; }
  });
+ const retailModeEnabled = forceWholesaleMode ? false : retailModeFromPrefs;
 
  useEffect(() => {
+ if (forceWholesaleMode) return;
  if (typeof user?.effectiveRetailModeEnabled !== "boolean") return;
- setRetailModeEnabled(user.effectiveRetailModeEnabled);
+ setRetailModeFromPrefs(user.effectiveRetailModeEnabled);
  try {
   sessionStorage.setItem(
    "create-sales-retailMode",
    user.effectiveRetailModeEnabled ? "1" : "0"
   );
  } catch {}
- }, [user?.effectiveRetailModeEnabled]);
+ }, [user?.effectiveRetailModeEnabled, forceWholesaleMode]);
 
  useEffect(() => {
+ if (forceWholesaleMode) return;
  const onModeChange = (e: Event) => {
   const ev = e as CustomEvent<boolean>;
   if (typeof ev.detail !== "boolean") return;
-  setRetailModeEnabled(ev.detail);
+  setRetailModeFromPrefs(ev.detail);
   try {
    sessionStorage.setItem("create-sales-retailMode", ev.detail ? "1" : "0");
   } catch {}
  };
  window.addEventListener("pos-user-sales-mode-change", onModeChange);
  return () => window.removeEventListener("pos-user-sales-mode-change", onModeChange);
- }, []);
+ }, [forceWholesaleMode]);
  const [blockNegativeStock, setBlockNegativeStock] = useState(() => {
  if (typeof window === "undefined") return false;
  try { return sessionStorage.getItem("create-sales-blockNegStock") === "1"; } catch { return false; }
@@ -864,6 +880,7 @@ const Page = () => {
   : "none";
 
  return (
+ <CartTaxConfigProvider value={defaultCartTax}>
  <div className={`@container h-full min-h-0 flex flex-col overflow-hidden ${retailModeEnabled ? "bg-[#f1f1f9]" : "bg-gray-100"}`}>
  {message.text && (
  <div
@@ -937,6 +954,19 @@ const Page = () => {
   </div>
   </div>
   )}
+  {showInvoiceDatePicker && (
+  <div className="relative shrink-0 w-[7.5rem] @[640px]:w-32">
+   <input
+    id="wholesale-invoice-date"
+    type="date"
+    value={invoiceDate}
+    onChange={(e) => setInvoiceDate(e.target.value)}
+    title="Invoice date (optional — leave empty for today)"
+    aria-label="Invoice date"
+    className="h-7 @[640px]:h-8 w-full text-[11px] @[640px]:text-xs text-gray-900 border border-gray-300 rounded-md px-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
+   />
+  </div>
+  )}
   <CustomerAccountSelect
    ref={customerSelectRef}
    value={selectedCustomer}
@@ -994,7 +1024,7 @@ const Page = () => {
    <span>{productPanelOpen ? "Hide" : "Show"}</span>
   </button>
   )}
-  {!retailModeEnabled && (
+  {!retailModeEnabled && draftsEnabled && (
   <button
    type="button"
    onClick={handleSaveDraft}
@@ -1006,7 +1036,7 @@ const Page = () => {
    <span>Save</span>
   </button>
   )}
-  {!retailModeEnabled && (
+  {!retailModeEnabled && draftsEnabled && (
   <div className="relative shrink-0" ref={draftsRef}>
    <button
     type="button"
@@ -1190,6 +1220,7 @@ const Page = () => {
    onAddManualItem={() => setManualItemModalOpen(true)}
    onLoadDraft={() => setDraftsOpen(true)}
    hasDrafts={drafts.length > 0}
+   showDraftActions={draftsEnabled}
    showProductGridAction
    />
   </div>
@@ -1237,6 +1268,7 @@ const Page = () => {
  total={total}
  saleForPrint={saleForPrint}
  retailMode={retailModeEnabled}
+ completedTitle={`${orderWriter.entityLabel} created`}
  onClose={() => {
   setShowInvoiceStep(false);
   setSaleForPrint(null);
@@ -1305,6 +1337,10 @@ const Page = () => {
   ...(trimmedRef ? { reference: trimmedRef } : {}),
   ...(selectedLocationId ? { locationId: selectedLocationId } : {}),
   ...(details.clientRequestId ? { clientRequestId: details.clientRequestId } : {}),
+  ...(showInvoiceDatePicker && (() => {
+   const occurredAt = invoiceDateToOccurredAt(invoiceDate);
+   return occurredAt ? { occurredAt } : {};
+  })()),
   };
   const result = await orderWriter.createSale(payload);
   const createOrderMs = Math.round(performance.now() - createOrderStart);
@@ -1328,13 +1364,41 @@ const Page = () => {
   (details.payments?.card ?? 0) +
   (details.payments?.credit ?? 0) +
   (details.payments?.bank ?? 0);
+  const data = result.data as {
+   taxName?: string;
+   taxRate?: number;
+   taxType?: string;
+   occurredAt?: string;
+   createdAt?: string;
+  };
+  const invoiceWhen =
+   data.occurredAt || data.createdAt || new Date().toISOString();
+  const taxSnapshot =
+   data.taxName != null && String(data.taxName).trim() !== ""
+    ? {
+       taxName: String(data.taxName).trim(),
+       taxRate:
+        data.taxRate != null && Number.isFinite(Number(data.taxRate)) ? Number(data.taxRate) : 0,
+       taxType: (data.taxType === "flat" || data.taxType === "percentage"
+        ? data.taxType
+        : "percentage") as "percentage" | "flat" | "",
+      }
+    : cartTax?.name
+      ? {
+         taxName: cartTax.name,
+         taxRate: Number.isFinite(Number(cartTax.rate)) ? Number(cartTax.rate) : 0,
+         taxType: cartTax.type,
+        }
+      : {};
   setSaleForPrint({
   _id: result.data._id,
   reference: result.data.reference,
   type: "wholesale",
-  createdAt: new Date().toISOString(),
+  createdAt: invoiceWhen,
+  occurredAt: data.occurredAt || undefined,
   customerName: selectedCustomer?.name,
   customerAddress: formatAddressForInvoice(selectedCustomer?.address),
+  ...taxSnapshot,
   items: items.map((i) => ({
    name: i.name,
    sku: i.sku,
@@ -1367,6 +1431,7 @@ const Page = () => {
   setSaleNote("");
   setCustomReference("");
   setRefStatus("idle");
+  if (showInvoiceDatePicker) setInvoiceDate("");
   try {
   if (typeof window !== "undefined") window.localStorage.removeItem(CUSTOMER_DRAFT_KEY);
   } catch {}
@@ -1375,7 +1440,7 @@ const Page = () => {
   refetchProducts();
   // Broadcast to other tabs (e.g. /inventory/products) so their stock displays refresh too.
   emitInventoryEvent({ type: "sale-created", saleId: result.data?._id });
-  if ((details.payments?.cash ?? 0) > 0) {
+  if (retailModeEnabled && (details.payments?.cash ?? 0) > 0) {
    const drawer = await openCashDrawer({ tryBothPins: true });
    if (!drawer.sent) {
     showMessage("error", drawer.error ?? "Cash drawer did not open. Check Settings → Printing.");
@@ -1581,6 +1646,7 @@ const Page = () => {
  </div>
  )}
  </div>
+ </CartTaxConfigProvider>
  );
 };
 

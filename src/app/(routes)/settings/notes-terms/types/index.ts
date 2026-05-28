@@ -1,5 +1,7 @@
 import type { RepairLabelPrintSettings } from "@/lib/repairLabelPrintConfig";
 import type { InvoicePdfPrintOptions } from "@/lib/invoicePdfPrintOptions";
+import type { BusinessInvoicePdfPrintOptions } from "@/lib/businessInvoicePdfPrintOptions";
+import type { A4InvoiceTemplateId } from "@/lib/a4InvoiceTemplate";
 import type {
  ReceiptPrinterSalesPrintOptions,
  ReceiptPrinterRepairPrintOptions,
@@ -17,6 +19,9 @@ export interface NotesTermsSettings {
  paymentNote: string;
  repairLabelPrint?: Partial<RepairLabelPrintSettings>;
  invoicePdfPrint?: Partial<InvoicePdfPrintOptions> | null;
+ businessInvoicePdfPrint?: Partial<BusinessInvoicePdfPrintOptions> | null;
+ businessInvoiceTerms?: string;
+ a4InvoiceTemplate?: A4InvoiceTemplateId;
  createdBy?: string;
  updatedBy?: string;
  createdAt?: string;
@@ -34,6 +39,9 @@ export interface NotesTermsFormData {
  paymentNote: string;
  repairLabelPrint: RepairLabelPrintSettings;
  invoicePdfPrint: InvoicePdfPrintOptions;
+ businessInvoicePdfPrint: BusinessInvoicePdfPrintOptions;
+ businessInvoiceTerms: string;
+ a4InvoiceTemplate: A4InvoiceTemplateId;
 }
 
 export interface Message {

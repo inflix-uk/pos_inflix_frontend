@@ -14,6 +14,8 @@ interface EmptyCartQuickActionsProps {
  onAddManualItem: () => void;
  onLoadDraft: () => void;
  hasDrafts: boolean;
+ /** When false, hide “Load draft” in empty cart. */
+ showDraftActions?: boolean;
  /** When false, hide “Show products” button. */
  showProductGridAction?: boolean;
 }
@@ -27,6 +29,7 @@ export function EmptyCartQuickActions({
  onAddManualItem,
  onLoadDraft,
  hasDrafts,
+ showDraftActions = true,
  showProductGridAction = true,
 }: EmptyCartQuickActionsProps) {
  const canAct = hasCustomer;
@@ -93,7 +96,7 @@ export function EmptyCartQuickActions({
   Bulk IMEIs
  </button>
  )}
- {hasDrafts && !retailMode && (
+ {showDraftActions && hasDrafts && !retailMode && (
   <button
   type="button"
   onClick={onLoadDraft}

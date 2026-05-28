@@ -7,7 +7,7 @@ import { categoryApi } from "@/app/(routes)/inventory/category/service/categoryA
 import { parseMultiIMEIs } from "@/app/(routes)/purchases/add/utils/parseMultiIMEIs";
 import { formatSupplierDisplay } from "@/lib/formatSupplierDisplay";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { API_BASE_URL as API_URL } from "@/lib/apiBase";
 
 const getAuthHeaders = (): HeadersInit => {
  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;

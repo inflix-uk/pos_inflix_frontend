@@ -19,8 +19,8 @@ import {
  X,
  MoreVertical,
 } from "lucide-react";
-import { invoicesApi, type InvoiceRecord } from "./service/invoicesApi";
-import { formatDateTimeLondon } from "@/lib/dateUtils";
+import { invoicesApi, invoiceDisplayDate, type InvoiceRecord } from "./service/invoicesApi";
+import { formatDateLondon, formatOccurredAt } from "@/lib/dateUtils";
 import { downloadInvoiceA4, printInvoiceA4, printReceipt80mm, type SaleForPrint } from "@/lib/invoicePrint";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -58,7 +58,8 @@ function invoiceToPrintable(inv: InvoiceRecord): SaleForPrint {
   _id: inv._id,
   reference: inv.reference,
   type: (inv.type as "wholesale" | "retail" | "repair") ?? "wholesale",
-  createdAt: inv.createdAt,
+  createdAt: inv.occurredAt || inv.createdAt,
+  occurredAt: inv.occurredAt,
   customerName: inv.customerName,
   items: (inv.items || []).map((i) => ({
    name: i.name,
@@ -76,6 +77,9 @@ function invoiceToPrintable(inv: InvoiceRecord): SaleForPrint {
   })),
   subtotal: inv.subtotal,
   tax: inv.tax,
+  taxName: inv.taxName,
+  taxRate: inv.taxRate,
+  taxType: inv.taxType,
   discount: inv.discount,
   discountType: inv.discountType,
   discountValue: inv.discountValue,
@@ -391,7 +395,9 @@ export default function InvoiceOnlineOrderPage() {
           return (
            <tr key={inv._id} className="border-b border-gray-100 hover:bg-gray-50">
             <td className="px-3 sm:px-4 py-3 font-mono text-xs font-semibold text-gray-800">{inv.reference}</td>
-            <td className="px-3 sm:px-4 py-3 text-gray-600">{formatDateTimeLondon(inv.createdAt)}</td>
+            <td className="px-3 sm:px-4 py-3 text-gray-600">
+             {formatDateLondon(invoiceDisplayDate(inv))}
+            </td>
             <td className="px-3 sm:px-4 py-3 text-gray-800">{inv.customerName || "—"}</td>
             <td className="px-3 sm:px-4 py-3">{typeBadge(inv.type)}</td>
             <td className="px-3 sm:px-4 py-3 text-xs text-gray-600">
@@ -528,7 +534,14 @@ function ViewInvoiceModal({
       <h3 className="text-base font-semibold text-gray-900">
        Invoice <span className="font-mono">{invoice.reference}</span>
       </h3>
-      <p className="text-xs text-gray-500">{formatDateTimeLondon(invoice.createdAt)}</p>
+      <p className="text-xs text-gray-500">
+       Invoice date: {formatDateLondon(invoiceDisplayDate(invoice))}
+       {invoice.occurredAt && invoice.createdAt && (
+        <span className="block text-[10px] text-gray-400 mt-0.5">
+         Created {formatOccurredAt(null, invoice.createdAt)}
+        </span>
+       )}
+      </p>
      </div>
      <button onClick={onClose} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600">
       <X className="w-4 h-4" />

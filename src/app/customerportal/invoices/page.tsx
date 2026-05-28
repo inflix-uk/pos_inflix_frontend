@@ -9,7 +9,7 @@ import {
   Download,
 } from "lucide-react";
 import {
-  buildInvoicePdf,
+  buildA4InvoicePdfUrl,
   type SaleForPrint,
   type InvoiceSettings,
   type LocationForHeader,
@@ -18,6 +18,8 @@ import { mergeReceiptPrinterSalesPrintOptions } from "@/lib/receiptPrinterPrintO
 import { mergeReceiptPrinterRepairPrintOptions } from "@/lib/receiptPrinterPrintOptions";
 import { mergeRepairLabelPrintSettings } from "@/lib/repairLabelPrintConfig";
 import { mergeInvoicePdfPrintOptions } from "@/lib/invoicePdfPrintOptions";
+import { mergeBusinessInvoicePdfPrintOptions } from "@/lib/businessInvoicePdfPrintOptions";
+import { normalizeA4InvoiceTemplate } from "@/lib/a4InvoiceTemplate";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -157,6 +159,9 @@ export default function CustomerPortalInvoices() {
         })),
         subtotal: Number(sale.subtotal) || 0,
         tax: Number(sale.tax) || 0,
+        taxName: sale.taxName ? String(sale.taxName) : undefined,
+        taxRate: sale.taxRate != null ? Number(sale.taxRate) : undefined,
+        taxType: sale.taxType ? String(sale.taxType) : undefined,
         discount: Number(sale.discount) || 0,
         total: Number(sale.total) || 0,
         paymentMethod: sale.paymentMethod || "",
@@ -167,7 +172,11 @@ export default function CustomerPortalInvoices() {
       };
 
       const invoiceSettings: InvoiceSettings = {
-        about: srv.about || {},
+        about: {
+          ...(srv.about || {}),
+          companyNumber: srv.about?.companyNumber || "",
+          vatNumber: srv.about?.vatNumber || "",
+        },
         notesTerms: {
           pdfSalesTerms: srv.notesTerms?.pdfSalesTerms || "",
           paymentNote: srv.notesTerms?.paymentNote || "",
@@ -177,13 +186,19 @@ export default function CustomerPortalInvoices() {
           receiptPrinterRepairPrint: mergeReceiptPrinterRepairPrintOptions(undefined),
           repairLabelPrint: mergeRepairLabelPrintSettings(undefined),
           invoicePdfPrint: mergeInvoicePdfPrintOptions(srv.notesTerms?.invoicePdfPrint),
+          businessInvoicePdfPrint: mergeBusinessInvoicePdfPrintOptions(
+            srv.notesTerms?.businessInvoicePdfPrint
+          ),
+          businessInvoiceTerms: srv.notesTerms?.businessInvoiceTerms || "",
+          a4InvoiceTemplate: normalizeA4InvoiceTemplate(srv.notesTerms?.a4InvoiceTemplate),
         },
         bankAccounts: srv.bankAccounts || [],
+        defaultTax: null,
       };
 
       const loc: LocationForHeader | null = location || null;
 
-      const url = await buildInvoicePdf(
+      const url = await buildA4InvoicePdfUrl(
         saleForPrint,
         invoiceSettings,
         loc,

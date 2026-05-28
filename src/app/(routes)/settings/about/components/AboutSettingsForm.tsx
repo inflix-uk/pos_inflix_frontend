@@ -165,6 +165,41 @@ export const AboutSettingsForm: React.FC<AboutSettingsFormProps> = ({
   </div>
   </div>
 
+  <div className="grid grid-cols-1 @[768px]:grid-cols-2 gap-6">
+  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+  COMPANY NUMBER
+  </label>
+  <input
+  type="text"
+  name="companyNumber"
+  value={formData.companyNumber}
+  onChange={onChange}
+  className="block w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-800"
+  placeholder="e.g. 12345678"
+  />
+  <p className="mt-1 text-xs text-gray-500">
+  Default for business invoices. Per-branch numbers can be set on Peoples → Locations.
+  </p>
+  </div>
+  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+  VAT NUMBER
+  </label>
+  <input
+  type="text"
+  name="vatNumber"
+  value={formData.vatNumber}
+  onChange={onChange}
+  className="block w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-gray-800"
+  placeholder="e.g. GB123456789"
+  />
+  <p className="mt-1 text-xs text-gray-500">
+  Shown on business invoices when enabled in Notes &amp; Terms (unless the sale location has its own VAT).
+  </p>
+  </div>
+  </div>
+
   {/* PDF Titles Row */}
   <div className="grid grid-cols-1 @[768px]:grid-cols-2 gap-6">
   {/* Order PDF Title */}

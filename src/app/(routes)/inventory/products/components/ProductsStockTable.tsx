@@ -42,15 +42,81 @@ const hasNonSerial = (rows: StockViewRow[]) => rows.some((r) => !r.isSerialProdu
 function formatSlugAsHeader(slug: string): string {
  const s = (slug || "").trim();
  if (!s) return slug;
+ if (s === "brandmodel" || s === "brand_model") return "Model";
  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Get display value for a variant slug from row.variantValues only */
+function canonicalAttributeSlug(slug: string): string {
+ const s = (slug || "").trim().toLowerCase();
+ if (s === "brandmodel" || s === "brand_model") return "model";
+ if (s === "color") return "colour";
+ if (s === "condition") return "grade";
+ return s;
+}
+
+const VARIANT_SLUG_ALIASES: Record<string, string[]> = {
+ brand: ["brand"],
+ model: ["model", "brandmodel", "brand_model"],
+ capacity: ["capacity"],
+ colour: ["colour", "color"],
+ grade: ["grade", "condition"],
+};
+
+const FLAT_VALUE_BY_SLUG: Record<string, (row: StockViewRow) => string> = {
+ brand: (r) => r.brand,
+ model: (r) => r.brandModel,
+ brandmodel: (r) => r.brandModel,
+ brand_model: (r) => r.brandModel,
+ capacity: (r) => r.capacity,
+ colour: (r) => r.colour,
+ color: (r) => r.colour,
+ grade: (r) => r.grade,
+ condition: (r) => r.grade,
+};
+
+/** Variant value from variantValues, then standard purchase-item fields (brand, model, etc.). */
 function getRowValueForSlug(row: StockViewRow, slug: string): string {
- const key = (slug || "").toLowerCase();
- const v = row.variantValues?.find((x) => (x.slug || "").toLowerCase() === key);
- const val = (v?.value ?? "").trim();
- return val ? String(val) : "";
+ const key = canonicalAttributeSlug(slug);
+ const aliases = VARIANT_SLUG_ALIASES[key] || [key];
+ const v = row.variantValues?.find((x) =>
+ aliases.includes((x.slug || "").toLowerCase())
+ );
+ const fromVariant = (v?.value ?? "").trim();
+ if (fromVariant) return String(fromVariant);
+ const flat = FLAT_VALUE_BY_SLUG[key];
+ if (flat) {
+ const val = (flat(row) ?? "").trim();
+ if (val) return val;
+ }
+ return "";
+}
+
+const STANDARD_ATTRIBUTE_SLUGS = ["brand", "model", "capacity", "colour", "grade"] as const;
+
+function slugCoveredByColumns(slug: string, columnSlugs: string[]): boolean {
+ const key = canonicalAttributeSlug(slug);
+ const cols = new Set(columnSlugs.map((s) => canonicalAttributeSlug(s)));
+ return cols.has(key);
+}
+
+/** Primary label for non-serial rows (name/barcode/attributes — not section category alone). */
+function getNonSerialProductLabel(row: StockViewRow, columnSlugs: string[]): string {
+ const name = (row.name || "").trim();
+ if (name) return name;
+ const barcode = (row.barcode || "").trim();
+ if (barcode) return barcode;
+
+ const parts: string[] = [];
+ for (const slug of STANDARD_ATTRIBUTE_SLUGS) {
+ if (slugCoveredByColumns(slug, columnSlugs)) continue;
+ const val = getRowValueForSlug(row, slug);
+ if (hasValue(val)) parts.push(val);
+ }
+ if (parts.length > 0) return parts.join(" · ");
+
+ const category = (row.category || "").trim();
+ if (category) return category;
+ return "—";
 }
 
 /** Order variant column slugs by category save order; merge when multiple categories share one table. */
@@ -58,9 +124,12 @@ function orderedVariantSlugsForRows(rows: StockViewRow[]): string[] {
  const slugSet = new Set<string>();
  rows.forEach((r) => {
  r.variantValues?.forEach((v) => {
- const s = (v.slug || "").trim().toLowerCase();
- if (s) slugSet.add(s);
+ const s = (v.slug || "").trim();
+ if (s) slugSet.add(canonicalAttributeSlug(s));
  });
+ for (const slug of STANDARD_ATTRIBUTE_SLUGS) {
+ if (hasValue(getRowValueForSlug(r, slug))) slugSet.add(slug);
+ }
  });
  const withValues = [...slugSet].filter((slug) => rows.some((r) => hasValue(getRowValueForSlug(r, slug))));
 
@@ -72,20 +141,21 @@ function orderedVariantSlugsForRows(rows: StockViewRow[]): string[] {
  return withValues.sort((a, b) => a.localeCompare(b));
  }
 
- const norm = (o: string[]) => o.map((s) => s.trim().toLowerCase()).join("\0");
+ const norm = (o: string[]) =>
+ o.map((s) => canonicalAttributeSlug(s)).join("\0");
  const canonical = norm(orders[0]);
  const allSame = orders.every((o) => norm(o) === canonical);
 
  let primaryOrder: string[];
  if (allSame) {
- primaryOrder = orders[0].map((s) => s.trim().toLowerCase());
+ primaryOrder = orders[0].map((s) => canonicalAttributeSlug(s));
  } else {
  const seen = new Set<string>();
  primaryOrder = [];
  const maxLen = Math.max(...orders.map((o) => o.length), 0);
  for (let i = 0; i < maxLen; i++) {
  for (const ord of orders) {
- const s = (ord[i] || "").trim().toLowerCase();
+ const s = canonicalAttributeSlug(ord[i] || "");
  if (s && !seen.has(s)) {
   seen.add(s);
   primaryOrder.push(s);
@@ -140,7 +210,9 @@ export function ProductsStockTable({
  <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
   <tr>
   {isSerial && <th className={thClass}>SID</th>}
-  {showNameColumn && <th className={thClass}>Category</th>}
+  {showNameColumn && (
+  <th className={thClass}>{isNonSerial ? "Product" : "Category"}</th>
+  )}
   {showQtyColumn && <th className={thClass}>Qty</th>}
   {dynamicVariantSlugs.map((slug) => (
   <th key={slug} className={thClass}>
@@ -250,7 +322,9 @@ function ProductsStockTableRow({
  const soldInfo = row.imei ? soldInfoMap[(row.imei || "").trim()] : undefined;
  const canEditQty = !row.isSerialProduct && row.purchaseId && row.itemId && onQuantityChange;
  const displayQty = editingQty !== null ? editingQty : (row.quantity ?? 0);
- const displayName = (row.category && row.category.trim()) || (row.name && row.name.trim()) || "-";
+ const displayName = isNonSerial
+ ? getNonSerialProductLabel(row, dynamicVariantSlugs)
+ : (row.category && row.category.trim()) || (row.name && row.name.trim()) || "—";
 
  const handleQtyBlur = useCallback(async () => {
  if (editingQty === null || !onQuantityChange || !row.purchaseId || !row.itemId) return;

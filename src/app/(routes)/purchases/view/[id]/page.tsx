@@ -23,7 +23,7 @@ import {
 import { Purchase } from "../../list/types";
 import { formatPurchasePartyDisplay } from "@/lib/formatSupplierDisplay";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { API_BASE_URL as API_URL } from "@/lib/apiBase";
 
 const getAuthHeaders = (): HeadersInit => {
  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;

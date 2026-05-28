@@ -6,7 +6,7 @@ import { ArrowLeft, Plus, Edit, X, Check, Trash2 } from "lucide-react";
 import { categoryApi } from "../../service/categoryApi";
 import { Category } from "../../types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { API_BASE_URL as API_URL } from "@/lib/apiBase";
 
 interface SubCategory {
  _id?: string;

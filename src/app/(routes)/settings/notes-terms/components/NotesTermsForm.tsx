@@ -13,8 +13,11 @@ import {
  CreditCard,
  Tag,
  FileStack,
+ Briefcase,
  type LucideIcon,
 } from "lucide-react";
+import { BusinessInvoiceSettingsPanel } from "./BusinessInvoiceSettingsPanel";
+import { A4InvoiceTemplateSelector } from "./A4InvoiceTemplateSelector";
 import { HelpTip } from "@/components/HelpTip";
 import type { InvoicePdfPrintOptions } from "@/lib/invoicePdfPrintOptions";
 import type {
@@ -97,6 +100,7 @@ type NotesTermsTabId =
  | "receiptRepair"
  | "repairLabel"
  | "a4Invoice"
+ | "businessInvoice"
  | "payment";
 
 const VALID_TAB_IDS = new Set<string>([
@@ -106,6 +110,7 @@ const VALID_TAB_IDS = new Set<string>([
  "receiptRepair",
  "repairLabel",
  "a4Invoice",
+ "businessInvoice",
  "payment",
 ]);
 
@@ -163,6 +168,13 @@ const TABS: {
  description: "PDF layout for A4 dispatch note / invoice",
  },
  {
+ id: "businessInvoice",
+ label: "Business invoice (A4)",
+ shortLabel: "Biz",
+ icon: Briefcase,
+ description: "Professional A4 invoice template (separate from dispatch)",
+ },
+ {
  id: "payment",
  label: "Payment",
  shortLabel: "Pay",
@@ -198,6 +210,7 @@ const TAB_UI: Record<
  receiptRepair: _tabUi,
  repairLabel: _tabUi,
  a4Invoice: _tabUi,
+ businessInvoice: _tabUi,
  payment: _tabUi,
 };
 
@@ -297,6 +310,11 @@ const A4_INVOICE_PRINT_OPTIONS: { key: InvoicePdfPrintToggleKey; label: string; 
  key: "showLogo",
  label: "Logo (top right)",
  hint: "Renders the image from Settings → About at the logo width/height (mm) above. Hide for plain invoices.",
+ },
+ {
+ key: "showCompanyName",
+ label: "Company / trading name",
+ hint: "Name from Settings → About or the sale location (e.g. Inflix LTD) in the header. Turn off to show only logo and address.",
  },
  {
  key: "showBillTo",
@@ -501,6 +519,9 @@ export const NotesTermsForm: React.FC<NotesTermsFormProps> = ({
   <p className="mt-0.5 pr-1 text-xs font-medium text-gray-500">
   Switch tabs to edit each area. Save applies all sections at once.
   </p>
+  <div className="mt-3">
+  <A4InvoiceTemplateSelector value={formData.a4InvoiceTemplate} onChange={onChange} />
+  </div>
  </div>
 
  <div
@@ -1822,6 +1843,16 @@ export const NotesTermsForm: React.FC<NotesTermsFormProps> = ({
   </div>
   </div>
   </div>
+  </div>
+
+  <div
+  role="tabpanel"
+  id={`${tablistId}-panel-businessInvoice`}
+  aria-labelledby={`${tablistId}-businessInvoice`}
+  hidden={activeTab !== "businessInvoice"}
+  className={activeTab === "businessInvoice" ? TAB_UI.businessInvoice.panel : "hidden"}
+  >
+  <BusinessInvoiceSettingsPanel formData={formData} onChange={onChange} />
   </div>
 
   <div

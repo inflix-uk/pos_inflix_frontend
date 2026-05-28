@@ -6,9 +6,10 @@ import WholesaleDashboardPage from "../wholesale-dashboard/page";
 import { CartTaxSlotProvider, CartTaxConfigProvider, type CartTaxConfig } from "../sales-dashboard/components/CartTaxSlotContext";
 import { SearchableSelect } from "../purchases/add/components/SearchableSelect";
 import { OrderWriterProvider, type OrderWriter } from "../wholesale-dashboard/components/OrderWriterContext";
+import { InvoiceDateProvider } from "../wholesale-dashboard/components/InvoiceDateContext";
 import { invoicesApi } from "../invoice-online-order/service/invoicesApi";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { API_BASE_URL } from "@/lib/apiBase";
 const SELECTED_TAX_KEY = "create-invoice-selected-tax";
 
 type TaxCategory = { _id: string; name: string; rate: number; type: string };
@@ -27,7 +28,7 @@ async function fetchTaxesWithRetry(attempts = 3): Promise<TaxCategory[]> {
  let lastErr: unknown = new Error("Request failed");
  for (let i = 0; i < attempts; i++) {
   try {
-   const response = await fetch(`${API_URL}/api/settings/taxes/active`, {
+   const response = await fetch(`${API_BASE_URL}/api/settings/taxes/active`, {
     headers: getAuthHeaders(),
    });
    if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -169,6 +170,9 @@ export default function CreateInvoicePage() {
      ...(selectedId ? { taxId: selectedId } : {}),
     }),
    checkReference: (reference, signal) => invoicesApi.checkReference(reference, signal),
+   enableDrafts: false,
+   forceWholesaleMode: true,
+   enableInvoiceDate: true,
   }),
   [selectedId],
  );
@@ -177,16 +181,22 @@ export default function CreateInvoicePage() {
   const selected = taxes.find((t) => t._id === selectedId);
   if (!selected) return null;
   const type: "percentage" | "flat" = selected.type === "fixed" || selected.type === "flat" ? "flat" : "percentage";
-  return { rate: Number(selected.rate) || 0, type };
+  return {
+   rate: Number(selected.rate) || 0,
+   type,
+   name: selected.name?.trim() || undefined,
+  };
  }, [taxes, selectedId]);
 
  return (
   <OrderWriterProvider value={writer}>
-   <CartTaxConfigProvider value={taxConfig}>
-    <CartTaxSlotProvider value={slot}>
-     <WholesaleDashboardPage />
-    </CartTaxSlotProvider>
-   </CartTaxConfigProvider>
+   <InvoiceDateProvider>
+    <CartTaxConfigProvider value={taxConfig}>
+     <CartTaxSlotProvider value={slot}>
+      <WholesaleDashboardPage />
+     </CartTaxSlotProvider>
+    </CartTaxConfigProvider>
+   </InvoiceDateProvider>
   </OrderWriterProvider>
  );
 }
