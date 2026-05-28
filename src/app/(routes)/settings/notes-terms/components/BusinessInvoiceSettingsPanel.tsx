@@ -15,7 +15,7 @@ const PRINT_OPTIONS: { key: ToggleKey; label: string; hint?: string }[] = [
  {
   key: "showCompanyName",
   label: "Company / trading name",
-  hint: "Branch / trading name in the FROM panel. The name under the logo always shows; uncheck this to hide it only in FROM.",
+  hint: "Inflix LTD, branch name, etc. in the top-left header and in the FROM panel. Logo and address stay visible when this is off.",
  },
  { key: "showBillTo", label: "Bill to (customer block)", hint: "Customer name, address, phone, and email when available." },
  { key: "showItemsSummary", label: "Line items table", hint: "Description, quantity, unit price, and amount." },

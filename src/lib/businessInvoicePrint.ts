@@ -292,12 +292,13 @@ export async function buildBusinessInvoicePdf(
 
   const nameBaselineY = headerLeftY > y + 2 ? headerLeftY : y + 6;
   let addrY = nameBaselineY;
-  // Always show trading / branch name under the logo (live tenants often had this hidden when the toggle was off).
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(io.fontCompanyNamePt);
-  doc.setTextColor(SLATE.r, SLATE.g, SLATE.b);
-  doc.text(tradingName, left, nameBaselineY);
-  addrY = nameBaselineY + 7;
+  if (io.showCompanyName) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(io.fontCompanyNamePt);
+    doc.setTextColor(SLATE.r, SLATE.g, SLATE.b);
+    doc.text(tradingName, left, nameBaselineY);
+    addrY = nameBaselineY + 7;
+  }
   doc.setFont("helvetica", "normal");
   doc.setFontSize(Math.max(io.fontBodyPt - 1, 8));
   doc.setTextColor(MUTED.r, MUTED.g, MUTED.b);
