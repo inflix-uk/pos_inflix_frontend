@@ -342,12 +342,16 @@ export async function buildBusinessInvoicePdf(
   doc.setTextColor(0, 0, 0);
 
   const balanceDueForBadge = computeWholesaleBalanceDue(sale);
-  if (balanceDueForBadge <= MONEY_EPS && sale.type === "wholesale") {
-    drawPaidBadge(doc, right - 2, metaBoxY + 4);
-  }
+  const showPaidBadge =
+    balanceDueForBadge <= MONEY_EPS && sale.type === "wholesale";
 
   let headerBottom = Math.max(addrY, metaBoxY + metaBoxH);
   const invoiceQrPayload = String(sale.reference || "").trim() || String(sale._id || "");
+  const qrMm = Math.min(io.invoiceReferenceQrSizeMm, 24);
+  const qrX = right - qrMm;
+  const qrY = metaBoxY + metaBoxH + 2;
+  const paidBadgeY = qrY + qrMm / 2 + 3.5;
+
   if (io.showInvoiceReferenceQr && invoiceQrPayload) {
     try {
       const qrDataUrl = await QRCode.toDataURL(invoiceQrPayload, {
@@ -355,14 +359,17 @@ export async function buildBusinessInvoicePdf(
         margin: 1,
         errorCorrectionLevel: "M",
       });
-      const qrMm = Math.min(io.invoiceReferenceQrSizeMm, 24);
-      const qrX = right - qrMm;
-      const qrY = metaBoxY + metaBoxH + 2;
       doc.addImage(qrDataUrl, "PNG", qrX, qrY, qrMm, qrMm);
       headerBottom = Math.max(headerBottom, qrY + qrMm + 3);
+      if (showPaidBadge) {
+        drawPaidBadge(doc, qrX - 4, paidBadgeY);
+      }
     } catch {
       /* ignore */
     }
+  } else if (showPaidBadge) {
+    drawPaidBadge(doc, right - 4, paidBadgeY);
+    headerBottom = Math.max(headerBottom, qrY + qrMm + 3);
   }
 
   y = headerBottom + 8;
