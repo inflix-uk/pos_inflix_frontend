@@ -64,24 +64,28 @@ export const DEFAULT_INVOICE_PDF_PRINT: InvoicePdfPrintOptions = {
   logoHeightMm: 13,
 };
 
+function readBool(value: boolean | undefined, defaultValue: boolean): boolean {
+  return typeof value === "boolean" ? value : defaultValue;
+}
+
 export function mergeInvoicePdfPrintOptions(
   partial?: Partial<InvoicePdfPrintOptions> | null
 ): InvoicePdfPrintOptions {
   const p = partial ?? {};
   const d = DEFAULT_INVOICE_PDF_PRINT;
   return {
-    showLogo: p.showLogo !== false,
-    showCompanyName: p.showCompanyName !== false,
-    showBillTo: p.showBillTo !== false,
-    showItemsSummary: p.showItemsSummary !== false,
-    showSerialDetails: p.showSerialDetails !== false,
-    showInvoiceSummary: p.showInvoiceSummary !== false,
-    showAccountSummary: p.showAccountSummary !== false,
-    showPayments: p.showPayments !== false,
-    showPdfSalesTerms: p.showPdfSalesTerms !== false,
-    showPaymentNote: p.showPaymentNote !== false,
-    showBankDetails: p.showBankDetails !== false,
-    showInvoiceReferenceQr: p.showInvoiceReferenceQr !== false,
+    showLogo: readBool(p.showLogo, d.showLogo),
+    showCompanyName: readBool(p.showCompanyName, d.showCompanyName),
+    showBillTo: readBool(p.showBillTo, d.showBillTo),
+    showItemsSummary: readBool(p.showItemsSummary, d.showItemsSummary),
+    showSerialDetails: readBool(p.showSerialDetails, d.showSerialDetails),
+    showInvoiceSummary: readBool(p.showInvoiceSummary, d.showInvoiceSummary),
+    showAccountSummary: readBool(p.showAccountSummary, d.showAccountSummary),
+    showPayments: readBool(p.showPayments, d.showPayments),
+    showPdfSalesTerms: readBool(p.showPdfSalesTerms, d.showPdfSalesTerms),
+    showPaymentNote: readBool(p.showPaymentNote, d.showPaymentNote),
+    showBankDetails: readBool(p.showBankDetails, d.showBankDetails),
+    showInvoiceReferenceQr: readBool(p.showInvoiceReferenceQr, d.showInvoiceReferenceQr),
     invoiceReferenceQrSizeMm: clamp(
       p.invoiceReferenceQrSizeMm ?? d.invoiceReferenceQrSizeMm,
       16,

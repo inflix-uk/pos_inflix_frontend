@@ -21,6 +21,10 @@ export interface BusinessInvoicePdfPrintOptions extends InvoicePdfPrintOptions {
   showTax: boolean;
 }
 
+function readBool(value: boolean | undefined, defaultValue: boolean): boolean {
+  return typeof value === "boolean" ? value : defaultValue;
+}
+
 export function mergeBusinessInvoicePdfPrintOptions(
   partial?: Partial<BusinessInvoicePdfPrintOptions> | null
 ): BusinessInvoicePdfPrintOptions {
@@ -37,9 +41,16 @@ export function mergeBusinessInvoicePdfPrintOptions(
   return {
     ...base,
     documentTitle: title || "INVOICE",
-    showCompanyNumber: partial?.showCompanyNumber !== false,
-    showVatNumber: partial?.showVatNumber !== false,
-    showFooterLegalLine: partial?.showFooterLegalLine !== false,
-    showTax: partial?.showTax !== false,
+    showCompanyNumber: readBool(partial?.showCompanyNumber, true),
+    showVatNumber: readBool(partial?.showVatNumber, true),
+    showFooterLegalLine: readBool(partial?.showFooterLegalLine, true),
+    showTax: readBool(partial?.showTax, true),
   };
+}
+
+/** Full object for API/DB — every toggle is explicit (including `false`). */
+export function toBusinessInvoicePdfPrintRecord(
+  partial?: Partial<BusinessInvoicePdfPrintOptions> | null
+): BusinessInvoicePdfPrintOptions {
+  return { ...mergeBusinessInvoicePdfPrintOptions(partial) };
 }

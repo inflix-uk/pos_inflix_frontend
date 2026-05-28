@@ -5,6 +5,7 @@ import { mergeRepairLabelPrintSettings, type RepairLabelPrintSettings } from "@/
 import { mergeInvoicePdfPrintOptions, type InvoicePdfPrintOptions } from "@/lib/invoicePdfPrintOptions";
 import {
  mergeBusinessInvoicePdfPrintOptions,
+ toBusinessInvoicePdfPrintRecord,
  type BusinessInvoicePdfPrintOptions,
 } from "@/lib/businessInvoicePdfPrintOptions";
 import { normalizeA4InvoiceTemplate, type A4InvoiceTemplateId } from "@/lib/a4InvoiceTemplate";
@@ -510,7 +511,7 @@ export const useNotesTermsSettings = () => {
   try {
    const payload: NotesTermsFormData = {
     ...formData,
-    businessInvoicePdfPrint: mergeBusinessInvoicePdfPrintOptions(formData.businessInvoicePdfPrint),
+    businessInvoicePdfPrint: toBusinessInvoicePdfPrintRecord(formData.businessInvoicePdfPrint),
    };
    const response = await notesTermsApi.saveSettings(payload);
 
