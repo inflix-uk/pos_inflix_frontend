@@ -1,0 +1,16 @@
+.git
+.github
+.cursor
+node_modules
+.next
+out
+coverage
+*.md
+!README.md
+.env
+.env.*
+!.env.example
+terminals
+*.log
+.DS_Store
+Thumbs.db
