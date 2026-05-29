@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Mail, Lock, Loader2 } from "lucide-react";
+import { startPosShift } from "@/lib/posShift";
 
 const LoginPage = () => {
   const router = useRouter();
@@ -83,6 +84,7 @@ const LoginPage = () => {
         // Store token in localStorage
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.data));
+        startPosShift();
 
         // Redirect to dashboard
         router.push("/dashboard");

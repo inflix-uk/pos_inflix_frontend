@@ -56,6 +56,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
 
   // Invoices (own flow, mirrors sales but gated by invoice.* perms)
   "/create-invoice": ["invoice.create"],
+  "/edit-invoice": ["invoice.edit"],
   "/invoice-online-order": ["invoice.view"],
   "/sales-return": ["return.create", "refund.issue", "sale.view"],
   "/sales-return/start": ["return.create", "refund.issue", "sale.view"],
@@ -271,7 +272,7 @@ export const NAV_CONFIG: NavSection[] = [
     items: [
       { title: "Dashboard", path: "/reports/dashboard", icon: LayoutDashboard, requiredPermsAnyOf: ["report.view"], featureKey: "reports" },
       { title: "Takings Dashboard", path: "/reports/takings", icon: TrendingUp, requiredPermsAnyOf: ["report.view"] },
-      { title: "Daily Closing Till Reading (Z-Read)", path: "/reports/z-read", icon: Receipt, requiredPermsAnyOf: ["report.zread"] },
+      { title: "Z-Report", path: "/reports/z-read", icon: Receipt, requiredPermsAnyOf: ["report.zread"] },
     ],
   },
   {

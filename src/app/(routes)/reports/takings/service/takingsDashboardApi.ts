@@ -12,6 +12,9 @@ export interface TakingsRange {
  from: string;
  to: string;
  timezone: string;
+ /** Present for shift (UTC window) Z-Read. */
+ fromUtc?: string;
+ toUtc?: string;
 }
 
 export interface TakingsLocation {
@@ -83,12 +86,16 @@ export async function getTakingsDashboard(params: {
  from: string;
  to: string;
  locationId?: string;
+ fromUtc?: string;
+ toUtc?: string;
 }): Promise<TakingsDashboardData> {
  const q = new URLSearchParams({
   from: params.from,
   to: params.to,
   locationId: params.locationId ?? "all",
  });
+ if (params.fromUtc) q.set("fromUtc", params.fromUtc);
+ if (params.toUtc) q.set("toUtc", params.toUtc);
  const res = await fetch(`${API_URL}/api/reports/takings-dashboard?${q}`, {
   headers: getAuthHeaders(),
  });

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { startPosShift } from "@/lib/posShift";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -29,6 +30,7 @@ export default function PlatformCallbackPage() {
           if (typeof window !== "undefined") {
             localStorage.setItem("token", data.token);
             localStorage.setItem("user", JSON.stringify(data.data));
+            startPosShift();
           }
           setStatus("ok");
           window.location.href = "/dashboard";

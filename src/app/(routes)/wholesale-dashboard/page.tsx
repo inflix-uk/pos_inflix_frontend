@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useSalesDashboard } from "../sales-dashboard/hooks/useSalesDashboard";
 import { CartTaxConfigProvider, useCartTaxConfig } from "../sales-dashboard/components/CartTaxSlotContext";
@@ -30,7 +31,7 @@ import { useInvoiceDate, invoiceDateToOccurredAt } from "./components/InvoiceDat
 import { emitInventoryEvent } from "@/lib/inventoryEvents";
 import { openCashDrawer } from "@/services/printService";
 import type { CartLineItem } from "../sales-dashboard/types";
-import { salesApi, formatAddressForInvoice } from "../sales-dashboard/service/salesApi";
+import { salesApi, formatAddressForInvoice, type SaleItemRecord } from "../sales-dashboard/service/salesApi";
 import { customerApi } from "../peoples/customers/service/customerApi";
 import { supplierApi } from "../peoples/suppliers/service/supplierApi";
 import { AddCustomerModal } from "../peoples/customers/components";
@@ -44,6 +45,8 @@ import { formatDateTimeLondon } from "@/lib/dateUtils";
 import type { SaleForPrint } from "@/lib/invoicePrint";
 import { HelpTip } from "@/components/HelpTip";
 import { usePermissions } from "@/hooks/usePermissions";
+import { invoicesApi } from "../invoice-online-order/service/invoicesApi";
+import type { InvoiceRecord } from "../invoice-online-order/service/invoicesApi";
 
 const CUSTOMER_DRAFT_KEY = "wholesale-selected-customer-v1";
 const DRAFTS_STORAGE_KEY = "wholesale-drafts-v1";
@@ -105,6 +108,50 @@ const parsePrice = (priceStr: string): number => {
  return isNaN(num) ? 0 : num;
 };
 
+function derivePaymentMethod(payments: {
+ cash?: number;
+ card?: number;
+ credit?: number;
+ bank?: number;
+}): "cash" | "card" | "credit" | "bank" | undefined {
+ const cash = Number(payments.cash) || 0;
+ const card = Number(payments.card) || 0;
+ const bank = Number(payments.bank) || 0;
+ const credit = Number(payments.credit) || 0;
+ const active: Array<"cash" | "card" | "credit" | "bank"> = [];
+ if (cash > 0.001) active.push("cash");
+ if (card > 0.001) active.push("card");
+ if (bank > 0.001) active.push("bank");
+ if (credit > 0.001) active.push("credit");
+ if (active.length === 1) return active[0];
+ if (credit > 0 && cash + card + bank < 0.001) return "credit";
+ if (cash >= card && cash >= bank && cash > 0) return "cash";
+ if (card >= cash && card >= bank && card > 0) return "card";
+ if (bank > 0) return "bank";
+ return undefined;
+}
+
+function invoiceItemToCartLine(item: SaleItemRecord): CartLineItem {
+ return {
+  sku: item.sku,
+  name: item.name,
+  price: typeof item.price === "number" ? item.price.toFixed(2) : String(item.price),
+  quantity: item.quantity,
+  unit: item.unit,
+  serialNumbers: item.serialNumbers,
+  serialColours: item.serialColours as CartLineItem["serialColours"],
+  grade: item.grade,
+  brand: item.brand,
+  colour: item.colour,
+  brandModel: item.brandModel,
+  capacity: item.capacity,
+  unit_cost_at_sale: (item as { unit_cost_at_sale?: number }).unit_cost_at_sale,
+  purchaseId: (item as { purchaseId?: string }).purchaseId,
+  purchaseItemId: (item as { purchaseItemId?: string }).purchaseItemId,
+  cost_missing: (item as { cost_missing?: boolean }).cost_missing,
+ };
+}
+
 /** Align cart line / per-serial prices with current inventory list (e.g. after pricing group or rate list change). */
 function syncCartLinePricesFromInventory(
  lines: CartLineItem[],
@@ -148,10 +195,13 @@ function loadDraftCustomer(): AccountForSale | null {
 }
 
 const Page = () => {
+ const router = useRouter();
  const defaultCartTax = useDefaultCartTax();
  const cartTax = useCartTaxConfig();
  const { user } = usePermissions();
  const orderWriter = useOrderWriter();
+ const editInvoiceId = orderWriter.editInvoiceId;
+ const editHydratedRef = useRef(false);
  const draftsEnabled = orderWriter.enableDrafts !== false;
  const forceWholesaleMode = orderWriter.forceWholesaleMode === true;
  const { invoiceDate, setInvoiceDate, enabled: invoiceDateCtxEnabled } = useInvoiceDate();
@@ -175,6 +225,10 @@ const Page = () => {
 
  // Live invoice-number availability check (debounced). Empty input → idle (server will auto-generate).
  useEffect(() => {
+ if (editInvoiceId) {
+  setRefStatus(customReference.trim() ? "available" : "idle");
+  return;
+ }
  const raw = customReference.trim().toUpperCase();
  if (!raw) {
   setRefStatus("idle");
@@ -189,11 +243,21 @@ const Page = () => {
  const controller = new AbortController();
  const timer = window.setTimeout(async () => {
   try {
-  const res = await orderWriter.checkReference(raw, controller.signal);
+  const res = await orderWriter.checkReference(raw, controller.signal, editInvoiceId);
   if (seq !== refCheckSeqRef.current) return;
   if (!res.success) { setRefStatus("idle"); return; }
   if (!res.data.valid) { setRefStatus("invalid"); return; }
-  setRefStatus(res.data.exists ? "taken" : "available");
+  if (res.data.exists) {
+   const next = res.data.nextAvailable;
+   if (next && next !== raw) {
+    setCustomReference(next);
+    setRefStatus("available");
+    return;
+   }
+   setRefStatus("taken");
+  } else {
+   setRefStatus("available");
+  }
   } catch {
   if (seq === refCheckSeqRef.current) setRefStatus("idle");
   }
@@ -202,7 +266,7 @@ const Page = () => {
   window.clearTimeout(timer);
   controller.abort();
  };
- }, [customReference, orderWriter]);
+ }, [customReference, orderWriter, editInvoiceId]);
 
  useEffect(() => {
  if (typeof window === "undefined") return;
@@ -624,6 +688,63 @@ const Page = () => {
  cartRef.current = cart;
  clearCartRef.current = clearCart;
 
+ useEffect(() => {
+  if (!editInvoiceId || editHydratedRef.current) return;
+  let cancelled = false;
+  (async () => {
+   try {
+    const res = await invoicesApi.getInvoiceById(editInvoiceId);
+    if (cancelled || !res.data) return;
+    const inv = res.data;
+    if (inv.status === "voided") {
+     router.push("/invoice-online-order");
+     return;
+    }
+    editHydratedRef.current = true;
+    replaceCart((inv.items || []).map(invoiceItemToCartLine));
+    setCustomReference(inv.reference || "");
+    setRefStatus(inv.reference ? "available" : "idle");
+    setSaleNote(inv.note || "");
+    if (inv.occurredAt) {
+     const d = String(inv.occurredAt).slice(0, 10);
+     if (d) setInvoiceDate(d);
+    }
+    const locId =
+     typeof inv.locationId === "object" && inv.locationId
+      ? String((inv.locationId as { _id?: string })._id || "")
+      : typeof inv.locationId === "string"
+        ? inv.locationId
+        : "";
+    if (locId) setSelectedLocationId(locId);
+    const cid =
+     typeof inv.customerId === "object" && inv.customerId
+      ? String((inv.customerId as { _id?: string })._id || "")
+      : typeof inv.customerId === "string"
+        ? inv.customerId
+        : "";
+    if (cid) {
+     try {
+      const custRes = await customerApi.getById(cid);
+      if (!cancelled && custRes.success && custRes.data) {
+       setSelectedCustomerState(custRes.data as AccountForSale);
+      }
+     } catch {
+      if (!cancelled && inv.customerName) {
+       setSelectedCustomerState({ _id: cid, name: inv.customerName } as AccountForSale);
+      }
+     }
+    } else if (inv.customerName) {
+     setSelectedCustomerState({ _id: "", name: inv.customerName } as AccountForSale);
+    }
+   } catch {
+    if (!cancelled) router.push("/invoice-online-order");
+   }
+  })();
+  return () => {
+   cancelled = true;
+  };
+ }, [editInvoiceId, replaceCart, setInvoiceDate, router]);
+
  const handleSaveDraft = () => {
  saveDraftToStorage(selectedCustomer, cart);
  setDraftSavedAt(new Date());
@@ -906,6 +1027,7 @@ const Page = () => {
    type="text"
    value={customReference}
    onChange={(e) => setCustomReference(e.target.value.slice(0, 32))}
+   readOnly={Boolean(editInvoiceId)}
    placeholder="Inv #"
    autoComplete="off"
    spellCheck={false}
@@ -1253,19 +1375,26 @@ const Page = () => {
  }}
  onComplete={async (details) => {
   // Re-check user-supplied invoice number right before save (race-condition guard).
-  const trimmedRef = customReference.trim().toUpperCase();
-  if (trimmedRef) {
+  let trimmedRef = customReference.trim().toUpperCase();
+  if (trimmedRef && !editInvoiceId) {
   if (!/^[A-Z0-9\-\/_]{1,32}$/.test(trimmedRef)) {
    showMessage("error", "Invoice number format is invalid.");
    setRefStatus("invalid");
    return;
   }
   try {
-   const check = await orderWriter.checkReference(trimmedRef);
+   const check = await orderWriter.checkReference(trimmedRef, undefined, editInvoiceId);
    if (check.success && check.data.valid && check.data.exists) {
-   setRefStatus("taken");
-   showMessage("error", `Invoice number "${trimmedRef}" is already in use.`);
-   return;
+   const next = check.data.nextAvailable;
+   if (next) {
+    trimmedRef = next;
+    setCustomReference(next);
+    setRefStatus("available");
+   } else {
+    setRefStatus("taken");
+    showMessage("error", `Invoice number "${trimmedRef}" is already in use.`);
+    return;
+   }
    }
   } catch {
    // Network blip: let backend make the final call (it re-checks inside the transaction).
@@ -1295,6 +1424,7 @@ const Page = () => {
   cost_missing: i.cost_missing,
   };
   });
+  const paymentMethod = derivePaymentMethod(details.payments);
   const payload = {
   type: "wholesale" as const,
   items,
@@ -1310,21 +1440,35 @@ const Page = () => {
   customerName: selectedCustomer?.name,
   payments: details.payments,
   bankAccount: details.bankAccount,
+  ...(paymentMethod ? { paymentMethod } : {}),
   note: saleNote.trim(),
-  ...(trimmedRef ? { reference: trimmedRef } : {}),
+  ...(trimmedRef && !editInvoiceId ? { reference: trimmedRef } : {}),
   ...(selectedLocationId ? { locationId: selectedLocationId } : {}),
-  ...(details.clientRequestId ? { clientRequestId: details.clientRequestId } : {}),
+  ...(details.clientRequestId && !editInvoiceId ? { clientRequestId: details.clientRequestId } : {}),
   ...(showInvoiceDatePicker && (() => {
    const occurredAt = invoiceDateToOccurredAt(invoiceDate);
    return occurredAt ? { occurredAt } : {};
   })()),
   };
-  const result = await orderWriter.createSale(payload);
+  const result =
+   editInvoiceId && orderWriter.updateSale
+    ? await orderWriter.updateSale(editInvoiceId, payload)
+    : await orderWriter.createSale(payload);
   const createOrderMs = Math.round(performance.now() - createOrderStart);
   if (process.env.NODE_ENV === "development") {
   console.info("[Create Order]", createOrderMs, "ms", result.success ? "success" : "failed");
   }
   if (result.success) {
+  if (editInvoiceId) {
+   showMessage(
+    "success",
+    result.data?.reference
+     ? `Invoice updated (${result.data.reference})`
+     : "Invoice updated",
+   );
+   router.push("/invoice-online-order");
+   return;
+  }
   clearCart();
   setShowInvoiceStep(true);
   showMessage(

@@ -37,6 +37,30 @@ export function invoiceDisplayDate(inv: Pick<InvoiceRecord, "occurredAt" | "crea
  return inv.occurredAt || inv.createdAt;
 }
 
+/** Primary payment type for list display (cash, card, bank, credit). */
+export function invoicePaymentTypeLabel(
+ inv: Pick<InvoiceRecord, "paymentMethod" | "payments">,
+): string {
+ const pm = String(inv.paymentMethod || "")
+  .trim()
+  .toLowerCase();
+ if (pm === "cash" || pm === "card" || pm === "bank" || pm === "credit") {
+  return pm.charAt(0).toUpperCase() + pm.slice(1);
+ }
+ const p = inv.payments;
+ if (!p) return "—";
+ const parts: { label: string; amount: number }[] = [
+  { label: "Cash", amount: Number(p.cash) || 0 },
+  { label: "Card", amount: Number(p.card) || 0 },
+  { label: "Bank", amount: Number(p.bank) || 0 },
+  { label: "Credit", amount: Number(p.credit) || 0 },
+ ];
+ const active = parts.filter((x) => x.amount > 0.001);
+ if (active.length === 0) return "—";
+ if (active.length === 1) return active[0].label;
+ return active.map((x) => x.label).join(" + ");
+}
+
 export interface GetInvoicesResponse {
  success: boolean;
  data: InvoiceRecord[];
@@ -71,6 +95,22 @@ export const invoicesApi = {
    throw new Error(err.message || "Failed to fetch invoices");
   }
   return response.json();
+ },
+
+ updateInvoice: async (
+  id: string,
+  payload: Partial<CreateInvoicePayload> & Record<string, unknown>,
+ ): Promise<{ success: boolean; message?: string; data?: InvoiceRecord }> => {
+  const response = await fetch(`${API_BASE_URL}/invoices/${id}`, {
+   method: "PUT",
+   headers: getAuthHeaders(),
+   body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+   throw new Error((data as { message?: string }).message || "Failed to update invoice");
+  }
+  return data as { success: boolean; message?: string; data?: InvoiceRecord };
  },
 
  getInvoiceById: async (id: string): Promise<{ success: boolean; data: InvoiceRecord }> => {
@@ -122,9 +162,21 @@ export const invoicesApi = {
  checkReference: async (
   reference: string,
   signal?: AbortSignal,
- ): Promise<{ success: boolean; data: { reference: string; exists: boolean; valid: boolean; reason?: string } }> => {
-  const q = encodeURIComponent(reference || "");
-  const response = await fetch(`${API_BASE_URL}/invoices/check-reference?reference=${q}`, {
+  excludeId?: string,
+ ): Promise<{
+  success: boolean;
+  data: {
+   reference: string;
+   exists: boolean;
+   valid: boolean;
+   reason?: string;
+   nextAvailable?: string;
+  };
+ }> => {
+  const params = new URLSearchParams();
+  params.set("reference", reference || "");
+  if (excludeId) params.set("excludeId", excludeId);
+  const response = await fetch(`${API_BASE_URL}/invoices/check-reference?${params}`, {
    method: "GET",
    headers: getAuthHeaders(),
    signal,

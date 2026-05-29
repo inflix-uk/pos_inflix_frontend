@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
  Search,
  Plus,
@@ -12,6 +13,7 @@ import {
  ChevronLeft,
  ChevronRight,
  Eye,
+ Pencil,
  Printer,
  Download,
  FileText,
@@ -19,7 +21,7 @@ import {
  X,
  MoreVertical,
 } from "lucide-react";
-import { invoicesApi, invoiceDisplayDate, type InvoiceRecord } from "./service/invoicesApi";
+import { invoicesApi, invoiceDisplayDate, invoicePaymentTypeLabel, type InvoiceRecord } from "./service/invoicesApi";
 import { formatDateLondon, formatOccurredAt } from "@/lib/dateUtils";
 import { downloadInvoiceA4, printInvoiceA4, printReceipt80mm, type SaleForPrint } from "@/lib/invoicePrint";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -27,31 +29,19 @@ import { usePermissions } from "@/hooks/usePermissions";
 const formatMoney = (n: number) =>
  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2 }).format(n);
 
-const typeBadge = (type: string) => {
- const cls =
-  type === "wholesale"
-   ? "bg-blue-100 text-blue-700"
-   : type === "repair"
-   ? "bg-neutral-100 text-neutral-800"
-   : "bg-emerald-100 text-emerald-700";
- const label = type === "wholesale" ? "Wholesale" : type === "repair" ? "Repair" : "Retail";
- return (
-  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${cls}`}>{label}</span>
- );
-};
-
-const statusBadge = (status: string) =>
- status === "voided" ? (
-  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700">
-   Voided
-  </span>
- ) : (
-  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
-   Active
-  </span>
- );
-
 const PAGE_SIZE = 25;
+
+/** Newest invoice date first (occurredAt, else createdAt). */
+function sortInvoicesByDateDesc(list: InvoiceRecord[]): InvoiceRecord[] {
+ return [...list].sort((a, b) => {
+  const ta = new Date(invoiceDisplayDate(a)).getTime();
+  const tb = new Date(invoiceDisplayDate(b)).getTime();
+  if (!Number.isFinite(ta) && !Number.isFinite(tb)) return 0;
+  if (!Number.isFinite(ta)) return 1;
+  if (!Number.isFinite(tb)) return -1;
+  return tb - ta;
+ });
+}
 
 function invoiceToPrintable(inv: InvoiceRecord): SaleForPrint {
  return {
@@ -183,6 +173,7 @@ function ActionsMenu({ items }: { items: RowAction[] }) {
 }
 
 export default function InvoiceOnlineOrderPage() {
+ const router = useRouter();
  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
  const [loading, setLoading] = useState(true);
  const [error, setError] = useState<string | null>(null);
@@ -220,7 +211,7 @@ export default function InvoiceOnlineOrderPage() {
     search: debouncedSearch || undefined,
    });
    if (res.success) {
-    setInvoices(res.data || []);
+    setInvoices(sortInvoicesByDateDesc(res.data || []));
     setTotal(res.meta?.total ?? (res.data?.length ?? 0));
    } else {
     setInvoices([]);
@@ -359,10 +350,9 @@ export default function InvoiceOnlineOrderPage() {
          <th className="px-3 sm:px-4 py-2.5">Reference</th>
          <th className="px-3 sm:px-4 py-2.5">Date</th>
          <th className="px-3 sm:px-4 py-2.5">Customer</th>
-         <th className="px-3 sm:px-4 py-2.5">Type</th>
          <th className="px-3 sm:px-4 py-2.5">Tax</th>
+         <th className="px-3 sm:px-4 py-2.5">Payment</th>
          <th className="px-3 sm:px-4 py-2.5 text-right">Total</th>
-         <th className="px-3 sm:px-4 py-2.5">Status</th>
          <th className="px-3 sm:px-4 py-2.5 text-right">Actions</th>
         </tr>
        </thead>
@@ -370,7 +360,7 @@ export default function InvoiceOnlineOrderPage() {
         {loading ? (
          Array.from({ length: 6 }).map((_, i) => (
           <tr key={i} className="border-b border-gray-100">
-           {Array.from({ length: 8 }).map((__, j) => (
+           {Array.from({ length: 7 }).map((__, j) => (
             <td key={j} className="px-3 sm:px-4 py-3">
              <div className="h-4 w-full max-w-[120px] bg-gray-200 rounded animate-pulse" />
             </td>
@@ -379,7 +369,7 @@ export default function InvoiceOnlineOrderPage() {
          ))
         ) : invoices.length === 0 ? (
          <tr>
-          <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-500">
+          <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-500">
            <Receipt className="w-8 h-8 mx-auto mb-2 text-gray-300" />
            No invoices found.{" "}
            <Link href="/create-invoice" className="text-blue-600 hover:underline font-medium">
@@ -399,7 +389,6 @@ export default function InvoiceOnlineOrderPage() {
              {formatDateLondon(invoiceDisplayDate(inv))}
             </td>
             <td className="px-3 sm:px-4 py-3 text-gray-800">{inv.customerName || "—"}</td>
-            <td className="px-3 sm:px-4 py-3">{typeBadge(inv.type)}</td>
             <td className="px-3 sm:px-4 py-3 text-xs text-gray-600">
              {taxLabel ? (
               <span>
@@ -409,12 +398,19 @@ export default function InvoiceOnlineOrderPage() {
               <span className="text-gray-400">—</span>
              )}
             </td>
+            <td className="px-3 sm:px-4 py-3 text-sm text-gray-800">{invoicePaymentTypeLabel(inv)}</td>
             <td className="px-3 sm:px-4 py-3 text-right font-semibold text-gray-900">{formatMoney(inv.total)}</td>
-            <td className="px-3 sm:px-4 py-3">{statusBadge(inv.status || "active")}</td>
             <td className="px-3 sm:px-4 py-3">
              <div className="flex justify-end">
               <ActionsMenu
                items={[
+                {
+                 key: "edit",
+                 label: inv.status === "voided" ? "Cannot edit voided" : "Edit invoice",
+                 icon: <Pencil className="w-4 h-4" />,
+                 disabled: !canEdit || inv.status === "voided",
+                 onClick: () => router.push(`/edit-invoice/${inv._id}`),
+                },
                 { key: "view", label: "View", icon: <Eye className="w-4 h-4" />, onClick: () => setViewInvoice(inv) },
                 { key: "print", label: "Print invoice (A4)", icon: <Printer className="w-4 h-4" />, onClick: () => handlePrintA4(inv) },
                 { key: "download", label: "Download PDF", icon: <Download className="w-4 h-4" />, onClick: () => handleDownload(inv) },
@@ -554,12 +550,12 @@ function ViewInvoiceModal({
        <p className="font-medium text-gray-900">{invoice.customerName || "—"}</p>
       </div>
       <div>
-       <p className="text-xs text-gray-500">Status</p>
-       <p>{statusBadge(invoice.status || "active")}</p>
+       <p className="text-xs text-gray-500">Payment</p>
+       <p className="font-medium text-gray-900">{invoicePaymentTypeLabel(invoice)}</p>
       </div>
       <div>
-       <p className="text-xs text-gray-500">Type</p>
-       <p>{typeBadge(invoice.type)}</p>
+       <p className="text-xs text-gray-500">Status</p>
+       <p className="text-gray-900 capitalize">{invoice.status || "active"}</p>
       </div>
       <div>
        <p className="text-xs text-gray-500">Tax</p>
@@ -615,7 +611,14 @@ function ViewInvoiceModal({
      </div>
     </div>
     <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2 bg-gray-50 rounded-b-xl">
-     {canEdit && <span className="text-xs text-gray-400 mr-auto">Edit endpoint live at PUT /api/invoices/{invoice._id}</span>}
+     {canEdit && invoice.status !== "voided" && (
+      <Link
+       href={`/edit-invoice/${invoice._id}`}
+       className="mr-auto text-sm font-medium text-blue-600 hover:text-blue-800"
+      >
+       Edit invoice
+      </Link>
+     )}
      <button onClick={onClose} className="px-3 py-1.5 rounded-md border border-gray-300 text-sm hover:bg-white">
       Close
      </button>

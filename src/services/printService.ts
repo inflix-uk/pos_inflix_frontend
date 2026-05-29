@@ -514,6 +514,58 @@ async function sendDrawerKickToAgent(
   return { sent: false, error: lastError };
 }
 
+/** True when a receipt printer is configured for silent thermal Z-Read. */
+export function isReceiptPrinterConfigured(settings: PrintingSettings | null): boolean {
+  return Boolean(settings?.receiptPrinterName?.trim());
+}
+
+/** Print Z-Read / till reading on 80mm receipt printer (RAW ESC/POS). */
+export async function printZReadEscpos(dataBase64: string, jobName = "z-read"): Promise<PrintReceiptResult> {
+  const settings = await loadPrintingSettings();
+  if (!settings) {
+    return { sent: false, error: "Printing settings not loaded. Check you are logged in." };
+  }
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("pos_print_agent_token");
+    if (stored !== null) settings.agentToken = stored;
+  }
+  if (!settings.receiptPrinterName?.trim()) {
+    return { sent: false, error: "Select a receipt printer in Settings → Printing." };
+  }
+  if (!settings.agentToken?.trim()) {
+    return { sent: false, error: "Print agent token not set in Settings → Printing." };
+  }
+  const ok = await checkAgentHealth(settings.agentUrl, settings.agentToken);
+  if (!ok) {
+    return {
+      sent: false,
+      error: "Cannot reach Print Bridge. Start POS Print Bridge and check Settings → Printing.",
+    };
+  }
+  try {
+    const agentRes = await fetchPrintAgent(settings.agentUrl, "POST", "/print/receipt/escpos", {
+      token: settings.agentToken,
+      timeoutMs: 30000,
+      jsonBody: {
+        printerName: settings.receiptPrinterName.trim(),
+        dataBase64,
+        jobName,
+      },
+    });
+    const agentJson = await agentRes.json().catch(() => ({}));
+    if (agentRes.ok && agentJson.success) {
+      return { sent: true };
+    }
+    return {
+      sent: false,
+      error: (agentJson as { message?: string }).message || `Print failed (${agentRes.status}).`,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { sent: false, error: msg };
+  }
+}
+
 /** Open cash drawer via receipt printer (RAW ESC/POS through Print Bridge). */
 export async function openCashDrawer(options?: {
   pin?: 0 | 1;

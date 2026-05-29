@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import type { TakingsDashboardData } from "@/app/(routes)/reports/takings/service/takingsDashboardApi";
+import type { ZReadReportKind } from "@/lib/zReadReceiptEscpos";
 
 function formatCurrency(n: number): string {
  return new Intl.NumberFormat("en-GB", {
@@ -15,10 +16,16 @@ export interface ZReadPdfParams {
  locationName: string;
  dateRangeLabel: string;
  rangeText: string;
+ reportKind?: ZReadReportKind;
+ cashierName?: string;
+}
+
+function zReadTitle(kind: ZReadReportKind | undefined): string {
+ return kind === "shift" ? "END OF SHIFT Z-REPORT" : "END OF DAY Z-REPORT";
 }
 
 export function buildZReadPdf(params: ZReadPdfParams): jsPDF {
- const { data, locationName, dateRangeLabel, rangeText } = params;
+ const { data, locationName, dateRangeLabel, rangeText, reportKind } = params;
  const { takings } = data;
  const pb = takings.paymentBreakdown;
  const totalIn = pb.cash.in + pb.card.in + pb.bank.in + pb.credit.in;
@@ -32,12 +39,12 @@ export function buildZReadPdf(params: ZReadPdfParams): jsPDF {
 
  doc.setFont("helvetica", "bold");
  doc.setFontSize(16);
- doc.text("DAILY CLOSING TILL READING", pageW / 2, y, { align: "center" });
+ doc.text(zReadTitle(reportKind), pageW / 2, y, { align: "center" });
  y += 6;
  doc.setFont("helvetica", "normal");
  doc.setFontSize(10);
  doc.setTextColor(120);
- doc.text("Z-READ", pageW / 2, y, { align: "center" });
+ doc.text("Z-REPORT", pageW / 2, y, { align: "center" });
  doc.setTextColor(0);
  y += 8;
 
@@ -200,7 +207,7 @@ export function buildZReadPdf(params: ZReadPdfParams): jsPDF {
  doc.setFont("helvetica", "normal");
  doc.setFontSize(9);
  doc.setTextColor(120);
- doc.text("— End of Z-Read —", pageW / 2, y, { align: "center" });
+ doc.text("— End of Z-Report —", pageW / 2, y, { align: "center" });
  doc.setTextColor(0);
  y += 14;
 
@@ -213,6 +220,133 @@ export function buildZReadPdf(params: ZReadPdfParams): jsPDF {
  doc.text("Manager signature", margin + sigW + 10, y + 4);
 
  return doc;
+}
+
+/** Build 80mm PDF blob URL for browser print (manual / no receipt printer). */
+export function buildZRead80mmPdfUrl(params: ZReadPdfParams): string {
+ const { data, locationName, dateRangeLabel, rangeText, reportKind, cashierName } = params;
+ const { takings } = data;
+ const pb = takings.paymentBreakdown;
+ const width = 80;
+ const pad = 4;
+ const center = width / 2;
+ const estLines = 28 + (takings.accountBreakdown?.length ?? 0) * 2;
+ const pageH = Math.min(297, Math.max(55, estLines * 4.2));
+ const doc = new jsPDF({ unit: "mm", format: [width, pageH], hotfixes: ["px_scaling"] });
+ let y = 8;
+
+ const row = (left: string, right: string) => {
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(left, pad, y);
+  doc.text(right, width - pad, y, { align: "right" });
+  y += 4.5;
+ };
+
+ const line = (text: string, bold = false) => {
+  doc.setFont("helvetica", bold ? "bold" : "normal");
+  doc.setFontSize(bold ? 10 : 9);
+  const lines = doc.splitTextToSize(text, width - pad * 2);
+  doc.text(lines, pad, y);
+  y += lines.length * 3.6 + 1;
+ };
+
+ doc.setFont("helvetica", "bold");
+ doc.setFontSize(11);
+ doc.text(zReadTitle(reportKind), center, y, { align: "center" });
+ y += 5;
+ doc.setFont("helvetica", "normal");
+ doc.setFontSize(8);
+ doc.text("Z-REPORT", center, y, { align: "center" });
+ y += 6;
+
+ line(`Location: ${locationName}`);
+ line(`Period: ${dateRangeLabel}`);
+ line(`Range: ${rangeText}`);
+ if (cashierName) line(`Cashier: ${cashierName}`);
+ line(
+  `Printed: ${new Date().toLocaleString("en-GB", {
+   day: "2-digit",
+   month: "short",
+   hour: "2-digit",
+   minute: "2-digit",
+   timeZone: "Europe/London",
+  })}`
+ );
+ y += 1;
+ doc.line(pad, y, width - pad, y);
+ y += 4;
+
+ row("Sales #", String(takings.salesCount));
+ row("Refunds #", String(takings.refundsCount));
+ row("Voids #", String(takings.voidsCount));
+ row("Gross", formatCurrency(takings.grossSales));
+ row("Refunds", formatCurrency(takings.refundsGross));
+ doc.setFont("helvetica", "bold");
+ row("Net", formatCurrency(takings.netRevenue));
+ doc.setFont("helvetica", "normal");
+ y += 1;
+ doc.line(pad, y, width - pad, y);
+ y += 4;
+
+ line("PAYMENTS", true);
+ (["cash", "card", "bank", "credit"] as const).forEach((m) => {
+  row(m.charAt(0).toUpperCase() + m.slice(1), formatCurrency(pb[m].net));
+ });
+ const totalNet = pb.cash.net + pb.card.net + pb.bank.net + pb.credit.net;
+ doc.line(pad, y, width - pad, y);
+ y += 3;
+ doc.setFont("helvetica", "bold");
+ row("TOTAL", formatCurrency(totalNet));
+ doc.setFont("helvetica", "normal");
+
+ if (takings.accountBreakdown?.length) {
+  y += 2;
+  doc.line(pad, y, width - pad, y);
+  y += 4;
+  line("ACCOUNTS", true);
+  takings.accountBreakdown.slice(0, 8).forEach((acc) => {
+   row(String(acc.accountName).slice(0, 20), formatCurrency(acc.net));
+  });
+ }
+
+ y += 4;
+ doc.setFontSize(8);
+ doc.text("- END OF Z-REPORT -", center, y, { align: "center" });
+
+ return URL.createObjectURL(doc.output("blob"));
+}
+
+/** Open 80mm PDF and trigger browser print dialog (no receipt printer / manual). */
+export async function printZReadPdfManual(params: ZReadPdfParams): Promise<void> {
+ const url = buildZRead80mmPdfUrl(params);
+ const w = window.open(url, "_blank");
+ if (w) {
+  w.onload = () => {
+   w.focus();
+   w.print();
+   setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+  setTimeout(() => {
+   try {
+    if (w && !w.closed) {
+     w.focus();
+     w.print();
+    }
+   } catch {
+    // ignore
+   }
+  }, 800);
+ } else {
+  const a = document.createElement("a");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+ }
 }
 
 export function openZReadPdfInNewTab(params: ZReadPdfParams) {
