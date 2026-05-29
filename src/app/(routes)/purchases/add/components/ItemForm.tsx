@@ -412,6 +412,8 @@ interface ItemFormProps {
  /** Prefill the IMEI/serial form from a selected existing item. */
  onSelectSerialProduct?: (product: SerialSearchResult) => void;
  variant?: "card" | "inline";
+ /** When false, variant dropdowns are select-only (no "+ Add" for brand/model/etc.). */
+ allowCreateVariantValues?: boolean;
  onAddBrand?: (name: string) => Promise<string | null>;
  onAddModel?: (brandId: string, modelName: string) => Promise<string | null>;
  onAddCapacity?: (name: string) => Promise<string | null>;
@@ -493,6 +495,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
  onSearchSerialProducts,
  onSelectSerialProduct,
  variant = "card",
+ allowCreateVariantValues = false,
  onAddBrand,
  onAddModel,
  onAddCapacity,
@@ -984,10 +987,11 @@ export const ItemForm: React.FC<ItemFormProps> = ({
    const selectedValueId = data.variantValues?.[attr._id] ?? "";
    const parentSelected = attributeIndex === 0 || categoryVariantAttributesImei.slice(0, attributeIndex).every((a) => data.variantValues?.[a._id]);
    const canAdd = data.type && parentSelected;
+   const canCreateNew = allowCreateVariantValues && canAdd;
    const parentPath = categoryVariantAttributesImei.slice(0, attributeIndex).map((a) => data.variantValues?.[a._id]).filter(Boolean) as string[];
    const firstAttrId = categoryVariantAttributesImei[0]?._id;
    const onCreateNew =
-   canAdd && onAddValueAtPath && firstAttrId
+   canCreateNew && onAddValueAtPath && firstAttrId
    ? (name: string) => onAddValueAtPath(data.type!, firstAttrId, parentPath, name)
    : undefined;
    const pathWithSelection = categoryVariantAttributesImei.slice(0, attributeIndex + 1).map((a) => data.variantValues?.[a._id]).filter(Boolean) as string[];
@@ -1027,7 +1031,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
    <div key={attr._id} className="space-y-2">
    <div className="flex items-center justify-between gap-2">
    <label className="block text-sm font-medium text-gray-700">{attr.name.toUpperCase()}</label>
-   {selectedValueId && (onEditVariantAtPath || onDeleteVariantAtPath) && (
+   {allowCreateVariantValues && selectedValueId && (onEditVariantAtPath || onDeleteVariantAtPath) && (
     <div className="flex items-center gap-1 shrink-0">
     {onEditVariantAtPath && (
     <button
@@ -1052,7 +1056,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
     </div>
    )}
    </div>
-   {canAdd && onCreateNew ? (
+   {canCreateNew && onCreateNew ? (
    <CreatableSearchableSelect
     options={valueOptions}
     value={selectedValueId}
@@ -1085,7 +1089,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
   {showGradeImei && (
   <div>
   <label className="block text-sm font-medium text-gray-700 mb-2">CONDITION</label>
-  {onAddGrade ? (
+  {allowCreateVariantValues && onAddGrade ? (
    <CreatableSearchableSelect
    options={grades}
    value={data.grade}
@@ -1108,7 +1112,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
   {showBrandImei && (
   <div>
   <label className="block text-sm font-medium text-gray-700 mb-2">BRAND</label>
-  {onAddBrand ? (
+  {allowCreateVariantValues && onAddBrand ? (
    <CreatableSearchableSelect
    options={brands}
    value={data.brand}
@@ -1136,7 +1140,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
   {showBrandImei && (
   <div>
    <label className="block text-sm font-medium text-gray-700 mb-2">MODEL</label>
-   {onAddModel && data.brand ? (
+   {allowCreateVariantValues && onAddModel && data.brand ? (
    <CreatableSearchableSelect
    options={brandModels}
    value={data.brandModel}
@@ -1159,7 +1163,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
   {showStorageImei && (
   <div>
    <label className="block text-sm font-medium text-gray-700 mb-2">STORAGE</label>
-   {onAddCapacity ? (
+   {allowCreateVariantValues && onAddCapacity ? (
    <CreatableSearchableSelect
    options={capacities}
    value={data.capacity}
@@ -1182,7 +1186,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
   {showColorImei && (
   <div>
    <label className="block text-sm font-medium text-gray-700 mb-2">COLOR</label>
-   {onAddColour ? (
+   {allowCreateVariantValues && onAddColour ? (
    <CreatableSearchableSelect
    options={colours}
    value={data.colour}
@@ -1466,10 +1470,11 @@ export const ItemForm: React.FC<ItemFormProps> = ({
    const selectedValueId = otherItemData.variantValues?.[attr._id] ?? "";
    const parentSelected = attributeIndex === 0 || categoryVariantAttributesOther.slice(0, attributeIndex).every((a) => otherItemData.variantValues?.[a._id]);
    const canAdd = otherItemData.type && parentSelected;
+   const canCreateNew = allowCreateVariantValues && canAdd;
    const parentPath = categoryVariantAttributesOther.slice(0, attributeIndex).map((a) => otherItemData.variantValues?.[a._id]).filter(Boolean) as string[];
    const firstAttrId = categoryVariantAttributesOther[0]?._id;
    const onCreateNew =
-   canAdd && onAddValueAtPath && firstAttrId
+   canCreateNew && onAddValueAtPath && firstAttrId
    ? (name: string) => onAddValueAtPath(otherItemData.type!, firstAttrId, parentPath, name)
    : undefined;
    const pathWithSelection = categoryVariantAttributesOther.slice(0, attributeIndex + 1).map((a) => otherItemData.variantValues?.[a._id]).filter(Boolean) as string[];
@@ -1509,7 +1514,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
    <div key={attr._id} className="space-y-2">
    <div className="flex items-center justify-between gap-2">
    <label className="block text-sm font-medium text-gray-700">{attr.name.toUpperCase()}</label>
-   {selectedValueId && (onEditVariantAtPath || onDeleteVariantAtPath) && (
+   {allowCreateVariantValues && selectedValueId && (onEditVariantAtPath || onDeleteVariantAtPath) && (
     <div className="flex items-center gap-1 shrink-0">
     {onEditVariantAtPath && (
     <button
@@ -1534,7 +1539,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
     </div>
    )}
    </div>
-   {canAdd && onCreateNew ? (
+   {canCreateNew && onCreateNew ? (
    <CreatableSearchableSelect
     options={valueOptions}
     value={selectedValueId}
@@ -1567,7 +1572,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
   {showGradeOther && (
   <div>
   <label className="block text-sm font-medium text-gray-700 mb-2">CONDITION</label>
-  {onAddGrade ? (
+  {allowCreateVariantValues && onAddGrade ? (
    <CreatableSearchableSelect
    options={grades}
    value={otherItemData.grade}
@@ -1590,7 +1595,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
   {showBrandOther && (
   <div>
   <label className="block text-sm font-medium text-gray-700 mb-2">BRAND</label>
-  {onAddBrand ? (
+  {allowCreateVariantValues && onAddBrand ? (
    <CreatableSearchableSelect
    options={brands}
    value={otherItemData.brand}
@@ -1618,7 +1623,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
   {showBrandOther && (
   <div>
    <label className="block text-sm font-medium text-gray-700 mb-2">MODEL</label>
-   {onAddModel && otherItemData.brand ? (
+   {allowCreateVariantValues && onAddModel && otherItemData.brand ? (
    <CreatableSearchableSelect
    options={brandModels}
    value={otherItemData.brandModel}
@@ -1641,7 +1646,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
   {showStorageOther && (
   <div>
    <label className="block text-sm font-medium text-gray-700 mb-2">STORAGE</label>
-   {onAddCapacity ? (
+   {allowCreateVariantValues && onAddCapacity ? (
    <CreatableSearchableSelect
    options={capacities}
    value={otherItemData.capacity}
@@ -1664,7 +1669,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
   {showColorOther && (
   <div>
    <label className="block text-sm font-medium text-gray-700 mb-2">COLOR</label>
-   {onAddColour ? (
+   {allowCreateVariantValues && onAddColour ? (
    <CreatableSearchableSelect
    options={colours}
    value={otherItemData.colour}

@@ -13,10 +13,13 @@ import {
 } from "./components";
 import { HelpTip } from "@/components/HelpTip";
 import { AddAccountModal } from "../../customers/components/AddAccountModal";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const NOOP = () => {};
 
 const AddPurchasePage = () => {
+ const { can } = usePermissions();
+ const allowCreateVariantValues = can("variant_attribute.create");
  const searchParams = useSearchParams();
  const importSerialByCategory = searchParams.get("import") === "serial-by-category";
  const [importBannerDismissed, setImportBannerDismissed] = useState(false);
@@ -320,6 +323,7 @@ const AddPurchasePage = () => {
   onSelectNonSerialProduct={selectNonSerialProduct}
   onSearchSerialProducts={searchSerialProducts}
   onSelectSerialProduct={selectSerialProduct}
+  allowCreateVariantValues={allowCreateVariantValues}
   onAddBrand={addBrand}
   onAddModel={addModelUnderBrand}
   onAddCapacity={addCapacity}

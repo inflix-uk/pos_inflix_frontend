@@ -23,6 +23,8 @@ interface SingleProductFormProps {
  getVariantOptionsForAttributeIndex: (variantValues: Record<string, string>, attributeIndex: number) => { _id: string; name: string }[];
  /** When provided, variant attribute dropdowns show "+ Add" to create new values (like add parcel). */
  onAddValueAtPath?: (categoryId: string, firstAttributeId: string, parentPath: string[], name: string) => Promise<string | null>;
+ /** When false, variant dropdowns are select-only (existing values in the system). */
+ allowCreateVariantValues?: boolean;
  currentImeiCount: number;
  /** Category dropdown still fetching (user picked type before prefetch finished). */
  isCategoryTypesLoading?: boolean;
@@ -63,6 +65,7 @@ export function SingleProductForm({
  categoryVariantAttributes,
  getVariantOptionsForAttributeIndex,
  onAddValueAtPath,
+ allowCreateVariantValues = false,
  currentImeiCount,
  isCategoryTypesLoading = false,
  currencySymbol = "£",
@@ -224,7 +227,10 @@ export function SingleProductForm({
   {categoryVariantAttributes.length > 0 && (
   <div className="space-y-2">
   <p className="text-[11px] text-gray-400">
-  Select in order; each dropdown shows options under the previous selection. Type and click &quot;+ Add&quot; to create new values.
+  Select in order; each dropdown shows options under the previous selection.
+  {allowCreateVariantValues
+   ? ' Type and click "+ Add" to create new values.'
+   : " Choose from existing values only."}
   </p>
   <div className="grid grid-cols-1 @[768px]:grid-cols-2 @[1024px]:grid-cols-3 gap-3">
   {categoryVariantAttributes.map((attr, attributeIndex) => {
@@ -238,9 +244,10 @@ export function SingleProductForm({
    .slice(0, attributeIndex)
    .map((a) => serialData.variantValues[a._id])
    .filter(Boolean);
-   const canAdd = !!serialData.type && parentSelected && firstAttrId && onAddValueAtPath;
+   const canAdd =
+    allowCreateVariantValues && !!serialData.type && parentSelected && firstAttrId && onAddValueAtPath;
    const onCreateNew = canAdd
-   ? (name: string) => onAddValueAtPath(serialData.type, firstAttrId, parentPath, name)
+   ? (name: string) => onAddValueAtPath!(serialData.type, firstAttrId, parentPath, name)
    : undefined;
    return (
    <div key={attr._id}>
@@ -444,7 +451,10 @@ export function SingleProductForm({
   {categoryVariantAttributes.length > 0 && (
   <div className="space-y-2">
   <p className="text-[11px] text-gray-400">
-  Select in order; each dropdown shows options under the previous selection. Type and click &quot;+ Add&quot; to create new values.
+  Select in order; each dropdown shows options under the previous selection.
+  {allowCreateVariantValues
+   ? ' Type and click "+ Add" to create new values.'
+   : " Choose from existing values only."}
   </p>
   <div className="grid grid-cols-1 @[768px]:grid-cols-2 @[1024px]:grid-cols-3 gap-3">
   {categoryVariantAttributes.map((attr, attributeIndex) => {
@@ -458,9 +468,10 @@ export function SingleProductForm({
    .slice(0, attributeIndex)
    .map((a) => nonSerialData.variantValues[a._id])
    .filter(Boolean);
-   const canAdd = !!nonSerialData.type && parentSelected && firstAttrId && onAddValueAtPath;
+   const canAdd =
+    allowCreateVariantValues && !!nonSerialData.type && parentSelected && firstAttrId && onAddValueAtPath;
    const onCreateNew = canAdd
-   ? (name: string) => onAddValueAtPath(nonSerialData.type, firstAttrId, parentPath, name)
+   ? (name: string) => onAddValueAtPath!(nonSerialData.type, firstAttrId, parentPath, name)
    : undefined;
    return (
    <div key={attr._id}>

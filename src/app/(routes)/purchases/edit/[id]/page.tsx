@@ -10,10 +10,13 @@ import {
  ItemForm,
  ParcelDetailsSummary,
 } from "../../add/components";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const labelCls = "block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1";
 
 const EditPurchasePage = () => {
+ const { can } = usePermissions();
+ const allowCreateVariantValues = can("variant_attribute.create");
  const {
  detailsSaved,
  handleSaveDetails,
@@ -290,6 +293,7 @@ const EditPurchasePage = () => {
   onVariantModelChange={handleItemVariantModelChange}
   onOtherVariantChange={handleOtherItemVariantChange}
   onOtherVariantModelChange={handleOtherItemVariantModelChange}
+  allowCreateVariantValues={allowCreateVariantValues}
   onAddValueAtPath={addValueAtPath}
   onEditVariantAtPath={updateVariantValueAtPath}
   onDeleteVariantAtPath={deleteVariantValueAtPath}

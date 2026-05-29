@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { useCreateSingleProduct } from "./hooks/useCreateSingleProduct";
 import { ProductTypeChoice } from "./components";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const SingleProductForm = dynamic(
  () =>
@@ -28,6 +29,8 @@ const SingleProductForm = dynamic(
 );
 
 export default function CreateProductPage() {
+ const { can } = usePermissions();
+ const allowCreateVariantValues = can("variant_attribute.create");
  const {
  productAddMode,
  setProductAddMode,
@@ -108,6 +111,7 @@ export default function CreateProductPage() {
   categoryVariantAttributes={categoryVariantAttributes}
   getVariantOptionsForAttributeIndex={getVariantOptionsForAttributeIndex}
   onAddValueAtPath={addValueAtPath}
+  allowCreateVariantValues={allowCreateVariantValues}
   currentImeiCount={currentImeiCount}
   isCategoryTypesLoading={isCategoryTypesLoading}
   onSubmit={submitSerial}
@@ -133,6 +137,7 @@ export default function CreateProductPage() {
   categoryVariantAttributes={categoryVariantAttributes}
   getVariantOptionsForAttributeIndex={getVariantOptionsForAttributeIndex}
   onAddValueAtPath={addValueAtPath}
+  allowCreateVariantValues={allowCreateVariantValues}
   currentImeiCount={0}
   isCategoryTypesLoading={isCategoryTypesLoading}
   onSubmit={submitNonSerial}
