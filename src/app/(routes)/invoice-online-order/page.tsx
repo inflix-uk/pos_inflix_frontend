@@ -75,6 +75,9 @@ function invoiceToPrintable(inv: InvoiceRecord): SaleForPrint {
   discountValue: inv.discountValue,
   total: inv.total,
   paymentMethod: inv.paymentMethod,
+  payments: inv.payments,
+  previousBalance: inv.previousBalance,
+  amountDue: inv.amountDue,
  };
 }
 

@@ -1480,11 +1480,6 @@ const Page = () => {
    : "Order completed"
   );
   if (result.data?._id && result.data?.reference) {
-  const paymentSum =
-  (details.payments?.cash ?? 0) +
-  (details.payments?.card ?? 0) +
-  (details.payments?.credit ?? 0) +
-  (details.payments?.bank ?? 0);
   const data = result.data as {
    taxName?: string;
    taxRate?: number;
@@ -1511,6 +1506,14 @@ const Page = () => {
          taxType: cartTax.type,
         }
       : {};
+  const paymentReceived =
+   (details.payments?.cash ?? 0) +
+   (details.payments?.card ?? 0) +
+   (details.payments?.bank ?? 0);
+  const remainingDue = Math.max(
+   0,
+   Math.round(((details.amountDue ?? 0) - paymentReceived) * 100) / 100,
+  );
   setSaleForPrint({
   _id: result.data._id,
   reference: result.data.reference,
@@ -1542,8 +1545,8 @@ const Page = () => {
   total,
   payments: details.payments,
   previousBalance: details.previousBalance,
-  amountDue: details.amountDue,
-  balanceAfter: details.amountDue != null ? details.amountDue - paymentSum : undefined,
+  amountDue: remainingDue,
+  balanceAfter: remainingDue,
   });
   } else {
   setSaleForPrint(null);
