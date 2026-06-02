@@ -670,6 +670,14 @@ export const ItemForm: React.FC<ItemFormProps> = ({
    onClick={() => toggleExpand(item.id)}
   >
    <div className="flex items-center gap-2">
+   <button
+   type="button"
+   onClick={(e) => { e.stopPropagation(); onRemoveItem(item.id); }}
+   className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+   title="Remove item"
+   >
+   <X className="w-4 h-4" />
+   </button>
    <span className="inline-flex items-center justify-center w-5 h-5 bg-gray-900 text-white text-[10px] font-bold rounded-full">
    {idx + 1}
    </span>
@@ -684,14 +692,6 @@ export const ItemForm: React.FC<ItemFormProps> = ({
    title="Edit item"
    >
    <Pencil className="w-4 h-4" />
-   </button>
-   <button
-   type="button"
-   onClick={(e) => { e.stopPropagation(); onRemoveItem(item.id); }}
-   className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-   title="Remove item"
-   >
-   <X className="w-4 h-4" />
    </button>
    {isExpanded ? (
    <ChevronUp className="w-4 h-4 text-gray-400" />
@@ -792,6 +792,14 @@ export const ItemForm: React.FC<ItemFormProps> = ({
    onClick={() => toggleExpand(item.id)}
   >
    <div className="flex items-center gap-2">
+   <button
+   type="button"
+   onClick={(e) => { e.stopPropagation(); onRemoveOtherItem(item.id); }}
+   className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+   title="Remove item"
+   >
+   <X className="w-4 h-4" />
+   </button>
    <span className="inline-flex items-center justify-center w-5 h-5 bg-gray-900 text-white text-[10px] font-bold rounded-full">
    {idx + 1}
    </span>
@@ -809,14 +817,6 @@ export const ItemForm: React.FC<ItemFormProps> = ({
    title="Edit item"
    >
    <Pencil className="w-4 h-4" />
-   </button>
-   <button
-   type="button"
-   onClick={(e) => { e.stopPropagation(); onRemoveOtherItem(item.id); }}
-   className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-   title="Remove item"
-   >
-   <X className="w-4 h-4" />
    </button>
    {isExpanded ? (
    <ChevronUp className="w-4 h-4 text-gray-400" />
