@@ -84,6 +84,14 @@ const LoginPage = () => {
         // Store token in localStorage
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.data));
+        if (typeof data.data?.effectiveRetailModeEnabled === "boolean") {
+          try {
+            sessionStorage.setItem(
+              "create-sales-retailMode",
+              data.data.effectiveRetailModeEnabled ? "1" : "0"
+            );
+          } catch {}
+        }
         startPosShift();
 
         // Redirect to dashboard

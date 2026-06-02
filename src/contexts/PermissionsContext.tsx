@@ -67,6 +67,12 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
         setSuspended(false);
         try {
           localStorage.setItem("user", JSON.stringify(json.data));
+          if (typeof json.data.effectiveRetailModeEnabled === "boolean") {
+            sessionStorage.setItem(
+              "create-sales-retailMode",
+              json.data.effectiveRetailModeEnabled ? "1" : "0"
+            );
+          }
         } catch {}
       }
     } catch {

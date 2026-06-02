@@ -331,7 +331,14 @@ const Page = () => {
 
  const [retailModeFromPrefs, setRetailModeFromPrefs] = useState(() => {
  if (typeof window === "undefined") return false;
- try { return sessionStorage.getItem("create-sales-retailMode") === "1"; } catch { return false; }
+ try {
+  const cached = localStorage.getItem("user");
+  if (cached) {
+   const u = JSON.parse(cached) as { effectiveRetailModeEnabled?: boolean };
+   if (typeof u.effectiveRetailModeEnabled === "boolean") return u.effectiveRetailModeEnabled;
+  }
+  return sessionStorage.getItem("create-sales-retailMode") === "1";
+ } catch { return false; }
  });
  const retailModeEnabled = forceWholesaleMode ? false : retailModeFromPrefs;
 
@@ -1561,6 +1568,12 @@ const Page = () => {
   } catch {}
   // Refresh inventory grid so qty reflects what was just sold (otherwise the picker
   // still shows the pre-sale stock and you can try to re-sell an already-sold unit).
+  try {
+   for (let i = sessionStorage.length - 1; i >= 0; i--) {
+    const k = sessionStorage.key(i);
+    if (k?.startsWith("inv-products-v1")) sessionStorage.removeItem(k);
+   }
+  } catch {}
   refetchProducts();
   // Broadcast to other tabs (e.g. /inventory/products) so their stock displays refresh too.
   emitInventoryEvent({ type: "sale-created", saleId: result.data?._id });
