@@ -26,8 +26,8 @@ import {
 import {
  salesApi,
  type SaleRecord,
- type SaleCustomer,
  formatCustomerAddressForInvoice,
+ getSaleCustomerDisplay,
 } from "../sales-dashboard/service/salesApi";
 import { downloadInvoiceA4, printInvoiceA4, printReceipt80mm } from "@/lib/invoicePrint";
 import { formatDateTimeLondon } from "@/lib/dateUtils";
@@ -338,10 +338,8 @@ function TakePaymentModal({
  // % of invoice already paid — used for the progress bar.
  const paidPct = invoiceTotal > 0 ? Math.min(100, Math.round((takenSoFar / invoiceTotal) * 100)) : 0;
 
- const customerName =
-  (typeof sale.customerId === "object" && sale.customerId && (sale.customerId as SaleCustomer).name)
-   || sale.customerName
-   || "—";
+ const { businessName: customerName, contactName: customerContact } = getSaleCustomerDisplay(sale);
+ const customerLabel = customerContact ? `${customerName} · ${customerContact}` : customerName;
 
  return (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={(e) => { if (e.target === e.currentTarget && !submitting) onClose(); }}>
@@ -349,7 +347,7 @@ function TakePaymentModal({
     <div className="bg-gray-900 px-5 py-4 flex items-center justify-between shrink-0">
      <div>
       <h3 className="text-lg font-semibold text-white">Take payment</h3>
-      <p className="text-xs text-gray-300 mt-0.5">{sale.reference} · {customerName}</p>
+      <p className="text-xs text-gray-300 mt-0.5">{sale.reference} · {customerLabel}</p>
      </div>
      <button type="button" onClick={onClose} disabled={submitting} className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 disabled:opacity-50">
       <X className="h-5 w-5" />
@@ -519,11 +517,8 @@ function InvoicePreviewModal({
  onPrintReceipt: () => void;
  printing: boolean;
 }) {
- const customer =
- typeof sale.customerId === "object" && sale.customerId
- ? (sale.customerId as SaleCustomer)
- : null;
- const customerName = customer?.name || sale.customerName || "\u2014";
+ const { businessName: customerName, contactName: customerContact, phone: customerPhone } =
+  getSaleCustomerDisplay(sale);
  const location =
  typeof sale.locationId === "object" && sale.locationId
  ? (sale.locationId as { _id: string; name: string })
@@ -575,7 +570,10 @@ function InvoicePreviewModal({
   <div className="min-w-0">
   <p className="text-[10px] sm:text-xs font-medium uppercase tracking-wide text-gray-500">Customer</p>
   <p className="mt-1 text-sm font-medium text-gray-900 truncate">{customerName}</p>
-  {customer?.phone && <p className="text-xs text-gray-500 truncate">{customer.phone}</p>}
+  {customerContact ? (
+   <p className="text-xs text-gray-600 truncate">{customerContact}</p>
+  ) : null}
+  {customerPhone ? <p className="text-xs text-gray-500 truncate">{customerPhone}</p> : null}
   </div>
   <div className="min-w-0">
   <p className="text-[10px] sm:text-xs font-medium uppercase tracking-wide text-gray-500">Date</p>
@@ -991,10 +989,9 @@ const Page = () => {
  };
 
  const displayCustomerLine = (sale: SaleRecord) => {
- const name = sale.customerName || (sale.type === "retail" ? "Walk-in" : "—");
- const cust = typeof sale.customerId === "object" && sale.customerId ? (sale.customerId as SaleCustomer) : null;
- const extra = [cust?.phone, cust?.email].filter(Boolean).join(" · ");
- return { name, extra };
+ const { businessName, contactName, phone, email } = getSaleCustomerDisplay(sale);
+ const extra = [phone, email].filter(Boolean).join(" · ");
+ return { name: businessName, contact: contactName, extra };
  };
 
  const handlePageChange = (page: number) => setCurrentPage(page);
@@ -1299,7 +1296,7 @@ const Page = () => {
   ) : (
    sales.map((sale, idx) => {
    const expanded = expandedSaleIds.has(sale._id);
-   const { name: custName, extra: custExtra } = displayCustomerLine(sale);
+   const { name: custName, contact: custContact, extra: custExtra } = displayCustomerLine(sale);
    const lines = sale.items ?? [];
    const rowNumber = (currentPage - 1) * rowsPerPage + idx + 1;
    const explicitDue = Number(sale.amountDue);
@@ -1323,6 +1320,7 @@ const Page = () => {
      {sale.reference}
      </button>
      <div className="mt-1 text-sm font-semibold text-gray-900 truncate">{custName}</div>
+     {custContact ? <div className="text-[11px] text-gray-600 truncate">{custContact}</div> : null}
      {custExtra ? <div className="text-[11px] text-gray-500 truncate">{custExtra}</div> : null}
     </div>
     <div className="shrink-0 flex flex-col items-end gap-1">
@@ -1490,7 +1488,7 @@ const Page = () => {
    ) : (
    sales.map((sale, idx) => {
    const expanded = expandedSaleIds.has(sale._id);
-   const { name: custName, extra: custExtra } = displayCustomerLine(sale);
+   const { name: custName, contact: custContact, extra: custExtra } = displayCustomerLine(sale);
    const lines = sale.items ?? [];
    const rowNumber = (currentPage - 1) * rowsPerPage + idx + 1;
    return (
@@ -1526,6 +1524,9 @@ const Page = () => {
     </td>
     <td className="px-2 @[640px]:px-6 py-0.5 @[640px]:py-1 text-xs @[640px]:text-sm text-gray-900 font-medium align-top leading-tight">
     <div>{custName}</div>
+    {custContact ? (
+     <div className="text-[10px] @[640px]:text-xs text-gray-600 font-normal">{custContact}</div>
+    ) : null}
     {custExtra ? <div className="text-[10px] @[640px]:text-xs text-gray-500 font-normal">{custExtra}</div> : null}
     </td>
     <td className="px-2 @[640px]:px-6 py-0.5 @[640px]:py-1 align-top">{statusBadge(sale)}</td>

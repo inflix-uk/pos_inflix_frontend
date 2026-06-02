@@ -175,9 +175,27 @@ export interface SaleCustomerAddress {
 export interface SaleCustomer {
  _id?: string;
  name?: string;
+ contactName?: string;
  phone?: string;
+ mobile?: string;
  email?: string;
  address?: SaleCustomerAddress;
+}
+
+/** Business + contact person lines for sales list / preview (Customer.name vs contactName). */
+export function getSaleCustomerDisplay(
+ sale: Pick<SaleRecord, "customerName" | "customerId" | "type">
+): { businessName: string; contactName: string | null; phone?: string; email?: string } {
+ const cust =
+  typeof sale.customerId === "object" && sale.customerId ? (sale.customerId as SaleCustomer) : null;
+ const businessName =
+  cust?.name?.trim() || sale.customerName?.trim() || (sale.type === "retail" ? "Walk-in" : "—");
+ const rawContact = cust?.contactName?.trim();
+ const contactName =
+  rawContact && rawContact.toLowerCase() !== businessName.toLowerCase() ? rawContact : null;
+ const phone = (cust?.phone || cust?.mobile || "").trim() || undefined;
+ const email = cust?.email?.trim() || undefined;
+ return { businessName, contactName, phone, email };
 }
 
 /** Populated location on sale (for invoice/receipt header and display) */
