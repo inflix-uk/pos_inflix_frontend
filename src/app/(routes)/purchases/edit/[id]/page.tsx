@@ -56,6 +56,8 @@ const EditPurchasePage = () => {
  handleAddItem,
  handleRemoveItem,
  handleEditItem,
+ editingItemId,
+ handleCancelEdit,
  handleBack,
  handleReset,
  getCurrencySymbol,
@@ -69,6 +71,8 @@ const EditPurchasePage = () => {
  handleAddOtherItem,
  handleRemoveOtherItem,
  handleEditOtherItem,
+ editingOtherItemId,
+ handleCancelOtherEdit,
  categoryVariantAttributesImei,
  categoryVariantAttributesOther,
  getVariantOptionsForAttributeIndex,
@@ -276,6 +280,8 @@ const EditPurchasePage = () => {
   canAddSerialItem={true}
   onRemoveItem={handleRemoveItem}
   onEditItem={handleEditItem}
+  editingItemId={editingItemId}
+  onCancelEdit={handleCancelEdit}
   mode={itemMode}
   onModeChange={setItemMode}
   otherItemData={otherItemData}
@@ -287,6 +293,8 @@ const EditPurchasePage = () => {
   onAddOtherItem={handleAddOtherItem}
   onRemoveOtherItem={handleRemoveOtherItem}
   onEditOtherItem={handleEditOtherItem}
+  editingOtherItemId={editingOtherItemId}
+  onCancelOtherEdit={handleCancelOtherEdit}
   categoryVariantAttributesImei={categoryVariantAttributesImei}
   categoryVariantAttributesOther={categoryVariantAttributesOther}
   onVariantChange={handleItemVariantChange}
