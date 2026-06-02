@@ -79,6 +79,12 @@ export const useEditPurchase = () => {
 
  const [savedOtherItems, setSavedOtherItems] = useState<OtherItemEntry[]>([]);
 
+ // Track which saved entry is currently loaded into the form for editing. While set, the entry
+ // remains visible in the saved list (with an "open" indicator) and its serial/quantity counts
+ // are excluded from totals so they aren't double-counted with the form's live serials.
+ const [editingItemId, setEditingItemId] = useState<string | null>(null);
+ const [editingOtherItemId, setEditingOtherItemId] = useState<string | null>(null);
+
  const [status, setStatus] = useState<"Received" | "Pending" | "Ordered">("Received");
  const [paymentStatus, setPaymentStatus] = useState<"Paid" | "Unpaid" | "Partial">("Unpaid");
  const [paid, setPaid] = useState<string>("0");
@@ -728,12 +734,23 @@ export const useEditPurchase = () => {
 
  const [savedItems, setSavedItems] = useState<ItemEntry[]>([]);
 
- const savedIMEICount = useMemo(() => savedItems.reduce((sum, item) => sum + item.imeiCount, 0), [savedItems]);
+ // Exclude the entry currently being edited — its data lives in the form, and the form's
+ // currentFormIMEICount already represents that entry's live serial count.
+ const savedIMEICount = useMemo(
+  () =>
+   savedItems
+    .filter((i) => i.id !== editingItemId)
+    .reduce((sum, item) => sum + item.imeiCount, 0),
+  [savedItems, editingItemId]
+ );
  const totalIMEIs = savedIMEICount + currentFormIMEICount;
 
  const savedOtherQuantity = useMemo(
-  () => savedOtherItems.reduce((sum, item) => sum + item.quantity, 0),
-  [savedOtherItems]
+  () =>
+   savedOtherItems
+    .filter((i) => i.id !== editingOtherItemId)
+    .reduce((sum, item) => sum + item.quantity, 0),
+  [savedOtherItems, editingOtherItemId]
  );
  const currentOtherQuantity = parseInt(otherItemData.quantity) || 0;
  const totalOtherQuantity = savedOtherQuantity + currentOtherQuantity;
@@ -761,20 +778,36 @@ export const useEditPurchase = () => {
    return;
   }
   const currentIMEIs = parseMultiIMEIs(itemData.multiIMEIs);
-  const allSavedIMEIs = savedItems.flatMap((item) => parseMultiIMEIs(item.data.multiIMEIs));
+  // Exclude the entry being edited from duplicate check — its old serials are being replaced
+  // by what's currently in the form.
+  const allSavedIMEIs = savedItems
+   .filter((item) => item.id !== editingItemId)
+   .flatMap((item) => parseMultiIMEIs(item.data.multiIMEIs));
   const savedU = new Set(allSavedIMEIs.map((x) => x.toUpperCase()));
   const duplicate = currentIMEIs.find((sn) => savedU.has(sn.toUpperCase()));
   if (duplicate) {
    setSubmitMessage({ type: "error", text: `Duplicate serial "${duplicate}" is already in another item group!` });
    return;
   }
-  const entry: ItemEntry = {
-   id: Date.now().toString(),
-   data: { ...itemData },
-   imeiCount: currentFormIMEICount,
-   specsSummary: buildSpecsSummary(itemData),
-  };
-  setSavedItems((prev) => [...prev, entry]);
+  const specs = buildSpecsSummary(itemData);
+  if (editingItemId) {
+   setSavedItems((prev) =>
+    prev.map((item) =>
+     item.id === editingItemId
+      ? { ...item, data: { ...itemData }, imeiCount: currentFormIMEICount, specsSummary: specs }
+      : item
+    )
+   );
+   setEditingItemId(null);
+  } else {
+   const entry: ItemEntry = {
+    id: Date.now().toString(),
+    data: { ...itemData },
+    imeiCount: currentFormIMEICount,
+    specsSummary: specs,
+   };
+   setSavedItems((prev) => [...prev, entry]);
+  }
   setItemData({
    sendTo: "", taxCategory: "", type: "", make: "", grade: "", brand: "",
    brandModel: "", capacity: "", colour: "", purchasePrice: "", salePrice: "", multiIMEIs: "",
@@ -784,7 +817,46 @@ export const useEditPurchase = () => {
  };
 
  const handleRemoveItem = (id: string) => {
+  if (id === editingItemId) {
+   setEditingItemId(null);
+   setItemData({
+    sendTo: "", taxCategory: "", type: "", make: "", grade: "", brand: "",
+    brandModel: "", capacity: "", colour: "", purchasePrice: "", salePrice: "", multiIMEIs: "",
+    variantValues: {},
+   });
+  }
   setSavedItems((prev) => prev.filter((item) => item.id !== id));
+ };
+
+ // Commit whatever is in the form back to the currently-edited entry (if any) without
+ // adding a new row. Used when switching to edit another item or when explicitly cancelling.
+ const commitFormToEditingItem = (targetId: string) => {
+  const pp = parseFloat(itemData.purchasePrice);
+  const sp = parseFloat(itemData.salePrice);
+  const cnt = currentFormIMEICount;
+  if (cnt === 0 || !Number.isFinite(pp) || pp <= 0 || !Number.isFinite(sp) || sp <= 0) {
+   // Form is incomplete — leave the original saved entry untouched.
+   return;
+  }
+  const specs = buildSpecsSummary(itemData);
+  setSavedItems((prev) =>
+   prev.map((item) =>
+    item.id === targetId
+     ? { ...item, data: { ...itemData }, imeiCount: cnt, specsSummary: specs }
+     : item
+   )
+  );
+ };
+
+ const handleCancelEdit = () => {
+  if (!editingItemId) return;
+  commitFormToEditingItem(editingItemId);
+  setEditingItemId(null);
+  setItemData({
+   sendTo: "", taxCategory: "", type: "", make: "", grade: "", brand: "",
+   brandModel: "", capacity: "", colour: "", purchasePrice: "", salePrice: "", multiIMEIs: "",
+   variantValues: {},
+  });
  };
 
  // Match option by _id or by name (case-insensitive) so API uppercase variant names resolve
@@ -798,6 +870,12 @@ export const useEditPurchase = () => {
  };
 
  const handleEditItem = (id: string) => {
+  // Toggle: if user re-clicks the row that's already open in the form, treat it as "close".
+  if (editingItemId === id) {
+   handleCancelEdit();
+   return;
+  }
+
   const entry = savedItems.find((item) => item.id === id);
   if (!entry) return;
   const d = { ...entry.data };
@@ -818,6 +896,12 @@ export const useEditPurchase = () => {
 
   const brandModelId = resolvedModels.length ? matchId(resolvedModels, d.brandModel) : d.brandModel;
 
+  // Switching from one open entry to another: commit the form's current contents back to
+  // the previously-edited entry so the user's pending changes aren't lost.
+  if (editingItemId && editingItemId !== id) {
+   commitFormToEditingItem(editingItemId);
+  }
+
   setItemData({
    ...d,
    grade: gradeId,
@@ -826,7 +910,7 @@ export const useEditPurchase = () => {
    capacity: capacityId,
    colour: colourId,
   });
-  setSavedItems((prev) => prev.filter((item) => item.id !== id));
+  setEditingItemId(id);
   if (d.type) {
    fetchSubCategories(d.type);
    fetchCategoryVariantAttributes(d.type, true);
@@ -888,13 +972,25 @@ export const useEditPurchase = () => {
    return;
   }
 
-  const entry: OtherItemEntry = {
-   id: Date.now().toString(),
-   data: { ...otherItemData },
-   quantity: currentOtherQuantity,
-   specsSummary: buildOtherSpecsSummary(),
-  };
-  setSavedOtherItems((prev) => [...prev, entry]);
+  const specs = buildOtherSpecsSummary();
+  if (editingOtherItemId) {
+   setSavedOtherItems((prev) =>
+    prev.map((item) =>
+     item.id === editingOtherItemId
+      ? { ...item, data: { ...otherItemData }, quantity: currentOtherQuantity, specsSummary: specs }
+      : item
+    )
+   );
+   setEditingOtherItemId(null);
+  } else {
+   const entry: OtherItemEntry = {
+    id: Date.now().toString(),
+    data: { ...otherItemData },
+    quantity: currentOtherQuantity,
+    specsSummary: specs,
+   };
+   setSavedOtherItems((prev) => [...prev, entry]);
+  }
   setOtherItemData({
    sendTo: "", taxCategory: "", type: "", make: "", grade: "", brand: "",
    brandModel: "", capacity: "", colour: "", purchasePrice: "", salePrice: "", quantity: "0",
@@ -904,14 +1000,59 @@ export const useEditPurchase = () => {
  };
 
  const handleRemoveOtherItem = (id: string) => {
+  if (id === editingOtherItemId) {
+   setEditingOtherItemId(null);
+   setOtherItemData({
+    sendTo: "", taxCategory: "", type: "", make: "", grade: "", brand: "",
+    brandModel: "", capacity: "", colour: "", purchasePrice: "", salePrice: "", quantity: "0",
+    name: "", barcode: "", variantValues: {},
+   });
+  }
   setSavedOtherItems((prev) => prev.filter((item) => item.id !== id));
  };
 
+ const commitFormToEditingOtherItem = (targetId: string) => {
+  const opp = parseFloat(otherItemData.purchasePrice);
+  const osp = parseFloat(otherItemData.salePrice);
+  const qty = currentOtherQuantity;
+  if (qty === 0 || !Number.isFinite(opp) || opp <= 0 || !Number.isFinite(osp) || osp <= 0) {
+   return;
+  }
+  const specs = buildOtherSpecsSummary();
+  setSavedOtherItems((prev) =>
+   prev.map((item) =>
+    item.id === targetId
+     ? { ...item, data: { ...otherItemData }, quantity: qty, specsSummary: specs }
+     : item
+   )
+  );
+ };
+
+ const handleCancelOtherEdit = () => {
+  if (!editingOtherItemId) return;
+  commitFormToEditingOtherItem(editingOtherItemId);
+  setEditingOtherItemId(null);
+  setOtherItemData({
+   sendTo: "", taxCategory: "", type: "", make: "", grade: "", brand: "",
+   brandModel: "", capacity: "", colour: "", purchasePrice: "", salePrice: "", quantity: "0",
+   name: "", barcode: "", variantValues: {},
+  });
+ };
+
  const handleEditOtherItem = (id: string) => {
+  if (editingOtherItemId === id) {
+   handleCancelOtherEdit();
+   return;
+  }
   const entry = savedOtherItems.find((item) => item.id === id);
   if (!entry) return;
+
+  if (editingOtherItemId && editingOtherItemId !== id) {
+   commitFormToEditingOtherItem(editingOtherItemId);
+  }
+
   setOtherItemData({ ...entry.data });
-  setSavedOtherItems((prev) => prev.filter((item) => item.id !== id));
+  setEditingOtherItemId(id);
   if (entry.data.type) {
    fetchSubCategories(entry.data.type);
    fetchCategoryVariantAttributes(entry.data.type, false);
@@ -1250,6 +1391,8 @@ export const useEditPurchase = () => {
    brandModel: "", capacity: "", colour: "", purchasePrice: "", salePrice: "", quantity: "0",
    name: "", barcode: "", variantValues: {},
   });
+  setEditingItemId(null);
+  setEditingOtherItemId(null);
   setSubmitMessage({ type: "", text: "" });
  };
 
@@ -1316,6 +1459,8 @@ export const useEditPurchase = () => {
   handleAddItem,
   handleRemoveItem,
   handleEditItem,
+  editingItemId,
+  handleCancelEdit,
   handleBack,
   handleReset,
   getCurrencySymbol,
@@ -1329,6 +1474,8 @@ export const useEditPurchase = () => {
   handleAddOtherItem,
   handleRemoveOtherItem,
   handleEditOtherItem,
+  editingOtherItemId,
+  handleCancelOtherEdit,
   categoryVariantAttributesImei,
   categoryVariantAttributesOther,
   getVariantOptionsForAttributeIndex,

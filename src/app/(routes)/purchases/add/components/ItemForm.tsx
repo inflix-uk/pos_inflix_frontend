@@ -391,6 +391,10 @@ interface ItemFormProps {
  canAddSerialItem?: boolean;
  onRemoveItem: (id: string) => void;
  onEditItem: (id: string) => void;
+ /** Id of the saved IMEI entry currently loaded in the form for editing (highlighted, up-arrow toggle). */
+ editingItemId?: string | null;
+ /** Called when the user clicks the up-arrow on the row currently being edited. */
+ onCancelEdit?: () => void;
  // Other items props
  mode: ItemMode;
  onModeChange: (mode: ItemMode) => void;
@@ -403,6 +407,10 @@ interface ItemFormProps {
  onAddOtherItem: () => void;
  onRemoveOtherItem: (id: string) => void;
  onEditOtherItem: (id: string) => void;
+ /** Id of the saved non-serial entry currently loaded in the form for editing. */
+ editingOtherItemId?: string | null;
+ /** Called when the user clicks the up-arrow on the non-serial row currently being edited. */
+ onCancelOtherEdit?: () => void;
  /** Typeahead search for existing non-serial items. */
  onSearchNonSerialProducts?: (query: string, limit?: number) => Promise<NonSerialSearchResult[]>;
  /** Prefill the non-serial form from a selected existing item. */
@@ -478,6 +486,8 @@ export const ItemForm: React.FC<ItemFormProps> = ({
  canAddSerialItem = true,
  onRemoveItem,
  onEditItem,
+ editingItemId = null,
+ onCancelEdit,
  // Other items props
  mode,
  onModeChange,
@@ -490,6 +500,8 @@ export const ItemForm: React.FC<ItemFormProps> = ({
  onAddOtherItem,
  onRemoveOtherItem,
  onEditOtherItem,
+ editingOtherItemId = null,
+ onCancelOtherEdit,
  onSearchNonSerialProducts,
  onSelectNonSerialProduct,
  onSearchSerialProducts,
@@ -659,15 +671,28 @@ export const ItemForm: React.FC<ItemFormProps> = ({
  <div className={`${isInline ? "px-3 py-3 sm:px-4" : "p-4"} border-b border-gray-200 space-y-1.5`}>
   <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Saved item groups</h3>
   {savedItems.map((item, idx) => {
-  const isExpanded = expandedItems.has(item.id);
+  const isEditingRow = editingItemId === item.id;
+  // Editing row auto-expands so the user always sees the "open" state. Otherwise normal toggle.
+  const isExpanded = isEditingRow || expandedItems.has(item.id);
   const d = item.data;
   const imeiLines = parseMultiIMEIs(d.multiIMEIs);
   return (
-  <div key={item.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-  {/* Header row — click to toggle */}
   <div
-   className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
-   onClick={() => toggleExpand(item.id)}
+   key={item.id}
+   className={`bg-white border rounded-lg overflow-hidden transition-all duration-300 ease-out ${
+   isEditingRow
+    ? "border-blue-400 ring-2 ring-blue-200 shadow-sm bg-blue-50/40 scale-[1.005]"
+    : "border-gray-200"
+   }`}
+  >
+  {/* Header row — click to toggle (or close edit when this is the editing row) */}
+  <div
+   className={`flex items-center justify-between px-3 py-2 transition-colors ${
+   isEditingRow ? "cursor-default" : "cursor-pointer hover:bg-gray-50"
+   }`}
+   onClick={() => {
+   if (!isEditingRow) toggleExpand(item.id);
+   }}
   >
    <div className="flex items-center gap-2">
    <button
@@ -678,32 +703,59 @@ export const ItemForm: React.FC<ItemFormProps> = ({
    >
    <X className="w-4 h-4" />
    </button>
-   <span className="inline-flex items-center justify-center w-5 h-5 bg-gray-900 text-white text-[10px] font-bold rounded-full">
+   <span
+    className={`inline-flex items-center justify-center w-5 h-5 text-white text-[10px] font-bold rounded-full transition-colors ${
+    isEditingRow ? "bg-blue-600" : "bg-gray-900"
+    }`}
+   >
    {idx + 1}
    </span>
    <span className="text-xs text-gray-800 font-medium">{item.specsSummary}</span>
    <span className="text-[11px] text-gray-500">({item.imeiCount} serial{item.imeiCount === 1 ? "" : "s"})</span>
+   {isEditingRow && (
+   <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold uppercase tracking-wide animate-pulse">
+    Editing
+   </span>
+   )}
    </div>
    <div className="flex items-center gap-2">
+   {isEditingRow ? (
    <button
    type="button"
-   onClick={(e) => { e.stopPropagation(); onEditItem(item.id); }}
-   className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-   title="Edit item"
+   onClick={(e) => { e.stopPropagation(); onCancelEdit?.(); }}
+   className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded transition-all duration-200"
+   title="Close edit"
+   aria-label="Close edit"
    >
-   <Pencil className="w-4 h-4" />
+   <ChevronUp className="w-4 h-4 transition-transform duration-300" />
+   </button>
+   ) : (
+   <>
+   <button
+    type="button"
+    onClick={(e) => { e.stopPropagation(); onEditItem(item.id); }}
+    className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+    title="Edit item"
+   >
+    <Pencil className="w-4 h-4" />
    </button>
    {isExpanded ? (
-   <ChevronUp className="w-4 h-4 text-gray-400" />
+    <ChevronUp className="w-4 h-4 text-gray-400 transition-transform duration-300" />
    ) : (
-   <ChevronDown className="w-4 h-4 text-gray-400" />
+    <ChevronDown className="w-4 h-4 text-gray-400 transition-transform duration-300" />
+   )}
+   </>
    )}
    </div>
   </div>
 
   {/* Expanded details */}
   {isExpanded && (
-   <div className="px-4 pb-4 pt-2 border-t border-gray-100 space-y-3">
+   <div
+   className={`px-4 pb-4 pt-2 border-t space-y-3 transition-colors duration-300 ${
+   isEditingRow ? "border-blue-200 bg-blue-50/30" : "border-gray-100"
+   }`}
+   >
    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
    <div>
    <span className="text-gray-500">Send To:</span>{" "}
@@ -783,13 +835,25 @@ export const ItemForm: React.FC<ItemFormProps> = ({
  <div className={`${isInline ? "px-3 py-3 sm:px-4" : "p-4"} border-b border-gray-200 space-y-1.5`}>
   <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Saved non-serial groups</h3>
   {savedOtherItems.map((item, idx) => {
-  const isExpanded = expandedItems.has(item.id);
+  const isEditingRow = editingOtherItemId === item.id;
+  const isExpanded = isEditingRow || expandedItems.has(item.id);
   const d = item.data;
   return (
-  <div key={item.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
   <div
-   className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
-   onClick={() => toggleExpand(item.id)}
+   key={item.id}
+   className={`bg-white border rounded-lg overflow-hidden transition-all duration-300 ease-out ${
+   isEditingRow
+    ? "border-blue-400 ring-2 ring-blue-200 shadow-sm bg-blue-50/40 scale-[1.005]"
+    : "border-gray-200"
+   }`}
+  >
+  <div
+   className={`flex items-center justify-between px-3 py-2 transition-colors ${
+   isEditingRow ? "cursor-default" : "cursor-pointer hover:bg-gray-50"
+   }`}
+   onClick={() => {
+   if (!isEditingRow) toggleExpand(item.id);
+   }}
   >
    <div className="flex items-center gap-2">
    <button
@@ -800,7 +864,11 @@ export const ItemForm: React.FC<ItemFormProps> = ({
    >
    <X className="w-4 h-4" />
    </button>
-   <span className="inline-flex items-center justify-center w-5 h-5 bg-gray-900 text-white text-[10px] font-bold rounded-full">
+   <span
+    className={`inline-flex items-center justify-center w-5 h-5 text-white text-[10px] font-bold rounded-full transition-colors ${
+    isEditingRow ? "bg-blue-600" : "bg-gray-900"
+    }`}
+   >
    {idx + 1}
    </span>
    <span className="text-sm text-gray-800 font-medium">{item.specsSummary}</span>
@@ -808,26 +876,49 @@ export const ItemForm: React.FC<ItemFormProps> = ({
    <span className="text-xs text-gray-500 font-mono">— {d.barcode}</span>
    )}
    <span className="text-xs text-gray-500">(Qty: {item.quantity})</span>
+   {isEditingRow && (
+   <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold uppercase tracking-wide animate-pulse">
+    Editing
+   </span>
+   )}
    </div>
    <div className="flex items-center gap-2">
+   {isEditingRow ? (
    <button
    type="button"
-   onClick={(e) => { e.stopPropagation(); onEditOtherItem(item.id); }}
-   className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-   title="Edit item"
+   onClick={(e) => { e.stopPropagation(); onCancelOtherEdit?.(); }}
+   className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded transition-all duration-200"
+   title="Close edit"
+   aria-label="Close edit"
    >
-   <Pencil className="w-4 h-4" />
+   <ChevronUp className="w-4 h-4 transition-transform duration-300" />
+   </button>
+   ) : (
+   <>
+   <button
+    type="button"
+    onClick={(e) => { e.stopPropagation(); onEditOtherItem(item.id); }}
+    className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+    title="Edit item"
+   >
+    <Pencil className="w-4 h-4" />
    </button>
    {isExpanded ? (
-   <ChevronUp className="w-4 h-4 text-gray-400" />
+    <ChevronUp className="w-4 h-4 text-gray-400 transition-transform duration-300" />
    ) : (
-   <ChevronDown className="w-4 h-4 text-gray-400" />
+    <ChevronDown className="w-4 h-4 text-gray-400 transition-transform duration-300" />
+   )}
+   </>
    )}
    </div>
   </div>
 
   {isExpanded && (
-   <div className="px-4 pb-4 pt-2 border-t border-gray-200 space-y-3">
+   <div
+   className={`px-4 pb-4 pt-2 border-t space-y-3 transition-colors duration-300 ${
+   isEditingRow ? "border-blue-200 bg-blue-50/30" : "border-gray-200"
+   }`}
+   >
    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm">
    <div>
    <span className="text-gray-500">Barcode:</span>{" "}
@@ -1830,7 +1921,11 @@ export const ItemForm: React.FC<ItemFormProps> = ({
   <button
   type="button"
   onClick={mode === "imei" ? onAddItem : onAddOtherItem}
-  className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+  className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
+  (mode === "imei" ? editingItemId : editingOtherItemId)
+   ? "bg-blue-600 hover:bg-blue-700 shadow-md"
+   : "bg-gray-900 hover:bg-gray-800"
+  }`}
   disabled={
   (mode === "imei" && !canAddSerialItem) || (mode === "other" && Number(otherItemData.quantity) <= 0)
   }
@@ -1842,8 +1937,17 @@ export const ItemForm: React.FC<ItemFormProps> = ({
    : undefined
   }
   >
+  {(mode === "imei" ? editingItemId : editingOtherItemId) ? (
+  <>
+  <Save className="w-3.5 h-3.5 mr-1.5" />
+  Save changes
+  </>
+  ) : (
+  <>
   <Plus className="w-3.5 h-3.5 mr-1.5" />
   Add Item
+  </>
+  )}
   </button>
   {!isInline && (
   <button
