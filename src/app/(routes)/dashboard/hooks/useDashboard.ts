@@ -3,24 +3,27 @@
 import { useState, useCallback, useEffect } from "react";
 import { fetchDashboard, type DashboardData } from "../service/dashboardApi";
 import {
- getDashboardRangeUtc,
  type DashboardRange,
  type DashboardDateRange,
 } from "@/lib/dateUtils";
+import { getSalesDateRange } from "@/lib/salesDateAccess";
 
 export interface UseDashboardOptions {
  /** Single location filter (for Reports dashboard). */
  locationId?: string | null;
  /** Multi-location filter (for Reports dashboard). */
  locationIds?: string[] | null;
+ /** When false, date range is locked to today (staff without report.view). */
+ canViewHistorical?: boolean;
 }
 
 export function useDashboard(options?: UseDashboardOptions) {
+ const canViewHistorical = options?.canViewHistorical !== false;
  const [range, setRange] = useState<DashboardRange>("today");
  const [customFrom, setCustomFrom] = useState("");
  const [customTo, setCustomTo] = useState("");
  const [dateRange, setDateRange] = useState<DashboardDateRange>(() =>
-  getDashboardRangeUtc("today")
+  getSalesDateRange("today", undefined, undefined, canViewHistorical)
  );
  const [data, setData] = useState<DashboardData | null>(null);
  const [loading, setLoading] = useState(true);
@@ -30,7 +33,7 @@ export function useDashboard(options?: UseDashboardOptions) {
   setLoading(true);
   setError(null);
   try {
-   const next = getDashboardRangeUtc(range, customFrom, customTo);
+   const next = getSalesDateRange(range, customFrom, customTo, canViewHistorical);
    setDateRange(next);
    const result = await fetchDashboard(next.fromUtc, next.toUtc, {
     locationId: options?.locationId ?? undefined,
@@ -42,7 +45,7 @@ export function useDashboard(options?: UseDashboardOptions) {
   } finally {
    setLoading(false);
   }
- }, [range, customFrom, customTo, options?.locationId, options?.locationIds]);
+ }, [range, customFrom, customTo, options?.locationId, options?.locationIds, canViewHistorical]);
 
  useEffect(() => {
   load();

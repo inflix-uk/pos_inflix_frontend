@@ -10,6 +10,8 @@ interface DashboardDateRangeProps {
  label: string;
  onRefresh: () => void;
  loading?: boolean;
+ /** When false, show static "Today" label only (staff without report.view). */
+ historicalAllowed?: boolean;
 }
 
 export function DashboardDateRange({
@@ -18,7 +20,28 @@ export function DashboardDateRange({
  label,
  onRefresh,
  loading,
+ historicalAllowed = true,
 }: DashboardDateRangeProps) {
+ if (!historicalAllowed) {
+  return (
+  <div className="flex flex-nowrap items-center gap-1.5 @[640px]:gap-2 @[768px]:gap-3 whitespace-nowrap">
+  <span className="text-[10px] @[640px]:text-xs @[768px]:text-sm text-gray-500 flex items-center gap-1">
+  <Calendar className="h-3 w-3 @[640px]:h-3.5 @[640px]:w-3.5 @[768px]:h-4 @[768px]:w-4" />
+  <span>Today</span>
+  </span>
+  <button
+  type="button"
+  onClick={onRefresh}
+  disabled={loading}
+  className="p-1 @[640px]:p-1.5 @[768px]:p-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+  title="Refresh"
+  >
+  <RefreshCw className={`h-3 w-3 @[640px]:h-3.5 @[640px]:w-3.5 @[768px]:h-4 @[768px]:w-4 ${loading ? "animate-spin" : ""}`} />
+  </button>
+  </div>
+  );
+ }
+
  return (
  <div className="flex flex-nowrap items-center gap-1.5 @[640px]:gap-2 @[768px]:gap-3 whitespace-nowrap">
  <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-0.5 @[640px]:p-1 shrink-0">

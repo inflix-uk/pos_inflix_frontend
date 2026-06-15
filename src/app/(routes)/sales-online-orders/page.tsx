@@ -32,6 +32,10 @@ import {
 import { downloadInvoiceA4, printInvoiceA4, printReceipt80mm } from "@/lib/invoicePrint";
 import { formatDateTimeLondon } from "@/lib/dateUtils";
 import { usePermissionsContext } from "@/contexts/PermissionsContext";
+import {
+ getTodayLondonDateKey,
+ STAFF_SALES_BANNER,
+} from "@/lib/salesDateAccess";
 import { locationApi } from "../peoples/locations/service/locationApi";
 
 const formatMoney = (n: number) =>
@@ -756,6 +760,7 @@ function InvoicePreviewModal({
 const Page = () => {
  const router = useRouter();
  const { can, user } = usePermissionsContext();
+ const canViewHistorical = can("report.view");
  const canVoid = can("sale.void");
  /** Backend hard-delete requires legacy role admin (not only sale.delete — managers may have that perm). */
  const canHardDelete = (user?.role || "").toLowerCase() === "admin";
@@ -897,17 +902,26 @@ const Page = () => {
 
  const listOrder = useMemo(() => (selectedSort === "Oldest" ? "asc" : "desc"), [selectedSort]);
 
+ const visibleSortOptions = useMemo(
+  () =>
+   canViewHistorical
+    ? sortOptions
+    : sortOptions.filter((opt) => opt !== "Last 7 Days" && opt !== "Last 30 Days"),
+  [canViewHistorical]
+ );
+
  const fetchSales = useCallback(async () => {
  setLoading(true);
  setError(null);
  try {
+ const todayKey = getTodayLondonDateKey();
  const res = await salesApi.getSales({
  page: currentPage,
  limit: rowsPerPage,
  type: selectedType === "All" ? undefined : selectedType,
  search: debouncedSearch.trim() || undefined,
- from: dateFrom.trim() || undefined,
- to: dateTo.trim() || undefined,
+ from: canViewHistorical ? (dateFrom.trim() || undefined) : todayKey,
+ to: canViewHistorical ? (dateTo.trim() || undefined) : todayKey,
  locationId: locationId.trim() || undefined,
  paymentMethod: paymentMethod.trim() || undefined,
  minTotal: minTotal.trim() || undefined,
@@ -937,6 +951,7 @@ const Page = () => {
  maxTotal,
  hasReturnFilter,
  listOrder,
+ canViewHistorical,
  ]);
 
  useEffect(() => {
@@ -1005,6 +1020,11 @@ const Page = () => {
  return (
  <div className="@container min-h-screen bg-gray-50/80 p-3 @[640px]:p-6">
  <div className="w-full">
+ {!canViewHistorical && (
+ <div className="mb-3 @[640px]:mb-4 rounded-lg bg-amber-50 border border-amber-200 px-3 @[640px]:px-4 py-2 @[640px]:py-2.5 text-amber-800 text-[11px] @[640px]:text-xs @[768px]:text-sm">
+  {STAFF_SALES_BANNER}
+ </div>
+ )}
  <div className="mb-4 @[640px]:mb-8 flex flex-wrap items-center justify-between gap-3">
   <div className="flex items-center gap-2 @[640px]:gap-4">
   <div className="p-2 @[640px]:p-3 rounded-lg bg-white border border-gray-200/80 shadow-sm">
@@ -1104,7 +1124,7 @@ const Page = () => {
   </button>
   {showSortDropdown && (
    <div className="absolute z-10 mt-1.5 right-0 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-1 overflow-hidden">
-   {sortOptions.map((opt) => (
+   {visibleSortOptions.map((opt) => (
    <button
    key={opt}
    type="button"
@@ -1153,6 +1173,8 @@ const Page = () => {
 
   {showMoreFilters && (
   <div className="flex flex-wrap gap-3 pt-1 border-t border-gray-200/80">
+  {canViewHistorical && (
+  <>
   <div>
    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">From date</label>
    <input
@@ -1177,6 +1199,8 @@ const Page = () => {
    className="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
    />
   </div>
+  </>
+  )}
   <div>
    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Location</label>
    <select

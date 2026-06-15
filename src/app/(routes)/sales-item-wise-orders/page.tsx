@@ -17,9 +17,10 @@ import { salesApi, type SaleRecord } from "@/app/(routes)/sales-dashboard/servic
 import { locationApi } from "@/app/(routes)/peoples/locations/service/locationApi";
 import { usePermissionsContext } from "@/contexts/PermissionsContext";
 import {
- getDashboardRangeUtc,
- type DashboardRange,
-} from "@/lib/dateUtils";
+ getSalesDateRange,
+ STAFF_SALES_BANNER,
+} from "@/lib/salesDateAccess";
+import type { DashboardRange } from "@/lib/dateUtils";
 
 function formatCurrency(n: number): string {
  return new Intl.NumberFormat("en-GB", {
@@ -71,7 +72,8 @@ type SortKey = "createdAt" | "name" | "quantity" | "amount" | "reference";
 type SaleTypeFilter = "all" | "retail" | "wholesale" | "repair";
 
 export default function SalesItemWiseOrdersPage() {
- const { user } = usePermissionsContext();
+ const { user, can } = usePermissionsContext();
+ const canViewHistorical = can("report.view");
  const [allLocations, setAllLocations] = useState<Array<{ _id: string; name: string }>>([]);
  const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
 
@@ -97,7 +99,7 @@ export default function SalesItemWiseOrdersPage() {
   const qpFrom = sp.get("from");
   const qpTo = sp.get("to");
   const qpLoc = sp.get("locationId");
-  if (qpFrom && qpTo) {
+  if (canViewHistorical && qpFrom && qpTo) {
    setRange("custom");
    setCustomFrom(qpFrom);
    setCustomTo(qpTo);
@@ -108,7 +110,7 @@ export default function SalesItemWiseOrdersPage() {
   }
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored) setSelectedLocationId(stored);
- }, []);
+ }, [canViewHistorical]);
 
  const allowedLocationIds = useMemo(
   () => (user?.assignedLocationIds?.length ? new Set(user.assignedLocationIds) : null),
@@ -177,7 +179,7 @@ export default function SalesItemWiseOrdersPage() {
   setLoading(true);
   setError("");
   try {
-   const dateRange = getDashboardRangeUtc(range, customFrom, customTo);
+   const dateRange = getSalesDateRange(range, customFrom, customTo, canViewHistorical);
    const fromStr = toLondonDateKey(dateRange.fromUtc);
    const toStr = toLondonDateKey(dateRange.toUtc);
    setFrom(fromStr);
@@ -209,7 +211,7 @@ export default function SalesItemWiseOrdersPage() {
   } finally {
    setLoading(false);
   }
- }, [range, customFrom, customTo, selectedLocationId, saleType, flatten]);
+ }, [range, customFrom, customTo, selectedLocationId, saleType, flatten, canViewHistorical]);
 
  useEffect(() => {
   load();
@@ -328,9 +330,17 @@ export default function SalesItemWiseOrdersPage() {
      </p>
     </div>
 
+    {!canViewHistorical && (
+     <div className="mb-3 @[640px]:mb-4 rounded-lg bg-amber-50 border border-amber-200 px-3 @[640px]:px-4 py-2 @[640px]:py-2.5 text-amber-800 text-[11px] @[640px]:text-xs @[768px]:text-sm">
+      {STAFF_SALES_BANNER}
+     </div>
+    )}
+
     <div className="flex flex-col gap-2 @[640px]:gap-3 @[768px]:flex-row @[768px]:flex-wrap @[768px]:items-center">
      <div className="flex items-center gap-1.5 @[640px]:gap-2">
       <Calendar className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 shrink-0 text-gray-500" />
+      {canViewHistorical ? (
+      <>
       <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1">
        {(["today", "yesterday", "7d", "30d", "custom"] as const).map((r) => (
         <button
@@ -373,6 +383,10 @@ export default function SalesItemWiseOrdersPage() {
          className="rounded-lg border border-gray-300 px-2 @[640px]:px-2.5 @[768px]:px-3 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm"
         />
        </div>
+      )}
+      </>
+      ) : (
+      <span className="text-[11px] @[640px]:text-xs @[768px]:text-sm text-gray-600 font-medium">Today</span>
       )}
      </div>
 

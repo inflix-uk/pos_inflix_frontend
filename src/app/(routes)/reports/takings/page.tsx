@@ -13,6 +13,7 @@ import { locationApi } from "@/app/(routes)/peoples/locations/service/locationAp
 import { usePermissionsContext } from "@/contexts/PermissionsContext";
 import { ItemsBreakdownModal } from "@/components/ItemsBreakdownModal";
 import type { DashboardRange } from "@/lib/dateUtils";
+import { STAFF_SALES_BANNER } from "@/lib/salesDateAccess";
 
 function formatCurrency(n: number): string {
  return new Intl.NumberFormat("en-GB", {
@@ -26,7 +27,8 @@ function formatCurrency(n: number): string {
 const STORAGE_KEY = "takings-dashboard-locationId";
 
 export default function TakingsDashboardPage() {
- const { user } = usePermissionsContext();
+ const { user, can } = usePermissionsContext();
+ const canViewHistorical = can("report.view");
  const [allLocations, setAllLocations] = useState<Array<{ _id: string; name: string }>>([]);
  const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
 
@@ -88,6 +90,7 @@ export default function TakingsDashboardPage() {
  refresh,
  } = useTakingsDashboard({
  locationId: selectedLocationId === "all" ? "all" : selectedLocationId,
+ canViewHistorical,
  });
 
  const dateRangeLabel =
@@ -131,6 +134,13 @@ export default function TakingsDashboardPage() {
  </div>
 
  <div className="flex flex-col gap-2 @[640px]:gap-3 @[768px]:flex-row @[768px]:flex-wrap @[768px]:items-center">
+  {!canViewHistorical && (
+  <div className="w-full rounded-lg bg-amber-50 border border-amber-200 px-3 @[640px]:px-4 py-2 @[640px]:py-2.5 text-amber-800 text-[11px] @[640px]:text-xs @[768px]:text-sm">
+   {STAFF_SALES_BANNER}
+  </div>
+  )}
+  {canViewHistorical && (
+  <>
   <div className="flex items-center gap-1.5 @[640px]:gap-2">
   <Calendar className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 shrink-0 text-gray-500" />
   <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1">
@@ -182,6 +192,14 @@ export default function TakingsDashboardPage() {
   <span aria-hidden>·</span>
   <span>{formatDateLabel(from, to)}</span>
   </div>
+  </>
+  )}
+  {!canViewHistorical && (
+  <div className="flex items-center gap-1.5 @[640px]:gap-2 text-[11px] @[640px]:text-xs @[768px]:text-sm text-gray-600 font-medium">
+  <Calendar className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 shrink-0 text-gray-500" />
+  <span>Today</span>
+  </div>
+  )}
   <div className="flex items-center gap-1.5 @[640px]:gap-2">
   <MapPin className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 shrink-0 text-gray-500" />
   <label htmlFor="takings-location" className="sr-only">

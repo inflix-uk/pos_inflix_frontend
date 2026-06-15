@@ -49,7 +49,7 @@ export const PurchaseFilters: React.FC<PurchaseFiltersProps> = ({
   <Search size={18} className="absolute left-2.5 @[640px]:left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
   <input
   type="text"
-  placeholder="Search by supplier or reference..."
+  placeholder="Search by supplier name, company name, or reference..."
   onChange={(e) => onSearch(e.target.value)}
   className="w-full pl-9 @[640px]:pl-10 pr-3 @[640px]:pr-4 py-1.5 @[640px]:py-2 text-xs @[640px]:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
   />

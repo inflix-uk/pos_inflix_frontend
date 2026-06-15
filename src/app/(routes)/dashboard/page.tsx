@@ -138,8 +138,11 @@ export default function DashboardPage() {
 }
 
 function FullDashboard() {
- const { data, loading, error, range, setRange, dateRange, refresh } = useDashboard();
  const { can } = usePermissions();
+ const canViewHistorical = can("report.view");
+ const { data, loading, error, range, setRange, dateRange, refresh } = useDashboard({
+  canViewHistorical,
+ });
  const [itemsModalOpen, setItemsModalOpen] = useState(false);
  return (
  <div className="@container min-h-screen bg-gray-50 p-2 @[640px]:p-3 @[768px]:p-4 @[1024px]:p-6">
@@ -189,6 +192,7 @@ function FullDashboard() {
   label={dateRange.label}
   onRefresh={refresh}
   loading={loading}
+  historicalAllowed={canViewHistorical}
   />
  </div>
  </div>

@@ -33,7 +33,8 @@ export const UNKNOWN_LOCATION_VALUE = "unknown";
  */
 export default function ReportsDashboardPage() {
  const searchParams = useSearchParams();
- const { user } = usePermissionsContext();
+ const { user, can } = usePermissionsContext();
+ const canViewHistorical = can("report.view");
  const [allLocations, setAllLocations] = useState<Array<{ _id: string; name: string }>>([]);
  const [legacyCount, setLegacyCount] = useState<{ sales: number; repairs: number } | null>(null);
  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(() => {
@@ -101,6 +102,7 @@ export default function ReportsDashboardPage() {
 
  const { data, loading, error, range, setRange, dateRange, refresh } = useDashboard({
  locationId: selectedLocationId ?? undefined,
+ canViewHistorical,
  });
 
  const [topBySales, setTopBySales] = useState<ByLocationData | null>(null);
@@ -180,6 +182,7 @@ export default function ReportsDashboardPage() {
   label={dateRange.label}
   onRefresh={refresh}
   loading={loading}
+  historicalAllowed={canViewHistorical}
   />
  </div>
  </div>

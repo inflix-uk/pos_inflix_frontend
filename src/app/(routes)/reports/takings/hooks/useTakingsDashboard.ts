@@ -6,10 +6,8 @@ import {
  getTodayLondon,
  type TakingsDashboardData,
 } from "../service/takingsDashboardApi";
-import {
- getDashboardRangeUtc,
- type DashboardRange,
-} from "@/lib/dateUtils";
+import { getSalesDateRange } from "@/lib/salesDateAccess";
+import type { DashboardRange } from "@/lib/dateUtils";
 
 function toLondonDateKey(d: Date): string {
  return d.toLocaleDateString("en-CA", { timeZone: "Europe/London" });
@@ -17,9 +15,12 @@ function toLondonDateKey(d: Date): string {
 
 export interface UseTakingsDashboardOptions {
  locationId?: string | null;
+ /** When false, date range is locked to today (staff without report.view). */
+ canViewHistorical?: boolean;
 }
 
 export function useTakingsDashboard(options?: UseTakingsDashboardOptions) {
+ const canViewHistorical = options?.canViewHistorical !== false;
  const [range, setRange] = useState<DashboardRange>("today");
  const [customFrom, setCustomFrom] = useState(() => getTodayLondon());
  const [customTo, setCustomTo] = useState(() => getTodayLondon());
@@ -33,7 +34,7 @@ export function useTakingsDashboard(options?: UseTakingsDashboardOptions) {
   setLoading(true);
   setError(null);
   try {
-   const dateRange = getDashboardRangeUtc(range, customFrom, customTo);
+   const dateRange = getSalesDateRange(range, customFrom, customTo, canViewHistorical);
    const fromStr = toLondonDateKey(dateRange.fromUtc);
    const toStr = toLondonDateKey(dateRange.toUtc);
    setFrom(fromStr);
@@ -49,7 +50,7 @@ export function useTakingsDashboard(options?: UseTakingsDashboardOptions) {
   } finally {
    setLoading(false);
   }
- }, [range, customFrom, customTo, options?.locationId]);
+ }, [range, customFrom, customTo, options?.locationId, canViewHistorical]);
 
  useEffect(() => {
   load();
