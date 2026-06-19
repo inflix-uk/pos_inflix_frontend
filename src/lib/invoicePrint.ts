@@ -2111,6 +2111,53 @@ export async function printInvoiceA4(sale: SaleForPrint): Promise<void> {
 const safeInvoiceFilename = (reference: string) =>
   String(reference || "invoice").replace(/[/\\?%*:|"<>]/g, "-").slice(0, 120) || "invoice";
 
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read PDF"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Same PDF as download, returned as base64 for email attachment. */
+export async function getInvoiceA4PdfBase64(
+  sale: SaleForPrint
+): Promise<{ base64: string; filename: string }> {
+  const [settings, context] = await Promise.all([
+    getInvoiceSettings(),
+    getSalePrintContext(sale._id).catch((): Awaited<ReturnType<typeof getSalePrintContext>> => ({
+      sale,
+      location: null,
+      fallbackLabel: null,
+      variantAttributeSlugsOrderBySku: {},
+    })),
+  ]);
+  const saleForPdf = mergeSaleTaxSnapshot(sale, context.sale);
+  const url = await buildA4InvoicePdfUrl(
+    saleForPdf,
+    settings,
+    context.location,
+    context.variantAttributeSlugsOrderBySku ?? {}
+  );
+  try {
+    const blob = await fetch(url).then((r) => r.blob());
+    const base64 = await blobToBase64(blob);
+    const prefix =
+      settings.notesTerms.a4InvoiceTemplate === "business" ? "business-invoice" : "invoice";
+    return {
+      base64,
+      filename: `${prefix}-${safeInvoiceFilename(sale.reference)}.pdf`,
+    };
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+
 /** Same PDF as A4 print, but save as file (wholesale modal). */
 export async function downloadInvoiceA4(sale: SaleForPrint): Promise<void> {
   const [settings, context] = await Promise.all([

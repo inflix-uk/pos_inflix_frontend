@@ -159,6 +159,22 @@ export const invoicesApi = {
   return data;
  },
 
+ sendInvoiceEmail: async (
+  id: string,
+  payload: { to: string; pdfBase64: string; filename: string }
+ ): Promise<{ success: boolean; message?: string }> => {
+  const response = await fetch(`${API_BASE_URL}/invoices/${id}/send-email`, {
+   method: "POST",
+   headers: getAuthHeaders(),
+   body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+   throw new Error((data as { message?: string }).message || "Failed to send invoice email");
+  }
+  return data as { success: boolean; message?: string };
+ },
+
  checkReference: async (
   reference: string,
   signal?: AbortSignal,
