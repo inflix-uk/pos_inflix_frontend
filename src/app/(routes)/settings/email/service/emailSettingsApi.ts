@@ -97,7 +97,14 @@ export const emailSettingsApi = {
     headers: getAuthHeaders(),
     body: JSON.stringify({ testEmail }),
    });
-   return await response.json();
+   const data = await response.json();
+   if (!response.ok) {
+    return {
+     success: false,
+     message: data.message || "Failed to send test email",
+    };
+   }
+   return data;
   } catch {
    throw new Error("Failed to test email settings");
   }
