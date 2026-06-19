@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAccounts } from "./hooks/useAccounts";
 import {
  AccountHeader,
@@ -9,6 +10,7 @@ import {
  AddAccountModal,
  ImportCustomersModal,
  SetPasswordModal,
+ Customer360PreviewPanel,
 } from "./components";
 import type { AccountRow } from "./types";
 import { EditCustomerModal } from "../peoples/customers/components/EditCustomerModal";
@@ -17,10 +19,12 @@ import { EditSupplierModal } from "../peoples/suppliers/components/EditSupplierM
 import { DeleteSupplierModal } from "../peoples/suppliers/components/DeleteSupplierModal";
 
 export default function CustomersPage() {
+ const router = useRouter();
  const [importModalOpen, setImportModalOpen] = useState(false);
  const [lastImportedCount, setLastImportedCount] = useState<number | null>(null);
  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
  const [passwordTarget, setPasswordTarget] = useState<{ id: string; name: string; email: string } | null>(null);
+ const [previewCustomerId, setPreviewCustomerId] = useState<string | null>(null);
  const {
  rows,
  customers,
@@ -58,6 +62,16 @@ export default function CustomersPage() {
  setPasswordTarget({ id: row.id, name: row.data.name, email: row.data.email });
  setPasswordModalOpen(true);
  }
+ };
+
+ const handleCustomerClick = (row: AccountRow) => {
+ if (row.kind === "customer") {
+ setPreviewCustomerId(row.id);
+ }
+ };
+
+ const handleRecordPaymentFromPreview = (customerId: string) => {
+ router.push(`/customers/${customerId}?tab=statement`);
  };
 
  const handleUndoImport = () => {
@@ -120,6 +134,7 @@ export default function CustomersPage() {
   onEdit={openEditModal}
   onDelete={openDeleteModal}
   onSetPassword={handleSetPassword}
+  onCustomerClick={handleCustomerClick}
  />
  </div>
 
@@ -191,6 +206,13 @@ export default function CustomersPage() {
   onSuccess={() => {}}
  />
  )}
+
+ <Customer360PreviewPanel
+  customerId={previewCustomerId}
+  open={previewCustomerId != null}
+  onClose={() => setPreviewCustomerId(null)}
+  onRecordPayment={handleRecordPaymentFromPreview}
+ />
  </div>
  );
 }

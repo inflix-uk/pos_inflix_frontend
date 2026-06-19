@@ -1,4 +1,4 @@
-import { Customer, CustomerFormData, CustomerFilters, CustomerResponse } from "../types";
+import { Customer, CustomerFormData, CustomerFilters, CustomerResponse, CustomerSummaryResponse } from "../types";
 
 /**
  * Single source for all customer data in the system.
@@ -53,6 +53,16 @@ export const customerApi = {
   } catch {
    throw new Error("Failed to fetch customer");
   }
+ },
+
+ getSummary: async (id: string): Promise<CustomerSummaryResponse> => {
+  const response = await fetch(`${API_URL}/api/customers/${id}/summary`, {
+   method: "GET",
+   headers: getAuthHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Failed to fetch customer summary");
+  return data;
  },
 
  /** Get or create the Walk-in customer (for Retail mode on Create Sales). */

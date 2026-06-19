@@ -67,6 +67,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
 
   // Customers / People
   "/customers": ["customer.view"],
+  "/customers/": ["customer.view"],
   "/peoples/customers": ["customer.view"],
   "/pricing-groups": ["customer.view", "product.view"],
   "/pricing-groups/": ["customer.view", "product.view"],

@@ -4,3 +4,6 @@ export { AccountTable } from "./AccountTable";
 export { AddAccountModal } from "./AddAccountModal";
 export { ImportCustomersModal } from "./ImportCustomersModal";
 export { SetPasswordModal } from "./SetPasswordModal";
+export { Customer360PreviewPanel } from "./Customer360PreviewPanel";
+export { CustomerStatementPanel } from "./CustomerStatementPanel";
+export { CustomerSalesTab } from "./CustomerSalesTab";

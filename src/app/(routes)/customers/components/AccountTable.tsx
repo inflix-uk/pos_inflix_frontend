@@ -13,6 +13,7 @@ interface AccountTableProps {
  onEdit: (row: AccountRow) => void;
  onDelete: (row: AccountRow) => void;
  onSetPassword?: (row: AccountRow) => void;
+ onCustomerClick?: (row: AccountRow) => void;
 }
 
 export const AccountTable: React.FC<AccountTableProps> = ({
@@ -21,6 +22,7 @@ export const AccountTable: React.FC<AccountTableProps> = ({
  onEdit,
  onDelete,
  onSetPassword,
+ onCustomerClick,
 }) => {
  const { data: entitlements } = useEntitlements();
  const isInvoicingEnabled = entitlements?.enabledFeatures?.["customer invoicing"] === true;
@@ -97,7 +99,17 @@ export const AccountTable: React.FC<AccountTableProps> = ({
   rows.map((row) => (
   <tr key={`${row.kind}-${row.id}`} className="hover:bg-gray-50">
   <td className="px-3 @[640px]:px-4 @[768px]:px-6 py-2.5 @[640px]:py-3 @[768px]:py-4 text-xs @[640px]:text-sm font-medium text-gray-900">
-   {getCompanyName(row)}
+   {row.kind === "customer" && onCustomerClick ? (
+   <button
+    type="button"
+    onClick={() => onCustomerClick(row)}
+    className="text-left hover:text-orange-600 hover:underline"
+   >
+    {getCompanyName(row)}
+   </button>
+   ) : (
+   getCompanyName(row)
+   )}
   </td>
   <td className="px-3 @[640px]:px-4 @[768px]:px-6 py-2.5 @[640px]:py-3 @[768px]:py-4 text-xs @[640px]:text-sm text-gray-600">{getContactName(row)}</td>
   <td className="px-3 @[640px]:px-4 @[768px]:px-6 py-2.5 @[640px]:py-3 @[768px]:py-4 text-xs @[640px]:text-sm text-gray-600">{getPhone(row)}</td>
@@ -121,7 +133,10 @@ export const AccountTable: React.FC<AccountTableProps> = ({
    <div className="flex items-center gap-1.5 @[640px]:gap-2">
    {row.kind === "customer" && row.data.email && (
    <button
-   onClick={() => isInvoicingEnabled && onSetPassword?.(row)}
+   onClick={(e) => {
+   e.stopPropagation();
+   isInvoicingEnabled && onSetPassword?.(row);
+   }}
    disabled={!isInvoicingEnabled}
    className={`p-1.5 rounded ${
     isInvoicingEnabled
@@ -134,14 +149,20 @@ export const AccountTable: React.FC<AccountTableProps> = ({
    </button>
    )}
    <button
-   onClick={() => onEdit(row)}
+   onClick={(e) => {
+   e.stopPropagation();
+   onEdit(row);
+   }}
    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
    title="Edit"
    >
    <Edit2 size={16} />
    </button>
    <button
-   onClick={() => onDelete(row)}
+   onClick={(e) => {
+   e.stopPropagation();
+   onDelete(row);
+   }}
    className="p-1.5 text-red-600 hover:bg-red-50 rounded"
    title="Delete"
    >

@@ -412,6 +412,7 @@ export const salesApi = {
   hasReturn?: "yes" | "no";
   order?: "asc" | "desc";
   includeItems?: boolean;
+  customerId?: string;
  }): Promise<GetSalesResponse> => {
   const searchParams = new URLSearchParams();
   if (params?.page != null) searchParams.set("page", String(params.page));
@@ -435,6 +436,7 @@ export const salesApi = {
    searchParams.set("order", params.order);
   }
   if (params?.includeItems) searchParams.set("includeItems", "true");
+  if (params?.customerId) searchParams.set("customerId", params.customerId);
   const response = await fetch(`${API_BASE_URL}/sales?${searchParams}`, {
    method: "GET",
    headers: getAuthHeaders(),

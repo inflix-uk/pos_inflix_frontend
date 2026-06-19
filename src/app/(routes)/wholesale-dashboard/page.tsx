@@ -546,6 +546,39 @@ const Page = () => {
  return () => { cancelled = true; };
  }, [retailModeEnabled]);
 
+ // Pre-select customer from ?customerId= or ?accountId= (e.g. from Customer 360)
+ useEffect(() => {
+ if (typeof window === "undefined") return;
+ const params = new URLSearchParams(window.location.search);
+ const id = (params.get("customerId") || params.get("accountId") || "").trim();
+ if (!id) return;
+ let cancelled = false;
+ (async () => {
+  try {
+   const [custRes, supRes] = await Promise.allSettled([
+    customerApi.getById(id),
+    supplierApi.getSupplier(id),
+   ]);
+   if (cancelled) return;
+   const cust =
+    custRes.status === "fulfilled" && custRes.value?.success && custRes.value?.data
+     ? custRes.value.data
+     : null;
+   const sup =
+    supRes.status === "fulfilled" && supRes.value?.success && supRes.value?.data
+     ? supRes.value.data
+     : null;
+   if (cust) setSelectedCustomerState(cust as AccountForSale);
+   else if (sup) setSelectedCustomerState(sup as AccountForSale);
+  } catch {
+   // ignore
+  }
+ })();
+ return () => {
+  cancelled = true;
+ };
+ }, []);
+
  const clearCartRef = useRef<() => void>(() => {});
 
  const handleLocationChange = useCallback((id: string) => {

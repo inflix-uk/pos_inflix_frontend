@@ -26,6 +26,10 @@ export interface Customer {
  useInRepairs?: boolean;
  /** Optional pricing group for customer-group pricing. When set, POS uses group price for products that have one. */
  pricingGroupId?: string | null;
+ /** System walk-in customer — hide 360 or show read-only. */
+ isWalkIn?: boolean;
+ /** B2B customer portal enabled. */
+ portalEnabled?: boolean;
  createdAt?: string;
  updatedAt?: string;
 }
@@ -75,4 +79,27 @@ export interface CustomerResponse {
   pages: number;
   limit: number;
  };
+}
+
+export interface CustomerSummaryPricingGroup {
+ _id: string;
+ name: string;
+}
+
+export interface CustomerSummaryStats {
+ saleCount: number;
+ lastSaleAt: string | null;
+ lastSaleReference: string | null;
+ openBalance: number;
+}
+
+export interface CustomerSummary {
+ customer: Customer;
+ pricingGroup: CustomerSummaryPricingGroup | null;
+ stats: CustomerSummaryStats;
+}
+
+export interface CustomerSummaryResponse {
+ success: boolean;
+ data: CustomerSummary;
 }
