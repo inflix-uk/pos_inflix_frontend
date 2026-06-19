@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
  Loader2,
@@ -36,18 +36,21 @@ const EDITABLE_TYPES = new Set(["opening_balance", "payment_in", "payment_out", 
 interface CustomerStatementPanelProps {
  customerId: string;
  customerName?: string;
- onBalanceChange?: (balance: number) => void;
+ /** Called after payment/refund/adjustment so parent can refresh header balance. */
+ onStatementUpdated?: () => void;
  compact?: boolean;
 }
 
 export function CustomerStatementPanel({
  customerId,
  customerName,
- onBalanceChange,
+ onStatementUpdated,
  compact = false,
 }: CustomerStatementPanelProps) {
  const { can } = usePermissionsContext();
  const canManageAccounts = can("accounts.payment");
+ const onStatementUpdatedRef = useRef(onStatementUpdated);
+ onStatementUpdatedRef.current = onStatementUpdated;
 
  const [statement, setStatement] = useState<CustomerStatement | null>(null);
  const [loading, setLoading] = useState(false);
@@ -86,13 +89,17 @@ export function CustomerStatementPanel({
     : undefined;
   const res = await accountsApi.getCustomerStatement(customerId, params);
   setStatement(res.data);
-  onBalanceChange?.(res.data.balance);
  } catch (e) {
   setError(e instanceof Error ? e.message : "Failed to load statement");
  } finally {
   setLoading(false);
  }
- }, [customerId, filterFrom, filterTo, onBalanceChange]);
+ }, [customerId, filterFrom, filterTo]);
+
+ const refreshAfterMutation = useCallback(async () => {
+ await fetchStatement();
+ onStatementUpdatedRef.current?.();
+ }, [fetchStatement]);
 
  useEffect(() => {
  fetchStatement();
@@ -125,7 +132,7 @@ export function CustomerStatementPanel({
    setPaymentModalOpen(false);
    setPaymentAmount("");
    setPaymentNote("");
-   fetchStatement();
+   await refreshAfterMutation();
   } catch (e) {
    setError(e instanceof Error ? e.message : "Failed to record payment");
   } finally {
@@ -149,7 +156,7 @@ export function CustomerStatementPanel({
    setRefundModalOpen(false);
    setRefundAmount("");
    setPaymentNote("");
-   fetchStatement();
+   await refreshAfterMutation();
   } catch (e) {
    setError(e instanceof Error ? e.message : "Failed to record refund");
   } finally {
@@ -174,7 +181,7 @@ export function CustomerStatementPanel({
    setAdjustModalOpen(false);
    setAdjustAmount("");
    setAdjustNote("");
-   fetchStatement();
+   await refreshAfterMutation();
   } catch (e) {
    setError(e instanceof Error ? e.message : "Failed to adjust balance");
   } finally {
@@ -211,7 +218,7 @@ export function CustomerStatementPanel({
     paymentMethod: editPaymentMethod || undefined,
    });
    setEditEntryId(null);
-   fetchStatement();
+   await refreshAfterMutation();
   } catch (err) {
    setError(err instanceof Error ? err.message : "Failed to update entry");
   } finally {
@@ -225,7 +232,7 @@ export function CustomerStatementPanel({
   setError(null);
   try {
    await accountsApi.deleteLedgerEntry(entryId);
-   fetchStatement();
+   await refreshAfterMutation();
   } catch (err) {
    setError(err instanceof Error ? err.message : "Failed to delete entry");
   } finally {

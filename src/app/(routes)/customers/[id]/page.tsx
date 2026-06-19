@@ -330,7 +330,7 @@ export default function CustomerDetailPage() {
      <CustomerStatementPanel
       customerId={customerId}
       customerName={customer.name}
-      onBalanceChange={() => loadSummary()}
+      onStatementUpdated={loadSummary}
      />
     )}
 
