@@ -186,6 +186,8 @@ interface ProductGridProps {
  tileStyle?: "icon" | "pos";
  /** Show on-hand inventory (qty) on each product card. Enable when "Block negative stock" is on. */
  showStock?: boolean;
+ /** Extra hint when the grid is empty (e.g. location filter, serial-only stock). */
+ emptyStateHint?: string;
 }
 
 export const ProductGrid: React.FC<ProductGridProps> = ({
@@ -204,6 +206,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
  loading = false,
  tileStyle = "icon",
  showStock = false,
+ emptyStateHint,
 }) => {
  const [showSuggestions, setShowSuggestions] = useState(false);
  const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -476,9 +479,13 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
   </div>
   <div className="flex flex-col items-center gap-2">
   <p className="text-sm font-semibold text-gray-700">No products match</p>
-  <HelpTip ariaLabel="No results" contentClassName="text-center">
-  Try another category or search term.
-  </HelpTip>
+  {emptyStateHint ? (
+   <p className="text-xs text-gray-500 max-w-sm text-center mt-1">{emptyStateHint}</p>
+  ) : (
+   <HelpTip ariaLabel="No results" contentClassName="text-center">
+    Try another category or search term.
+   </HelpTip>
+  )}
   </div>
   </div>
  )}

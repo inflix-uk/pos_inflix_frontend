@@ -7,6 +7,7 @@ import {
  type PurchaseRaw,
  type PurchaseItemRaw,
 } from "@/app/(routes)/stock/view/services/stockViewApi";
+import { onInventoryEvent } from "@/lib/inventoryEvents";
 import { salesApi } from "../service/salesApi";
 
 /** Product shape compatible with products-context for POS grid */
@@ -247,6 +248,19 @@ function readProductCache(key: string): InventoryProductForSales[] {
  } catch { return []; }
 }
 
+/** Clear cached create-sales product lists (call after purchase import or stock changes). */
+export function clearSalesProductCache(): void {
+ if (typeof window === "undefined") return;
+ try {
+  const keys: string[] = [];
+  for (let i = 0; i < sessionStorage.length; i++) {
+   const k = sessionStorage.key(i);
+   if (k && k.startsWith("inv-products-v1")) keys.push(k);
+  }
+  keys.forEach((k) => sessionStorage.removeItem(k));
+ } catch { /* ignore */ }
+}
+
 export function useInventoryProductsForSales(options?: { pricingGroupId?: string | null; locationId?: string | null; allowNegativeStock?: boolean }) {
  const pricingGroupId = options?.pricingGroupId ?? undefined;
  const locationId = options?.locationId ?? undefined;
@@ -320,6 +334,20 @@ export function useInventoryProductsForSales(options?: { pricingGroupId?: string
 
  useEffect(() => {
   refetch();
+ }, [refetch]);
+
+ useEffect(() => {
+  return onInventoryEvent((event) => {
+   if (
+    event.type === "purchase-imported" ||
+    event.type === "manual-refresh" ||
+    event.type === "sale-created" ||
+    event.type === "sale-return" ||
+    event.type === "stock-transferred"
+   ) {
+    refetch();
+   }
+  });
  }, [refetch]);
 
  return { products, soldInfoMap, loading, error, refetch };

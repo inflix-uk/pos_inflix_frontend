@@ -1004,6 +1004,17 @@ const Page = () => {
  return filteredProducts.slice(0, 8);
  }, [search, typeaheadResults, filteredProducts]);
 
+ const productGridEmptyHint = useMemo(() => {
+  if (productsLoading || productsError || inventoryProducts.length > 0) return undefined;
+  const locName = inventoryLocationId
+   ? locations.find((l) => l._id === inventoryLocationId)?.name
+   : null;
+  if (locName) {
+   return `No stock at ${locName}. Match the location dropdown to your purchase import "Send to", or use the refresh button. Phones/IMEIs are added by scanning the serial above — not this grid.`;
+  }
+  return "No non-serial stock loaded. Phones and IMEI devices are added by scanning the serial in the search bar.";
+ }, [productsLoading, productsError, inventoryProducts.length, inventoryLocationId, locations]);
+
  const currentStep: WholesaleStep = !selectedCustomer ? 1 : cartItemCount === 0 ? 2 : 3;
  const canComplete = Boolean(cartItemCount > 0 && (retailModeEnabled || selectedCustomer));
  const completeDisabledReason: "none" | "no_customer" | "no_items" =
@@ -1303,6 +1314,7 @@ const Page = () => {
    loading={productsLoading}
    tileStyle="icon"
    showStock={blockNegativeStock}
+   emptyStateHint={productGridEmptyHint}
    />
   )}
   </div>

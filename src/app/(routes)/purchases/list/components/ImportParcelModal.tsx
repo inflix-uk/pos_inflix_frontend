@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { X, Upload, FileSpreadsheet, ChevronRight, AlertCircle } from "lucide-react";
 import { parseImportFile, type ParsedImportFile } from "../utils/parseImportFile";
 import { purchaseApi } from "../service/purchaseApi";
+import { emitInventoryEvent } from "@/lib/inventoryEvents";
+import { clearSalesProductCache } from "@/app/(routes)/sales-dashboard/hooks/useInventoryProductsForSales";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -191,6 +193,18 @@ export const ImportParcelModal: React.FC<ImportParcelModalProps> = ({ open, onCl
  }
  }
  }, [open, initialImportType, loadOptions]);
+
+ useEffect(() => {
+ if (sendToOptions.length === 0) return;
+ setSendTo((prev) => {
+  if (prev && sendToOptions.some((l) => l._id === prev)) return prev;
+  try {
+   const stored = localStorage.getItem("create-sales-locationId");
+   if (stored && sendToOptions.some((l) => l._id === stored)) return stored;
+  } catch { /* ignore */ }
+  return sendToOptions[0]?._id || "";
+ });
+ }, [sendToOptions]);
 
  useEffect(() => {
  if (!categoryId || importType === "non-serial") {
@@ -574,6 +588,12 @@ export const ImportParcelModal: React.FC<ImportParcelModalProps> = ({ open, onCl
  );
  return;
  }
+ if (!sendTo) {
+ setSubmitError(
+ "Select Send to (location). Create Sales only shows stock assigned to the selected store."
+ );
+ return;
+ }
  setIsSubmitting(true);
  setSubmitError(null);
  setImportProgress(null);
@@ -712,6 +732,8 @@ export const ImportParcelModal: React.FC<ImportParcelModalProps> = ({ open, onCl
  try {
  lastError = await runWithConcurrency();
  if (!lastError) {
+ clearSalesProductCache();
+ emitInventoryEvent({ type: "purchase-imported" });
  onSuccess();
  onClose();
  }
@@ -1016,9 +1038,9 @@ export const ImportParcelModal: React.FC<ImportParcelModalProps> = ({ open, onCl
    <input type="date" value={parcelDate} onChange={(e) => setParcelDate(e.target.value)} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" />
   </div>
   <div>
-   <label className="block text-sm font-medium text-gray-700 mb-1">Send to (location)</label>
-   <select value={sendTo} onChange={(e) => setSendTo(e.target.value)} className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
-   <option value="">—</option>
+   <label className="block text-sm font-medium text-gray-700 mb-1">Send to (location) *</label>
+   <select value={sendTo} onChange={(e) => setSendTo(e.target.value)} className="w-full rounded border border-gray-300 px-3 py-2 text-sm" required>
+   <option value="">Select location</option>
    {sendToOptions.map((l) => (
    <option key={l._id} value={l._id}>{l.name}</option>
    ))}

@@ -12,6 +12,7 @@ export type InventoryEvent =
  | { type: "sale-voided"; saleId?: string }
  | { type: "sale-return"; saleReturnId?: string }
  | { type: "stock-transferred" }
+ | { type: "purchase-imported" }
  | { type: "manual-refresh" };
 
 type Listener = (e: InventoryEvent) => void;
