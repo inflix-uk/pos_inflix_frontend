@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { productApi } from "../service";
 import { parseMultiIMEIs } from "@/lib/parseMultiIMEIs";
+import { formatProductName } from "@/lib/formatProductName";
 import type {
  ProductAddMode,
  SerialSingleFormData,
@@ -269,7 +270,9 @@ export function useCreateSingleProduct() {
  }, []);
 
  const updateNonSerialData = useCallback((data: Partial<NonSerialSingleFormData>) => {
-  setNonSerialData((prev) => ({ ...prev, ...data }));
+  const patch = { ...data };
+  if (patch.name != null) patch.name = formatProductName(patch.name);
+  setNonSerialData((prev) => ({ ...prev, ...patch }));
  }, []);
 
  const currentImeiCount = useMemo(() => {

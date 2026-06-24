@@ -246,7 +246,8 @@ function readProductCache(key: string): InventoryProductForSales[] {
   const raw = sessionStorage.getItem(key);
   if (!raw) return [];
   const parsed = JSON.parse(raw) as InventoryProductForSales[];
-  return Array.isArray(parsed) ? parsed : [];
+  if (!Array.isArray(parsed)) return [];
+  return parsed.map((p) => ({ ...p, name: formatProductName(p.name) || p.name }));
  } catch { return []; }
 }
 

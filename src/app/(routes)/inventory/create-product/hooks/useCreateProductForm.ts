@@ -18,6 +18,7 @@ import {
  QuickUnitFormData,
  QuickBrandFormData,
 } from "../components/QuickAddModals";
+import { formatProductName } from "@/lib/formatProductName";
 
 // Default values
 const defaultFormData: ProductFormData = {

@@ -6,6 +6,7 @@ import { ParcelData, QuantityData, ItemData, ItemEntry, Step, Currency, ItemMode
 import { categoryApi } from "@/app/(routes)/inventory/category/service/categoryApi";
 import { parseMultiIMEIs } from "../utils/parseMultiIMEIs";
 import { formatSupplierDisplay } from "@/lib/formatSupplierDisplay";
+import { formatProductName } from "@/lib/formatProductName";
 import { customerApi } from "@/app/(routes)/peoples/customers/service";
 import { supplierApi } from "@/app/(routes)/peoples/suppliers/service/supplierApi";
 import type { CustomerFormData } from "@/app/(routes)/peoples/customers/types";
@@ -1178,6 +1179,8 @@ export const useAddPurchase = () => {
    setOtherItemData((prev) => ({ ...prev, [field]: value, brandModel: "" }));
    const selected = brandsRaw.find((b) => b._id === value);
    setBrandModels(selected?.models?.map((m) => ({ _id: m._id, name: m.name })) || []);
+  } else if (field === "name") {
+   setOtherItemData((prev) => ({ ...prev, [field]: formatProductName(value) }));
   } else if (field === "quantity") {
    setOtherItemData((prev) => ({ ...prev, quantity: value }));
    setSubmitMessage({ type: "", text: "" });
@@ -1609,7 +1612,7 @@ export const useAddPurchase = () => {
    colour = toUpper(colours.find((c) => c._id === d.colour)?.name || d.colour);
   }
   return {
-   name: d.name?.trim() || undefined,
+   name: d.name?.trim() ? formatProductName(d.name) : undefined,
    barcode: d.barcode?.trim() || undefined,
    sendTo: d.sendTo || undefined,
    tax: d.taxCategory || undefined,

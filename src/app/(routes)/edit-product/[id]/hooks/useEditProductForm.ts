@@ -18,6 +18,7 @@ import {
  QuickUnitFormData,
  QuickBrandFormData,
 } from "../../../inventory/create-product/components/QuickAddModals";
+import { formatProductName } from "@/lib/formatProductName";
 
 // Default values
 const defaultFormData: ProductFormData = {
@@ -415,11 +416,12 @@ export const useEditProductForm = (productId: string) => {
 
  // Auto-generate slug from product name
  const generateSlug = useCallback((name: string) => {
-  const slug = name
+  const formatted = formatProductName(name);
+  const slug = formatted
    .toLowerCase()
    .replace(/[^a-z0-9]+/g, "-")
    .replace(/(^-|-$)/g, "");
-  updateFormData({ productName: name, slug });
+  updateFormData({ productName: formatted, slug });
  }, [updateFormData]);
 
  // Image handlers
