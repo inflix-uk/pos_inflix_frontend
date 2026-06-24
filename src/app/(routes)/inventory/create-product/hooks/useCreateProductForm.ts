@@ -349,11 +349,12 @@ export const useCreateProductForm = () => {
 
  // Auto-generate slug from product name
  const generateSlug = useCallback((name: string) => {
-  const slug = name
+  const formatted = formatProductName(name);
+  const slug = formatted
    .toLowerCase()
    .replace(/[^a-z0-9]+/g, "-")
    .replace(/(^-|-$)/g, "");
-  updateFormData({ productName: name, slug });
+  updateFormData({ productName: formatted, slug });
  }, [updateFormData]);
 
  // Image handlers

@@ -15,6 +15,7 @@ import {
   Package,
   Monitor,
 } from "lucide-react";
+import { formatProductName } from "@/lib/formatProductName";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -68,7 +69,7 @@ function mapApiProductToProduct(api: ApiProduct): Product {
   const { icon, color } = getCategoryIcon(categoryName);
   return {
     sku: api.sku,
-    name: api.name,
+    name: formatProductName(api.name) || api.name,
     category: categoryName,
     brand: brandName,
     price: typeof api.sellingPrice === "number" ? `£${Number(api.sellingPrice).toFixed(2)}` : "£0.00",
@@ -347,7 +348,7 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
     // Default values for missing fields
     const newProduct: Product = {
       sku,
-      name: productData.name || "New Product",
+      name: formatProductName(productData.name) || "NEW PRODUCT",
       category: productData.category || "General",
       brand: productData.brand || "Unknown",
       price: productData.price || "£0",

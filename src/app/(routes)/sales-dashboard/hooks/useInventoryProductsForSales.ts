@@ -8,6 +8,7 @@ import {
  type PurchaseItemRaw,
 } from "@/app/(routes)/stock/view/services/stockViewApi";
 import { onInventoryEvent } from "@/lib/inventoryEvents";
+import { formatProductName } from "@/lib/formatProductName";
 import { salesApi } from "../service/salesApi";
 
 /** Product shape compatible with products-context for POS grid */
@@ -195,12 +196,13 @@ function flattenPurchasesToRows(purchases: PurchaseRaw[], allowNegativeStock: bo
 function rowToProduct(row: FlattenRow): InventoryProductForSales {
  // Item name without grade — condition is shown in Condition column
  const parts = [row.brand, row.brandModel, row.capacity, row.colour].filter(Boolean);
- const name =
+ const rawName =
   row.name && row.name.trim()
    ? row.name.trim()
    : parts.length > 0
     ? parts.join(" ")
     : "Product";
+ const name = formatProductName(rawName) || "PRODUCT";
  const symbol = row.currency === "GBP" ? "£" : row.currency === "USD" ? "£" : row.currency ? `${row.currency} ` : "£";
  const price = `${symbol}${Number(row.salePrice).toFixed(2)}`;
 
