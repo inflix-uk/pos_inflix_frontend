@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { productApi } from "../service";
 import { parseMultiIMEIs } from "@/lib/parseMultiIMEIs";
-import { formatProductName } from "@/lib/formatProductName";
+import { formatProductName, formatProductNameInput } from "@/lib/formatProductName";
 import type {
  ProductAddMode,
  SerialSingleFormData,
@@ -271,7 +271,7 @@ export function useCreateSingleProduct() {
 
  const updateNonSerialData = useCallback((data: Partial<NonSerialSingleFormData>) => {
   const patch = { ...data };
-  if (patch.name != null) patch.name = formatProductName(patch.name);
+  if (patch.name != null) patch.name = formatProductNameInput(patch.name);
   setNonSerialData((prev) => ({ ...prev, ...patch }));
  }, []);
 
@@ -362,7 +362,7 @@ export function useCreateSingleProduct() {
  }, [serialData, serialImeis, parcelData, categoryVariantAttributes, resolveVariantValues, showMessage]);
 
  const submitNonSerial = useCallback(async () => {
-  const name = nonSerialData.name.trim();
+  const name = formatProductName(nonSerialData.name);
   const hasVariantSelection = categoryVariantAttributes.length > 0 && Object.values(nonSerialData.variantValues).some(Boolean);
   if (!hasVariantSelection && !name) {
    showMessage("error", "Enter product name or select variant attributes.");

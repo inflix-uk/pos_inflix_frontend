@@ -66,11 +66,13 @@ const typeBadge = (type: string) => {
 const paymentBadge = (sale: SaleRecord) => {
  const allowed = ["cash", "card", "bank", "credit"] as const;
  const breakdown = sale.payments;
- const methods: string[] = breakdown
- ? allowed.filter((k) => Number((breakdown as Record<string, number | undefined>)[k] ?? 0) > 0)
- : sale.paymentMethod && (allowed as readonly string[]).includes(sale.paymentMethod)
- ? [sale.paymentMethod]
- : [];
+ let methods: string[] = breakdown
+  ? allowed.filter((k) => Number((breakdown as Record<string, number | undefined>)[k] ?? 0) > 0)
+  : [];
+ // Retail/repair sales often set paymentMethod only (payments defaults to all zeros).
+ if (methods.length === 0 && sale.paymentMethod && (allowed as readonly string[]).includes(sale.paymentMethod)) {
+  methods = [sale.paymentMethod];
+ }
  if (methods.length === 0) {
  return <span className="text-xs text-gray-400">—</span>;
  }

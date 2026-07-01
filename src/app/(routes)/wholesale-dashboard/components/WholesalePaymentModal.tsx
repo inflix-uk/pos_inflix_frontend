@@ -222,13 +222,13 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  // eslint-disable-next-line react-hooks/exhaustive-deps -- only apply initial values when modal opens
  }, [open]);
 
- // Retail + EXACT: refresh tender when amount due changes (discount); skip when user picked +£ chips
+ // Retail + EXACT: refresh tender when amount due changes (discount); only when a single method is active
  useEffect(() => {
  if (!open || !retailMode || retailQuickPick !== "exact") return;
- const active = (["cash", "card", "bank"] as const).find((m) => checkedMethods[m]);
- if (!active) return;
+ const active = (["cash", "card", "bank"] as const).filter((m) => checkedMethods[m]);
+ if (active.length !== 1) return;
  const dueStr = dueRounded.toFixed(2);
- setAmounts({ cash: "", card: "", credit: "", bank: "", [active]: dueStr });
+ setAmounts({ cash: "", card: "", credit: "", bank: "", [active[0]]: dueStr });
  }, [open, retailMode, retailQuickPick, dueRounded, checkedMethods.cash, checkedMethods.card, checkedMethods.bank]);
 
  useEffect(() => {
@@ -245,17 +245,21 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
 
  const toggleMethod = (id: MethodId) => {
  if (retailMode && (id === "cash" || id === "card" || id === "bank")) {
- setCheckedMethods((prev) => {
-  if (prev[id]) {
-  setAmounts((a) => ({ ...a, [id]: "" }));
-  return { ...prev, [id]: false };
-  }
-  const exact = dueRounded.toFixed(2);
-  setAmounts({ cash: "", card: "", credit: "", bank: "", [id]: exact });
-  setRetailQuickPick("exact");
-  return { cash: false, card: false, credit: false, bank: false, [id]: true };
- });
- return;
+  setCheckedMethods((prev) => {
+   const turningOn = !prev[id];
+   const next = { ...prev, [id]: turningOn };
+   setAmounts((a) => {
+    if (!turningOn) return { ...a, [id]: "" };
+    const paidOther = (["cash", "card", "bank"] as const)
+     .filter((m) => m !== id && next[m])
+     .reduce((sum, m) => sum + parseAmount(a[m]), 0);
+    const fill = Math.max(0, Math.round((dueRounded - paidOther) * 100) / 100);
+    return { ...a, [id]: fill > 0 ? fill.toFixed(2) : "0.00" };
+   });
+   if (turningOn) setRetailQuickPick(null);
+   return next;
+  });
+  return;
  }
  setCheckedMethods((prev) => {
  const next = { ...prev, [id]: !prev[id] };
@@ -686,8 +690,8 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
     type="button"
     onClick={() => {
     setRetailQuickPick(v);
-    setCheckedMethods({ cash: true, card: false, credit: false, bank: false });
-    setAmounts((a) => ({ ...a, cash: (parseAmount(a.cash) + v).toFixed(2), card: "", bank: "" }));
+    setCheckedMethods((prev) => ({ ...prev, cash: true }));
+    setAmounts((a) => ({ ...a, cash: (parseAmount(a.cash) + v).toFixed(2) }));
     }}
     className={retailQuickPick === v ? RETAIL_QUICK_BTN_ACTIVE : RETAIL_QUICK_BTN_INACTIVE}
    >
@@ -723,6 +727,11 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   )}
   {retailMode && (
    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Pay By</p>
+  )}
+  {retailMode && (
+   <p className="text-[11px] text-slate-500 mb-2">
+   Select one or more methods and enter amounts (total must equal amount due).
+   </p>
   )}
   <div className={retailMode ? "grid grid-cols-3 gap-1.5" : "flex flex-wrap gap-2"}>
   {paymentMethodsToShow.map(({ id, label, icon: Icon }) => (
