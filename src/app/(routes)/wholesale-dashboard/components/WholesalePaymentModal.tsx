@@ -211,12 +211,6 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   credit: credit > 0,
   bank: bank > 0,
  });
- } else if (retailMode) {
- const dueOpen = Math.max(0, total + Math.max(0, previousBalance));
- const dueStr = (Math.round(dueOpen * 100) / 100).toFixed(2);
- setCheckedMethods({ cash: true, card: false, credit: false, bank: false });
- setAmounts({ cash: dueStr, card: "", credit: "", bank: "" });
- setRetailQuickPick("exact");
  }
  }
  // eslint-disable-next-line react-hooks/exhaustive-deps -- only apply initial values when modal opens
