@@ -118,7 +118,7 @@ function SalesTableSkeleton({ rows = 6 }: { rows?: number }) {
  </thead>
  <tbody>
   {Array.from({ length: rows }).map((_, i) => (
-  <tr key={i} className="border-b border-gray-100">
+  <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/70"}>
   <td className="px-2 py-4"><div className={`${shimmer} h-4 w-4`} /></td>
   <td className="px-6 py-4"><div className={`${shimmer} h-4 w-36`} /></td>
   <td className="px-6 py-4"><div className={`${shimmer} h-4 w-24`} /></td>
@@ -1313,7 +1313,7 @@ const Page = () => {
   ) : (
   <>
   {/* Mobile: card list (no horizontal scroll) */}
-  <div className="@[640px]:hidden divide-y divide-gray-100">
+  <div className="@[640px]:hidden">
   {sales.length === 0 ? (
    <div className="px-4 py-12 text-center">
    <p className="text-gray-500 font-medium">No sales found</p>
@@ -1328,8 +1328,9 @@ const Page = () => {
    const explicitDue = Number(sale.amountDue);
    const creditPart = Number(sale.payments?.credit || 0);
    const rowBalance = Math.max(0, Number.isFinite(explicitDue) ? explicitDue : (creditPart > 0 ? creditPart : 0));
+   const rowStripe = idx % 2 === 0 ? "bg-white" : "bg-gray-50/70";
    return (
-    <div key={sale._id} className="px-3 py-3 active:bg-orange-50">
+    <div key={sale._id} className={`px-3 py-3 border-b border-gray-100/80 active:bg-orange-50/80 ${rowStripe}`}>
     <div className="flex items-start justify-between gap-2">
     <div className="min-w-0 flex-1">
      <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
@@ -1345,7 +1346,7 @@ const Page = () => {
      >
      {sale.reference}
      </button>
-     <div className="mt-1 text-sm font-semibold text-gray-900 truncate">{custName}</div>
+     <div className="mt-1 text-sm text-gray-900 truncate">{custName}</div>
      {custContact ? <div className="text-[11px] text-gray-600 truncate">{custContact}</div> : null}
      {custExtra ? <div className="text-[11px] text-gray-500 truncate">{custExtra}</div> : null}
     </div>
@@ -1501,7 +1502,7 @@ const Page = () => {
    </th>
    </tr>
    </thead>
-   <tbody className="divide-y divide-gray-100">
+   <tbody>
    {sales.length === 0 ? (
    <tr>
    <td colSpan={9} className="px-6 py-16 text-center">
@@ -1517,9 +1518,10 @@ const Page = () => {
    const { name: custName, contact: custContact, extra: custExtra } = displayCustomerLine(sale);
    const lines = sale.items ?? [];
    const rowNumber = (currentPage - 1) * rowsPerPage + idx + 1;
+   const rowStripe = idx % 2 === 0 ? "bg-white" : "bg-gray-50/70";
    return (
     <React.Fragment key={sale._id}>
-    <tr className="hover:bg-orange-50 hover:shadow-sm transition-colors">
+    <tr className={`${rowStripe} hover:bg-orange-50/80 transition-colors border-b border-gray-100/80`}>
     <td className="px-1.5 @[640px]:px-2 py-0.5 @[640px]:py-1 align-top">
     <button
      type="button"
@@ -1548,7 +1550,7 @@ const Page = () => {
     {sale.reference}
     </button>
     </td>
-    <td className="px-2 @[640px]:px-6 py-0.5 @[640px]:py-1 text-xs @[640px]:text-sm text-gray-900 font-medium align-top leading-tight">
+    <td className="px-2 @[640px]:px-6 py-0.5 @[640px]:py-1 text-xs @[640px]:text-sm text-gray-900 font-normal align-top leading-tight">
     <div>{custName}</div>
     {custContact ? (
      <div className="text-[10px] @[640px]:text-xs text-gray-600 font-normal">{custContact}</div>
@@ -1651,8 +1653,8 @@ const Page = () => {
     </td>
     </tr>
     {expanded && (
-    <tr className="bg-slate-50/90 border-t border-slate-100">
-    <td colSpan={9} className="px-4 py-4 @[640px]:px-8">
+    <tr className={`${rowStripe} border-b border-gray-100/80`}>
+    <td colSpan={9} className="px-4 py-4 @[640px]:px-8 bg-gray-50/90 border-t border-gray-200/60">
      <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
      Invoice lines ({lines.length})
      </p>
