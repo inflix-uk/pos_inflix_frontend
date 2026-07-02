@@ -418,7 +418,7 @@ export default function InvoiceOnlineOrderPage() {
        <tbody>
         {loading ? (
          Array.from({ length: 6 }).map((_, i) => (
-          <tr key={i} className="border-b border-gray-100">
+          <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-100"}>
            {Array.from({ length: 7 }).map((__, j) => (
             <td key={j} className="px-3 sm:px-4 py-3">
              <div className="h-4 w-full max-w-[120px] bg-gray-200 rounded animate-pulse" />
@@ -437,12 +437,13 @@ export default function InvoiceOnlineOrderPage() {
           </td>
          </tr>
         ) : (
-         invoices.map((inv) => {
+         invoices.map((inv, idx) => {
+          const rowStripe = idx % 2 === 0 ? "bg-white" : "bg-gray-100";
           const taxLabel = (inv as unknown as { taxName?: string; taxRate?: number; taxType?: string }).taxName;
           const taxRate = (inv as unknown as { taxRate?: number }).taxRate ?? 0;
           const taxType = (inv as unknown as { taxType?: string }).taxType ?? "";
           return (
-           <tr key={inv._id} className="border-b border-gray-100 hover:bg-gray-50">
+           <tr key={inv._id} className={`${rowStripe} border-b border-gray-100/80 hover:bg-orange-50/80 transition-colors`}>
             <td className="px-3 sm:px-4 py-3 font-mono text-xs font-semibold text-gray-800">{inv.reference}</td>
             <td className="px-3 sm:px-4 py-3 text-gray-600">
              {formatDateLondon(invoiceDisplayDate(inv))}

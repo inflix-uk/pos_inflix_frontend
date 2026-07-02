@@ -118,7 +118,7 @@ function SalesTableSkeleton({ rows = 6 }: { rows?: number }) {
  </thead>
  <tbody>
   {Array.from({ length: rows }).map((_, i) => (
-  <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/70"}>
+  <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-100"}>
   <td className="px-2 py-4"><div className={`${shimmer} h-4 w-4`} /></td>
   <td className="px-6 py-4"><div className={`${shimmer} h-4 w-36`} /></td>
   <td className="px-6 py-4"><div className={`${shimmer} h-4 w-24`} /></td>
@@ -1328,7 +1328,7 @@ const Page = () => {
    const explicitDue = Number(sale.amountDue);
    const creditPart = Number(sale.payments?.credit || 0);
    const rowBalance = Math.max(0, Number.isFinite(explicitDue) ? explicitDue : (creditPart > 0 ? creditPart : 0));
-   const rowStripe = idx % 2 === 0 ? "bg-white" : "bg-gray-50/70";
+   const rowStripe = idx % 2 === 0 ? "bg-white" : "bg-gray-100";
    return (
     <div key={sale._id} className={`px-3 py-3 border-b border-gray-100/80 active:bg-orange-50/80 ${rowStripe}`}>
     <div className="flex items-start justify-between gap-2">
@@ -1518,7 +1518,7 @@ const Page = () => {
    const { name: custName, contact: custContact, extra: custExtra } = displayCustomerLine(sale);
    const lines = sale.items ?? [];
    const rowNumber = (currentPage - 1) * rowsPerPage + idx + 1;
-   const rowStripe = idx % 2 === 0 ? "bg-white" : "bg-gray-50/70";
+   const rowStripe = idx % 2 === 0 ? "bg-white" : "bg-gray-100";
    return (
     <React.Fragment key={sale._id}>
     <tr className={`${rowStripe} hover:bg-orange-50/80 transition-colors border-b border-gray-100/80`}>

@@ -183,7 +183,7 @@ const SECTION_SUBMENU_DOT: Record<string, string> = {
 };
 
 const sidebarShellClass =
-  "h-full flex flex-col bg-white bg-gradient-to-b from-slate-50 via-white to-orange-50";
+  "h-full flex flex-col bg-white bg-gradient-to-b from-slate-50 via-white to-orange-50 uppercase";
 
 export function Sidebar() {
   const [collapsed, setCollapsedState] = useState(false);
@@ -605,7 +605,7 @@ export function Sidebar() {
                     e.currentTarget.parentElement?.querySelector(".logo-fallback")?.classList.remove("hidden");
                   }}
                 />
-                <span className="logo-fallback hidden text-base font-semibold text-gray-800 truncate">Inflix</span>
+                <span className="logo-fallback hidden text-base font-semibold text-gray-800 truncate uppercase">Inflix</span>
               </div>
               <button
                 onClick={() => setMobileOpen(false)}
@@ -639,7 +639,7 @@ export function Sidebar() {
                         aria-label={`${section.label} (always shown)`}
                       >
                         <ChevronRight className="h-4 w-4 shrink-0 rotate-90" aria-hidden />
-                        <span className="truncate">{section.label}</span>
+                        <span className="truncate uppercase">{section.label}</span>
                       </div>
                     ) : (
                       <button
@@ -669,7 +669,7 @@ export function Sidebar() {
                           )}
                           aria-hidden
                         />
-                        <span className="truncate">{section.label}</span>
+                        <span className="truncate uppercase">{section.label}</span>
                       </button>
                     )}
                     <div
@@ -725,7 +725,7 @@ export function Sidebar() {
               e.currentTarget.parentElement?.querySelector(".logo-fallback")?.classList.remove("hidden");
             }}
           />
-          <span className="logo-fallback hidden text-base font-semibold text-gray-800 truncate">Inflix</span>
+          <span className="logo-fallback hidden text-base font-semibold text-gray-800 truncate uppercase">Inflix</span>
         </div>
         <button
           onClick={toggleCollapse}
@@ -765,7 +765,7 @@ export function Sidebar() {
                       aria-label={`${section.label} (always shown)`}
                     >
                       <ChevronRight className="h-4 w-4 shrink-0 rotate-90" aria-hidden />
-                      <span className="truncate">{section.label}</span>
+                      <span className="truncate uppercase">{section.label}</span>
                     </div>
                   ) : (
                     <button
@@ -795,7 +795,7 @@ export function Sidebar() {
                         )}
                         aria-hidden
                       />
-                      <span className="truncate">{section.label}</span>
+                      <span className="truncate uppercase">{section.label}</span>
                     </button>
                   )}
                   <div
