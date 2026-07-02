@@ -244,10 +244,10 @@ const SummaryTableRow: React.FC<{
   </div>
  )}
  </td>
- <td className="py-1.5 px-2 text-right">
+ <td className="py-1.5 px-2 text-right overflow-visible">
  {onUpdatePrice ? (
-  <span className="inline-flex items-center rounded border border-gray-200 bg-gray-50 focus-within:ring-1 focus-within:ring-blue-500 min-w-[4.5rem] w-22">
-  <span className="pl-1.5 text-gray-500 text-xs shrink-0">{currencySymbol}</span>
+  <span className="inline-flex items-center rounded-md border border-gray-200 bg-gray-50 focus-within:ring-2 focus-within:ring-blue-500/40 focus-within:border-blue-500 min-w-[5.75rem] px-2 py-0.5 normal-case">
+  <span className="text-gray-500 text-xs font-medium shrink-0 select-none">{currencySymbol}</span>
   <input
   type="text"
   inputMode="decimal"
@@ -258,7 +258,7 @@ const SummaryTableRow: React.FC<{
   }}
   onBlur={commitPrice}
   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-  className="w-full min-w-0 py-0.5 pr-1.5 text-sm font-medium bg-transparent border-0 focus:ring-0 tabular-nums text-right"
+  className="w-full min-w-[2.75rem] py-0.5 pl-1 pr-0.5 text-sm font-medium bg-transparent border-0 focus:ring-0 focus:outline-none tabular-nums text-right normal-case"
   aria-label="Unit price"
   />
   </span>
@@ -324,8 +324,8 @@ const SerialDetailRateCell: React.FC<{
  }
  return (
  <td className="py-1.5 px-2 text-right">
- <span className="inline-flex items-center rounded border border-gray-200 bg-gray-50 focus-within:ring-1 focus-within:ring-blue-500 w-20 justify-end">
- <span className="pl-1.5 text-gray-500 text-xs shrink-0">{currencySymbol}</span>
+ <span className="inline-flex items-center rounded-md border border-gray-200 bg-gray-50 focus-within:ring-2 focus-within:ring-blue-500/40 focus-within:border-blue-500 min-w-[5.75rem] px-2 py-0.5 normal-case justify-end">
+ <span className="text-gray-500 text-xs font-medium shrink-0 select-none">{currencySymbol}</span>
  <input
   type="text"
   inputMode="decimal"
@@ -336,7 +336,7 @@ const SerialDetailRateCell: React.FC<{
   }}
   onBlur={commitPrice}
   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-  className="w-full min-w-0 py-0.5 pr-1 text-sm font-medium bg-transparent border-0 focus:ring-0 tabular-nums text-right"
+  className="w-full min-w-[2.75rem] py-0.5 pl-1 pr-0.5 text-sm font-medium bg-transparent border-0 focus:ring-0 focus:outline-none tabular-nums text-right normal-case"
   aria-label="Unit price"
  />
  </span>
@@ -495,8 +495,8 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
   {onUpdatePrice ? (
   <span>
   <span className="sr-only">Unit price</span>
-  <span className="inline-flex items-center rounded border border-gray-300 bg-gray-50 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 w-full min-w-0">
-   <span className="pl-1 text-gray-500 text-[10px] shrink-0">{currencySymbol}</span>
+  <span className="inline-flex items-center rounded-md border border-gray-300 bg-gray-50 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 w-full min-w-[4.5rem] px-1.5 py-0.5 normal-case">
+   <span className="text-gray-500 text-[10px] font-medium shrink-0 select-none">{currencySymbol}</span>
    <input
    type="text"
    inputMode="decimal"
@@ -507,7 +507,7 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
    }}
    onBlur={commitPrice}
    onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-   className="w-full min-w-0 py-0.5 pr-1 text-[11px] font-bold bg-transparent border-0 focus:ring-0 focus:outline-none tabular-nums"
+   className="w-full min-w-0 py-0.5 pl-0.5 pr-0.5 text-[11px] font-bold bg-transparent border-0 focus:ring-0 focus:outline-none tabular-nums normal-case"
    aria-label="Unit price"
    />
   </span>
@@ -571,8 +571,8 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
   <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
   Unit price
   </label>
-  <div className="flex items-center rounded-lg border border-gray-300 bg-gray-50 overflow-hidden focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-orange-500">
-  <span className="pl-2.5 text-gray-500 text-sm">{currencySymbol}</span>
+  <div className="flex items-center rounded-lg border border-gray-300 bg-gray-50 overflow-hidden focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-orange-500 normal-case">
+  <span className="pl-2.5 pr-1 text-gray-500 text-sm font-medium shrink-0 select-none">{currencySymbol}</span>
   <input
   type="text"
   inputMode="decimal"
@@ -583,7 +583,7 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
   }}
   onBlur={commitPrice}
   onKeyDown={(e) => e.key === "Enter" && commitPrice()}
-  className="w-16 py-1.5 pr-2 text-sm font-medium bg-transparent border-0 focus:ring-0"
+  className="w-16 py-1.5 pr-2 text-sm font-medium bg-transparent border-0 focus:ring-0 focus:outline-none normal-case"
   aria-label="Unit price"
   />
   </div>
@@ -716,7 +716,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
    <th className="py-1.5 px-2 w-8 shrink-0">#</th>
    <th className="py-1.5 pl-2 pr-1 min-w-[180px]">Item</th>
    <th className="py-1.5 px-2 text-right w-20 shrink-0">Qty</th>
-   <th className="py-1.5 px-2 text-right w-24 shrink-0">Unit price</th>
+   <th className="py-1.5 px-2 text-right w-28 shrink-0">Unit price</th>
    <th className="py-1.5 px-2 text-right w-24 shrink-0">Amount</th>
    </tr>
    </thead>
