@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import {
  FileText,
  Loader2,
@@ -10,8 +11,13 @@ import {
  DollarSign,
  FolderTree,
  Package,
+ MapPin,
 } from "lucide-react";
 import { accountsApi, type ProfitAndLossData } from "../accounts/service/accountsApi";
+import { locationApi } from "@/app/(routes)/peoples/locations/service/locationApi";
+import { usePermissionsContext } from "@/contexts/PermissionsContext";
+
+const STORAGE_KEY = "profit-and-loss-locationId";
 
 const formatMoney = (n: number) =>
  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
@@ -20,9 +26,13 @@ const formatDate = (d: string) =>
  new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
 export default function ProfitAndLossPage() {
+ const searchParams = useSearchParams();
+ const { user } = usePermissionsContext();
  const [data, setData] = useState<ProfitAndLossData | null>(null);
  const [loading, setLoading] = useState(true);
  const [error, setError] = useState<string | null>(null);
+ const [allLocations, setAllLocations] = useState<Array<{ _id: string; name: string }>>([]);
+ const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
  const [from, setFrom] = useState(() => {
  const d = new Date();
  d.setMonth(0);
@@ -31,22 +41,101 @@ export default function ProfitAndLossPage() {
  });
  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
 
- const fetchData = async () => {
- setLoading(true);
- setError(null);
- try {
- const res = await accountsApi.getProfitAndLoss({ from, to });
- setData(res.data);
- } catch (e) {
- setError(e instanceof Error ? e.message : "Failed to load profit and loss");
- } finally {
- setLoading(false);
- }
- };
+ const canSelectAll = !user?.assignedLocationIds?.length;
+ const allowedLocationIds = useMemo(
+  () => (user?.assignedLocationIds?.length ? new Set(user.assignedLocationIds) : null),
+  [user?.assignedLocationIds]
+ );
+ const locations = useMemo(() => {
+  if (!allowedLocationIds) return allLocations;
+  return allLocations.filter((l) => allowedLocationIds.has(l._id));
+ }, [allLocations, allowedLocationIds]);
 
  useEffect(() => {
- fetchData();
- }, [from, to]);
+  const fromParam = searchParams.get("from");
+  const toParam = searchParams.get("to");
+  const locationParam = searchParams.get("locationId");
+  if (fromParam) setFrom(fromParam);
+  if (toParam) setTo(toParam);
+  if (locationParam) {
+   setSelectedLocationId(locationParam === "all" && !canSelectAll ? "" : locationParam);
+  } else if (typeof window !== "undefined") {
+   const stored = localStorage.getItem(STORAGE_KEY);
+   if (stored) setSelectedLocationId(stored);
+  }
+ }, [searchParams, canSelectAll]);
+
+ useEffect(() => {
+  let cancelled = false;
+  locationApi
+   .getLocations({ isActive: true, limit: 500 })
+   .then((res) => {
+    if (cancelled || !res.success || !Array.isArray(res.data)) return;
+    setAllLocations(
+     (res.data as Array<{ _id: string; name: string }>).map((l) => ({
+      _id: l._id,
+      name: l.name,
+     }))
+    );
+   })
+   .catch(() => {});
+  return () => {
+   cancelled = true;
+  };
+ }, []);
+
+ useEffect(() => {
+  if (locations.length === 0) return;
+  if (canSelectAll) {
+   if (!selectedLocationId) setSelectedLocationId("all");
+   return;
+  }
+  const allowed = new Set(locations.map((l) => l._id));
+  if (selectedLocationId && selectedLocationId !== "all" && allowed.has(selectedLocationId)) return;
+  const defaultId = user?.defaultLocationId && allowed.has(user.defaultLocationId)
+   ? user.defaultLocationId
+   : locations[0]?._id;
+  if (defaultId) setSelectedLocationId(defaultId);
+ }, [locations, canSelectAll, selectedLocationId, user?.defaultLocationId]);
+
+ const handleLocationChange = (value: string) => {
+  setSelectedLocationId(value);
+  try {
+   if (value && value !== "all") localStorage.setItem(STORAGE_KEY, value);
+   else localStorage.removeItem(STORAGE_KEY);
+  } catch {
+   // ignore
+  }
+ };
+
+ const fetchData = useCallback(async () => {
+  if (!canSelectAll && !selectedLocationId) return;
+  setLoading(true);
+  setError(null);
+  try {
+   const res = await accountsApi.getProfitAndLoss({
+    from,
+    to,
+    locationId: selectedLocationId || "all",
+   });
+   setData(res.data);
+  } catch (e) {
+   setError(e instanceof Error ? e.message : "Failed to load profit and loss");
+  } finally {
+   setLoading(false);
+  }
+ }, [from, to, selectedLocationId, canSelectAll]);
+
+ useEffect(() => {
+  fetchData();
+ }, [fetchData]);
+
+ const locationLabel = useMemo(() => {
+  if (selectedLocationId === "all") return "All locations";
+  return locations.find((l) => l._id === selectedLocationId)?.name ?? data?.location?.name ?? "—";
+ }, [selectedLocationId, locations, data?.location?.name]);
+
+ const showLocationExpenseNote = selectedLocationId !== "all" && selectedLocationId !== "";
 
  return (
  <div className="@container min-h-screen bg-gray-50/80 p-2 @[640px]:p-3 @[768px]:p-4 @[1024px]:p-6">
@@ -66,6 +155,24 @@ export default function ProfitAndLossPage() {
   </div>
   </div>
   <div className="flex flex-wrap items-center gap-1.5 @[640px]:gap-2">
+  <div className="flex items-center gap-1.5 @[640px]:gap-2">
+  <MapPin className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 shrink-0 text-gray-500" />
+  <label htmlFor="pl-location" className="sr-only">Location</label>
+  <select
+  id="pl-location"
+  value={selectedLocationId}
+  onChange={(e) => handleLocationChange(e.target.value)}
+  disabled={loading || (!canSelectAll && locations.length === 0)}
+  className="rounded-xl border border-gray-200 px-2.5 @[640px]:px-3 @[768px]:px-4 py-1.5 @[640px]:py-2 @[768px]:py-2.5 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium bg-white focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 disabled:opacity-50 min-w-[8rem]"
+  >
+  {canSelectAll ? <option value="all">All locations</option> : null}
+  {locations.map((loc) => (
+   <option key={loc._id} value={loc._id}>
+   {loc.name}
+   </option>
+  ))}
+  </select>
+  </div>
   <input
   type="date"
   value={from}
@@ -103,6 +210,13 @@ export default function ProfitAndLossPage() {
   </div>
  )}
 
+ {showLocationExpenseNote && (
+  <div className="mb-3 @[640px]:mb-4 p-2.5 @[640px]:p-3 @[768px]:p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-[11px] @[640px]:text-xs @[768px]:text-sm">
+  <strong>Location filter:</strong> Revenue and COGS are for <span className="font-medium">{locationLabel}</span>.
+  Operating expenses are company-wide until expense locations are tracked per branch.
+  </div>
+ )}
+
  {loading && !data ? (
   <div className="flex items-center justify-center py-10 @[640px]:py-12 @[768px]:py-16">
   <Loader2 className="h-6 w-6 @[640px]:h-7 @[640px]:w-7 @[768px]:h-8 @[768px]:w-8 animate-spin text-orange-500" />
@@ -110,6 +224,12 @@ export default function ProfitAndLossPage() {
  ) : data ? (
   <div className="space-y-3 @[640px]:space-y-4 @[768px]:space-y-6">
   <p className="text-[11px] @[640px]:text-xs @[768px]:text-sm text-gray-500">
+  {locationLabel !== "All locations" ? (
+   <>
+   <span className="font-medium text-gray-700">{locationLabel}</span>
+   <span className="mx-1.5">·</span>
+   </>
+  ) : null}
   Period: {formatDate(data.from)} to {formatDate(data.to)}
   </p>
 
