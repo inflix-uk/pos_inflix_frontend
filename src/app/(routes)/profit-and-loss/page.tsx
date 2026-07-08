@@ -27,7 +27,7 @@ const formatDate = (d: string) =>
 
 export default function ProfitAndLossPage() {
  const searchParams = useSearchParams();
- const { user } = usePermissionsContext();
+ const { user, can } = usePermissionsContext();
  const [data, setData] = useState<ProfitAndLossData | null>(null);
  const [loading, setLoading] = useState(true);
  const [error, setError] = useState<string | null>(null);
@@ -41,11 +41,13 @@ export default function ProfitAndLossPage() {
  });
  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
 
- const canSelectAll = !user?.assignedLocationIds?.length;
- const allowedLocationIds = useMemo(
-  () => (user?.assignedLocationIds?.length ? new Set(user.assignedLocationIds) : null),
-  [user?.assignedLocationIds]
- );
+ const hasUnrestrictedLocationAccess =
+  user?.role === "admin" || can("user.manage") || !user?.assignedLocationIds?.length;
+ const canSelectAll = hasUnrestrictedLocationAccess;
+ const allowedLocationIds = useMemo(() => {
+  if (hasUnrestrictedLocationAccess) return null;
+  return user?.assignedLocationIds?.length ? new Set(user.assignedLocationIds) : null;
+ }, [hasUnrestrictedLocationAccess, user?.assignedLocationIds]);
  const locations = useMemo(() => {
   if (!allowedLocationIds) return allLocations;
   return allLocations.filter((l) => allowedLocationIds.has(l._id));
@@ -162,8 +164,8 @@ export default function ProfitAndLossPage() {
   id="pl-location"
   value={selectedLocationId}
   onChange={(e) => handleLocationChange(e.target.value)}
-  disabled={loading || (!canSelectAll && locations.length === 0)}
-  className="rounded-xl border border-gray-200 px-2.5 @[640px]:px-3 @[768px]:px-4 py-1.5 @[640px]:py-2 @[768px]:py-2.5 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium bg-white focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 disabled:opacity-50 min-w-[8rem]"
+  disabled={loading || (!hasUnrestrictedLocationAccess && locations.length === 0)}
+  className="rounded-xl border border-gray-200 px-2.5 @[640px]:px-3 @[768px]:px-4 py-1.5 @[640px]:py-2 @[768px]:py-2.5 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium bg-white focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 disabled:opacity-50 min-w-[10rem] max-w-[14rem]"
   >
   {canSelectAll ? <option value="all">All locations</option> : null}
   {locations.map((loc) => (

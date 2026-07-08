@@ -761,7 +761,7 @@ function InvoicePreviewModal({
 
 const Page = () => {
  const router = useRouter();
- const { can, user } = usePermissionsContext();
+ const { can, user, loading: permissionsLoading } = usePermissionsContext();
  const canViewHistorical = can("report.view");
  const canVoid = can("sale.void");
  /** Backend hard-delete requires legacy role admin (not only sale.delete — managers may have that perm). */
@@ -776,6 +776,8 @@ const Page = () => {
  const [searchTerm, setSearchTerm] = useState("");
  const [debouncedSearch, setDebouncedSearch] = useState("");
  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+ const fetchSeqRef = useRef(0);
+ const fetchAbortRef = useRef<AbortController | null>(null);
 
  // Debounce search: wait 400ms after last keystroke before triggering API call
  const handleSearchChange = useCallback((value: string) => {
@@ -913,32 +915,48 @@ const Page = () => {
  );
 
  const fetchSales = useCallback(async () => {
+ if (permissionsLoading) return;
+ fetchAbortRef.current?.abort();
+ const controller = new AbortController();
+ fetchAbortRef.current = controller;
+ const seq = ++fetchSeqRef.current;
+ const timeoutId = window.setTimeout(() => controller.abort(), 30000);
  setLoading(true);
  setError(null);
  try {
  const todayKey = getTodayLondonDateKey();
- const res = await salesApi.getSales({
- page: currentPage,
- limit: rowsPerPage,
- type: selectedType === "All" ? undefined : selectedType,
- search: debouncedSearch.trim() || undefined,
- from: canViewHistorical ? (dateFrom.trim() || undefined) : todayKey,
- to: canViewHistorical ? (dateTo.trim() || undefined) : todayKey,
- locationId: locationId.trim() || undefined,
- paymentMethod: paymentMethod.trim() || undefined,
- minTotal: minTotal.trim() || undefined,
- maxTotal: maxTotal.trim() || undefined,
- hasReturn: hasReturnFilter || undefined,
- order: listOrder,
- });
+ const res = await salesApi.getSales(
+  {
+  page: currentPage,
+  limit: rowsPerPage,
+  type: selectedType === "All" ? undefined : selectedType,
+  search: debouncedSearch.trim() || undefined,
+  from: canViewHistorical ? (dateFrom.trim() || undefined) : todayKey,
+  to: canViewHistorical ? (dateTo.trim() || undefined) : todayKey,
+  locationId: locationId.trim() || undefined,
+  paymentMethod: paymentMethod.trim() || undefined,
+  minTotal: minTotal.trim() || undefined,
+  maxTotal: maxTotal.trim() || undefined,
+  hasReturn: hasReturnFilter || undefined,
+  order: listOrder,
+  },
+  controller.signal
+ );
+ if (seq !== fetchSeqRef.current) return;
  setSales(res.data ?? []);
  setTotal(res.total ?? 0);
  setPages(res.pages ?? 1);
  } catch (e) {
- setError(e instanceof Error ? e.message : "Failed to load sales");
+ if (seq !== fetchSeqRef.current) return;
+ if (e instanceof DOMException && e.name === "AbortError") {
+  setError("Sales list timed out — try again or use filters to narrow the date range.");
+ } else {
+  setError(e instanceof Error ? e.message : "Failed to load sales");
+ }
  setSales([]);
  } finally {
- setLoading(false);
+ window.clearTimeout(timeoutId);
+ if (seq === fetchSeqRef.current) setLoading(false);
  }
  }, [
  currentPage,
@@ -954,11 +972,16 @@ const Page = () => {
  hasReturnFilter,
  listOrder,
  canViewHistorical,
+ permissionsLoading,
  ]);
 
  useEffect(() => {
+ if (permissionsLoading) return;
  fetchSales();
- }, [fetchSales]);
+ return () => {
+ fetchAbortRef.current?.abort();
+ };
+ }, [fetchSales, permissionsLoading]);
 
  useEffect(() => {
  let cancelled = false;

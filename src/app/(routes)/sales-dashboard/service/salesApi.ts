@@ -398,7 +398,8 @@ export const salesApi = {
   return data;
  },
 
- getSales: async (params?: {
+ getSales: async (
+  params?: {
   page?: number;
   limit?: number;
   type?: string;
@@ -413,7 +414,9 @@ export const salesApi = {
   order?: "asc" | "desc";
   includeItems?: boolean;
   customerId?: string;
- }): Promise<GetSalesResponse> => {
+ },
+  signal?: AbortSignal
+ ): Promise<GetSalesResponse> => {
   const searchParams = new URLSearchParams();
   if (params?.page != null) searchParams.set("page", String(params.page));
   if (params?.limit != null) searchParams.set("limit", String(params.limit));
@@ -440,6 +443,7 @@ export const salesApi = {
   const response = await fetch(`${API_BASE_URL}/sales?${searchParams}`, {
    method: "GET",
    headers: getAuthHeaders(),
+   signal,
   });
   if (!response.ok) {
    const err = await response.json().catch(() => ({}));
