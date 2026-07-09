@@ -134,7 +134,7 @@ export default function ZReadDashboardPage() {
    try {
     if (kind === "day") {
      const today = getTodayLondon();
-     const result = await getTakingsDashboard({ from: today, to: today, locationId: locId });
+     const result = await getTakingsDashboard({ from: today, to: today, locationId: locId, lite: true });
      setFrom(today);
      setTo(today);
      setPeriodLabel("End of day");
@@ -150,6 +150,7 @@ export default function ZReadDashboardPage() {
       locationId: locId,
       fromUtc: start.toISOString(),
       toUtc: end.toISOString(),
+      lite: true,
      });
      setFrom(start.toISOString().slice(0, 10));
      setTo(end.toISOString().slice(0, 10));
