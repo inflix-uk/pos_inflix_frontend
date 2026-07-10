@@ -5,10 +5,13 @@ body {
 }
 
 button,
-input,
-select,
-textarea {
+select {
   text-transform: inherit;
+}
+
+input,
+textarea {
+  text-transform: none;
 }
 
 :root {
