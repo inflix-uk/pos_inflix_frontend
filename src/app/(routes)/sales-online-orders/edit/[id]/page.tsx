@@ -97,6 +97,11 @@ export default function EditSalePage() {
  const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
  const [addCustomerLoading, setAddCustomerLoading] = useState(false);
 
+ const customerPricingGroupId =
+  selectedCustomer && "pricingGroupId" in selectedCustomer && selectedCustomer.pricingGroupId
+   ? String(selectedCustomer.pricingGroupId)
+   : undefined;
+
  useEffect(() => {
  let cancelled = false;
  categoryApi.getCategories({ limit: 500, isActive: true }).then((res) => {
@@ -115,7 +120,7 @@ export default function EditSalePage() {
  loading: productsLoading,
  error: productsError,
  refetch: refetchProducts,
- } = useInventoryProductsForSales();
+ } = useInventoryProductsForSales({ pricingGroupId: customerPricingGroupId });
  const [search, setSearch] = useState("");
  const [categoryFilter, setCategoryFilter] = useState("all");
 
@@ -493,7 +498,7 @@ export default function EditSalePage() {
  } catch {
   // Not sold yet — look up the in-stock product matching this serial.
   try {
-  const stockRes = await salesApi.getFindInStockSerial(t);
+  const stockRes = await salesApi.getFindInStockSerial(t, customerPricingGroupId);
   const d = stockRes.data;
   const product: POSProduct = {
   sku: d.sku,
@@ -526,7 +531,7 @@ export default function EditSalePage() {
  setMessage({ type: "error", text: "Product not found" });
  return true;
  },
- [id, addToCart, addBySku]
+ [id, addToCart, addBySku, customerPricingGroupId]
  );
 
  const cartSearchSuggestions = React.useMemo(() => (search.trim() ? filteredPosProducts.slice(0, 8) : []), [search, filteredPosProducts]);
