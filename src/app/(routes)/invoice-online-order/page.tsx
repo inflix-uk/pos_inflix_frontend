@@ -15,7 +15,9 @@ import {
  Eye,
  Pencil,
  Printer,
+ Calendar,
  Download,
+ FileSpreadsheet,
  FileText,
  Trash2,
  X,
@@ -26,13 +28,20 @@ import {
 import { invoicesApi, invoiceDisplayDate, invoicePaymentTypeLabel, type InvoiceRecord } from "./service/invoicesApi";
 import { formatDateLondon, formatOccurredAt } from "@/lib/dateUtils";
 import { downloadInvoiceA4, getInvoiceA4PdfBase64, printInvoiceA4, printReceipt80mm, type SaleForPrint } from "@/lib/invoicePrint";
+import { downloadInvoicesExcel } from "@/lib/invoiceExport";
 import { usePermissions } from "@/hooks/usePermissions";
 import { customerApi } from "../peoples/customers/service/customerApi";
+import { getSalesDateRange, STAFF_SALES_BANNER } from "@/lib/salesDateAccess";
+import type { DashboardRange } from "@/lib/dateUtils";
 
 const formatMoney = (n: number) =>
  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2 }).format(n);
 
 const PAGE_SIZE = 25;
+
+function toLondonDateKey(d: Date): string {
+ return d.toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+}
 
 /** Newest invoice date first (occurredAt, else createdAt). */
 function sortInvoicesByDateDesc(list: InvoiceRecord[]): InvoiceRecord[] {
@@ -198,9 +207,16 @@ export default function InvoiceOnlineOrderPage() {
  const [emailPrefillLoading, setEmailPrefillLoading] = useState(false);
  const [actionError, setActionError] = useState<string | null>(null);
  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+ const [range, setRange] = useState<DashboardRange>("today");
+ const [customFrom, setCustomFrom] = useState("");
+ const [customTo, setCustomTo] = useState("");
+ const [from, setFrom] = useState(() => toLondonDateKey(new Date()));
+ const [to, setTo] = useState(() => toLondonDateKey(new Date()));
+ const [exporting, setExporting] = useState(false);
  const { can } = usePermissions();
  const canEdit = can("invoice.edit");
  const canVoid = can("invoice.void");
+ const canViewHistorical = can("report.view");
 
  useEffect(() => {
   const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
@@ -209,7 +225,13 @@ export default function InvoiceOnlineOrderPage() {
 
  useEffect(() => {
   setPage(1);
- }, [debouncedSearch, statusFilter]);
+ }, [debouncedSearch, statusFilter, from, to]);
+
+ useEffect(() => {
+  const dateRange = getSalesDateRange(range, customFrom, customTo, canViewHistorical);
+  setFrom(toLondonDateKey(dateRange.fromUtc));
+  setTo(toLondonDateKey(dateRange.toUtc));
+ }, [range, customFrom, customTo, canViewHistorical]);
 
  const load = useCallback(async () => {
   setLoading(true);
@@ -220,6 +242,8 @@ export default function InvoiceOnlineOrderPage() {
     limit: PAGE_SIZE,
     status: statusFilter,
     search: debouncedSearch || undefined,
+    from,
+    to,
    });
    if (res.success) {
     setInvoices(sortInvoicesByDateDesc(res.data || []));
@@ -234,7 +258,30 @@ export default function InvoiceOnlineOrderPage() {
   } finally {
    setLoading(false);
   }
- }, [page, statusFilter, debouncedSearch]);
+ }, [page, statusFilter, debouncedSearch, from, to]);
+
+ const handleExportExcel = useCallback(async () => {
+  setExporting(true);
+  setActionError(null);
+  try {
+   const rows = await invoicesApi.fetchAllInvoicesInRange({
+    from,
+    to,
+    status: statusFilter,
+    search: debouncedSearch || undefined,
+   });
+   if (rows.length === 0) {
+    setActionError("No invoices found in the selected date range.");
+    return;
+   }
+   downloadInvoicesExcel(sortInvoicesByDateDesc(rows), from, to);
+   setActionSuccess(`Exported ${rows.length} invoice${rows.length === 1 ? "" : "s"} to Excel.`);
+  } catch (e) {
+   setActionError(e instanceof Error ? e.message : "Failed to export invoices");
+  } finally {
+   setExporting(false);
+  }
+ }, [from, to, statusFilter, debouncedSearch]);
 
  useEffect(() => {
   load();
@@ -332,9 +379,29 @@ export default function InvoiceOnlineOrderPage() {
  const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
  const rangeEnd = Math.min(total, page * PAGE_SIZE);
 
+ const rangeLabel =
+  range === "today"
+   ? "Today"
+   : range === "yesterday"
+    ? "Yesterday"
+    : range === "7d"
+     ? "7 days"
+     : range === "30d"
+      ? "30 days"
+      : "Custom";
+
  const headerRight = useMemo(
   () => (
    <div className="flex items-center gap-2">
+    <button
+     type="button"
+     onClick={handleExportExcel}
+     disabled={exporting || loading}
+     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-green-200 bg-green-50 hover:bg-green-100 text-sm text-green-800 font-medium disabled:opacity-50"
+    >
+     {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+     Export Excel
+    </button>
     <button
      type="button"
      onClick={load}
@@ -353,7 +420,7 @@ export default function InvoiceOnlineOrderPage() {
     </Link>
    </div>
   ),
-  [load, loading],
+  [load, loading, handleExportExcel, exporting],
  );
 
  return (
@@ -372,8 +439,68 @@ export default function InvoiceOnlineOrderPage() {
      {headerRight}
     </div>
 
+    {!canViewHistorical && (
+     <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 sm:px-4 py-2 text-amber-800 text-xs sm:text-sm">
+      {STAFF_SALES_BANNER}
+     </div>
+    )}
+
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-     <div className="p-3 sm:p-4 border-b border-gray-200 flex flex-wrap items-center gap-2">
+     <div className="p-3 sm:p-4 border-b border-gray-200 space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+       <Calendar className="w-4 h-4 text-gray-500 shrink-0" />
+       {canViewHistorical ? (
+        <>
+         <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
+          {(["today", "yesterday", "7d", "30d", "custom"] as const).map((r) => (
+           <button
+            key={r}
+            type="button"
+            onClick={() => setRange(r)}
+            disabled={loading}
+            className={`rounded-md px-2.5 py-1 text-sm font-medium transition-colors disabled:opacity-50 ${
+             range === r ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-white"
+            }`}
+           >
+            {r === "today"
+             ? "Today"
+             : r === "yesterday"
+              ? "Yesterday"
+              : r === "7d"
+               ? "7 days"
+               : r === "30d"
+                ? "30 days"
+                : "Custom"}
+           </button>
+          ))}
+         </div>
+         {range === "custom" && (
+          <div className="flex flex-wrap items-center gap-2">
+           <label className="text-xs text-gray-600">From</label>
+           <input
+            type="date"
+            value={customFrom}
+            onChange={(e) => setCustomFrom(e.target.value)}
+            className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+           />
+           <label className="text-xs text-gray-600">To</label>
+           <input
+            type="date"
+            value={customTo}
+            onChange={(e) => setCustomTo(e.target.value)}
+            className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+           />
+          </div>
+         )}
+        </>
+       ) : (
+        <span className="text-sm text-gray-600 font-medium">Today</span>
+       )}
+       <span className="text-xs text-gray-500">
+        {rangeLabel} · {from} → {to}
+       </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
       <div className="relative flex-1 min-w-[200px]">
        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
        <input
@@ -393,6 +520,7 @@ export default function InvoiceOnlineOrderPage() {
        <option value="voided">Voided</option>
        <option value="all">All</option>
       </select>
+      </div>
      </div>
 
      {error && (

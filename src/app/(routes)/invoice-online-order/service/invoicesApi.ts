@@ -79,6 +79,8 @@ export const invoicesApi = {
   type?: string;
   search?: string;
   status?: string;
+  from?: string;
+  to?: string;
  }): Promise<GetInvoicesResponse> => {
   const sp = new URLSearchParams();
   if (params?.page != null) sp.set("page", String(params.page));
@@ -86,6 +88,8 @@ export const invoicesApi = {
   if (params?.type) sp.set("type", params.type);
   if (params?.search) sp.set("search", params.search);
   if (params?.status) sp.set("status", params.status);
+  if (params?.from) sp.set("from", params.from);
+  if (params?.to) sp.set("to", params.to);
   const response = await fetch(`${API_BASE_URL}/invoices?${sp}`, {
    method: "GET",
    headers: getAuthHeaders(),
@@ -95,6 +99,40 @@ export const invoicesApi = {
    throw new Error(err.message || "Failed to fetch invoices");
   }
   return response.json();
+ },
+
+ fetchAllInvoicesInRange: async (params: {
+  from: string;
+  to: string;
+  status?: string;
+  search?: string;
+  type?: string;
+  maxRows?: number;
+ }): Promise<InvoiceRecord[]> => {
+  const maxRows = params.maxRows ?? 10000;
+  const pageSize = 500;
+  const all: InvoiceRecord[] = [];
+  let page = 1;
+  let total = Infinity;
+
+  while (all.length < total && all.length < maxRows) {
+   const res = await invoicesApi.getInvoices({
+    page,
+    limit: pageSize,
+    from: params.from,
+    to: params.to,
+    status: params.status,
+    search: params.search,
+    type: params.type,
+   });
+   const batch = res.data || [];
+   total = res.meta?.total ?? batch.length;
+   all.push(...batch);
+   if (batch.length < pageSize) break;
+   page += 1;
+  }
+
+  return all.slice(0, maxRows);
  },
 
  updateInvoice: async (
