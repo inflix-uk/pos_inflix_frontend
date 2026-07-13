@@ -132,11 +132,16 @@ export default function StartReturnPage() {
  setRefundAccountId("");
  return;
  }
+ if (refundMethod === "cash") {
+ setRefundAccountId("");
+ return;
+ }
+ // Card/bank: keep selection if still valid; do not force-select — pot is optional.
  const options = paymentAccounts.filter((a) => a.type === refundMethodToAccountType[refundMethod]);
  setRefundAccountId((prev) => {
- if (options.length === 0) return prev;
+ if (!prev) return "";
  if (options.some((a) => a._id === prev)) return prev;
- return options[0]._id;
+ return "";
  });
  }, [returnType, refundMethod, paymentAccounts]);
 
@@ -240,7 +245,10 @@ export default function StartReturnPage() {
  returnType,
  customerId,
  refundMethod: returnType === "refund" ? refundMethod : undefined,
- refundAccountId: returnType === "refund" ? refundAccountId || undefined : undefined,
+ refundAccountId:
+  returnType === "refund" && refundMethod !== "cash" && refundAccountId
+   ? refundAccountId
+   : undefined,
  adminOtpCode,
  });
  };
@@ -248,10 +256,6 @@ export default function StartReturnPage() {
  const handleCreateReturn = async () => {
  if (basket.length === 0) {
  setMessage({ type: "error", text: "Add at least one item to the return basket." });
- return;
- }
- if (returnType === "refund" && !refundAccountId) {
- setMessage({ type: "error", text: "Please select the account (pot) to refund from." });
  return;
  }
  setSubmitting(true);
@@ -558,7 +562,11 @@ export default function StartReturnPage() {
     <label className="block text-xs font-medium text-gray-500 mb-1">Refund method</label>
     <select
     value={refundMethod}
-    onChange={(e) => setRefundMethod(e.target.value as "cash" | "card" | "bank")}
+    onChange={(e) => {
+     const next = e.target.value as "cash" | "card" | "bank";
+     setRefundMethod(next);
+     if (next === "cash") setRefundAccountId("");
+    }}
     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
     >
     <option value="cash">Cash</option>
@@ -566,8 +574,11 @@ export default function StartReturnPage() {
     <option value="bank">Bank transfer</option>
     </select>
    </div>
+   {refundMethod !== "cash" && (
    <div>
-    <label className="block text-xs font-medium text-gray-500 mb-1">Refund from account (pot)</label>
+    <label className="block text-xs font-medium text-gray-500 mb-1">
+     Refund from account (pot) <span className="font-normal text-gray-400">(optional)</span>
+    </label>
     <select
     value={refundAccountId}
     onChange={(e) => setRefundAccountId(e.target.value)}
@@ -584,6 +595,7 @@ export default function StartReturnPage() {
     <p className="text-xs text-neutral-600 mt-0.5">No {refundMethod} account. Add one in settings or choose another method.</p>
     )}
    </div>
+   )}
    </div>
    )}
    </div>
