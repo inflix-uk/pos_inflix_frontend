@@ -81,7 +81,7 @@ function productColour(p: { name?: string; colour?: string }): string {
  );
  if (match) return match[1];
  const last = name.split(/\s+/).filter(Boolean).pop();
- if (last && last.length >= 2 && last.length <= 20 && /^[A-Za-z]+$/.test(last)) return last;
+ if (last && last.length >= 2 && last.length <= 20 && /^[A-Za-z]+$/.test(last) && !/^(product|item|misc)$/i.test(last)) return last;
  return "";
 }
 

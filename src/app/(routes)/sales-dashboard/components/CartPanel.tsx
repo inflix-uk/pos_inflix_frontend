@@ -297,7 +297,7 @@ function serialRowInlineDescription(row: SerialDetailRow): string {
  const token = compactGradeToken(row.grade);
  const g = token ? `GRADE ${token}` : "";
  const c = (row.colour ?? "").trim();
- const colourPart = c && c !== "—" ? c : "";
+ const colourPart = c && c !== "—" && c.toLowerCase() !== base.toLowerCase() ? c : "";
  return [base, g, colourPart].filter(Boolean).join(" ").trim() || "—";
 }
 
