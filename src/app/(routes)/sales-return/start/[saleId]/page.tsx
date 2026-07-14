@@ -54,6 +54,41 @@ type BasketItem = {
  returnDestination: ReturnDestination;
 };
 
+function BasketUnitPriceInput({
+ price,
+ name,
+ lineIndex,
+ onCommit,
+}: {
+ price: number;
+ name: string;
+ lineIndex: number;
+ onCommit: (lineIndex: number, raw: string) => void;
+}) {
+ const [value, setValue] = useState(Number.isFinite(price) ? String(price) : "0");
+ useEffect(() => {
+ setValue(Number.isFinite(price) ? String(price) : "0");
+ }, [price]);
+ return (
+ <span className="inline-flex items-center gap-0.5 rounded-lg border border-gray-200 bg-white px-1.5 py-0.5">
+  <span className="text-xs text-gray-500 select-none">£</span>
+  <input
+  id={`return-price-${lineIndex}`}
+  type="text"
+  inputMode="decimal"
+  value={value}
+  onChange={(e) => setValue(e.target.value.replace(/[^0-9.]/g, ""))}
+  onBlur={() => onCommit(lineIndex, value)}
+  onKeyDown={(e) => {
+   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+  }}
+  className="w-16 min-w-0 border-0 bg-transparent p-0 text-sm font-medium text-gray-900 tabular-nums text-right focus:outline-none focus:ring-0"
+  aria-label={`Amend return price for ${name}`}
+  />
+ </span>
+ );
+}
+
 export default function StartReturnPage() {
  const params = useParams();
  const router = useRouter();
@@ -208,6 +243,13 @@ export default function StartReturnPage() {
 
  const setBasketDestination = (lineIndex: number, returnDestination: ReturnDestination) => {
  setBasket((prev) => prev.map((b) => (b.lineIndex === lineIndex ? { ...b, returnDestination } : b)));
+ };
+
+ const setBasketPrice = (lineIndex: number, raw: string) => {
+ const cleaned = raw.replace(/[^0-9.]/g, "");
+ const num = parseFloat(cleaned);
+ const price = Number.isFinite(num) && num >= 0 ? Math.round(num * 100) / 100 : 0;
+ setBasket((prev) => prev.map((b) => (b.lineIndex === lineIndex ? { ...b, price } : b)));
  };
 
  const basketSubtotal = basket.reduce((sum, b) => sum + b.price * b.qtyToReturn, 0);
@@ -492,8 +534,13 @@ export default function StartReturnPage() {
     <p className="font-medium text-gray-900 truncate">{b.name}</p>
     <p className="text-gray-500">Qty: {b.qtyToReturn} × {formatMoney(b.price)}</p>
     </div>
-    <div className="shrink-0 flex items-center gap-1">
-    <span className="font-medium text-gray-900">{formatMoney(b.price * b.qtyToReturn)}</span>
+    <div className="shrink-0 flex items-center gap-1.5">
+    <BasketUnitPriceInput
+     price={b.price}
+     name={b.name}
+     lineIndex={b.lineIndex}
+     onCommit={setBasketPrice}
+    />
     <button
     type="button"
     onClick={() => removeFromBasket(b.lineIndex)}
