@@ -207,7 +207,7 @@ export default function InvoiceOnlineOrderPage() {
  const [emailPrefillLoading, setEmailPrefillLoading] = useState(false);
  const [actionError, setActionError] = useState<string | null>(null);
  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
- const [range, setRange] = useState<DashboardRange>("today");
+ const [range, setRange] = useState<DashboardRange>("30d");
  const [customFrom, setCustomFrom] = useState("");
  const [customTo, setCustomTo] = useState("");
  const [from, setFrom] = useState(() => toLondonDateKey(new Date()));
