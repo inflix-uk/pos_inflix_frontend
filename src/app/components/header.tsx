@@ -190,7 +190,16 @@ export function Header() {
   const showAccounts = quickActions.showAccounts && can("accounts.view");
   const showStockList = quickActions.showStockList && (can("product.view") || can("stock.view"));
   const showSalesOnline = quickActions.showSalesOnline && can("sale.view");
-  const showAnyPrimaryQuickAction = showNewSale || showNewRepair || showParcel || showReturn || showAccounts || showStockList || showSalesOnline;
+  const showNewInvoice = quickActions.showNewInvoice && can("invoice.create");
+  const showAnyPrimaryQuickAction =
+    showNewSale ||
+    showNewRepair ||
+    showParcel ||
+    showReturn ||
+    showAccounts ||
+    showStockList ||
+    showSalesOnline ||
+    showNewInvoice;
 
   return (
     <>
@@ -303,6 +312,15 @@ export function Header() {
                 >
                   <Globe className="h-4.5 w-4.5 shrink-0 text-indigo-600" />
                   <span className="hidden xl:inline">Sales</span>
+                </Link>
+              )}
+              {showNewInvoice && (
+                <Link
+                  href="/create-invoice"
+                  className="inline-flex items-center gap-2 px-2.5 xl:px-3.5 py-2 rounded-lg text-sm font-semibold text-sky-800 bg-sky-50 border border-sky-200 hover:bg-sky-100 hover:border-sky-300 active:bg-sky-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 transition-colors whitespace-nowrap"
+                >
+                  <FileText className="h-4.5 w-4.5 shrink-0 text-sky-600" />
+                  <span className="hidden xl:inline">Invoice</span>
                 </Link>
               )}
               {showSalesModeToggle && (

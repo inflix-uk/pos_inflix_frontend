@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, LayoutPanelTop, Loader2, PlusCircle, Wrench, Truck, RotateCcw, ShoppingBag, FileSpreadsheet, Boxes, Globe } from "lucide-react";
+import { ArrowLeft, LayoutPanelTop, Loader2, PlusCircle, Wrench, Truck, RotateCcw, ShoppingBag, FileSpreadsheet, Boxes, Globe, FileText } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
  fetchHeaderQuickActionsVisibility,
@@ -67,6 +67,12 @@ const ROWS: Row[] = [
  label: "Sales",
  description: "Shortcut to Sales (Online Orders) page.",
  Icon: Globe,
+ },
+ {
+ key: "showNewInvoice",
+ label: "Invoice",
+ description: "Shortcut to Create Invoice.",
+ Icon: FileText,
  },
 ];
 
