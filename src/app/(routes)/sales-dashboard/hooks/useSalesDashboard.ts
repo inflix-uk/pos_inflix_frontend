@@ -281,13 +281,18 @@ export const useSalesDashboard = (options?: {
     return false;
    }
   }
-  let didAdd = false;
+  // Prefer ref-based result over a flag inside the updater (more reliable after await).
+  const serialNorm = isSerialItem && product.serialNumber ? product.serialNumber.trim() : null;
+  const cartHasSerial = (lines: CartLineItem[], serial: string) =>
+   lines.some((i) => (i.serialNumbers ?? []).some((s) => s.trim() === serial));
+  if (serialNorm && cartHasSerial(cartStateRef.current, serialNorm)) {
+   return false;
+  }
   setCart((prev) => {
-   const serial = product.serialNumber ?? null;
+   const serial = serialNorm;
    // Serial already in cart (any line) — skip to avoid duplicate after price splits
-   if (isSerialItem && serial) {
-    const alreadyIn = prev.find((i) => (i.serialNumbers ?? []).includes(serial));
-    if (alreadyIn) return prev;
+   if (isSerialItem && serial && cartHasSerial(prev, serial)) {
+    return prev;
    }
    const existingBySku = prev.find((i) => i.sku === product.sku);
    // For serial items: merge into same variant (any price); line price = recent-inventory price by date
@@ -296,8 +301,7 @@ export const useSalesDashboard = (options?: {
    if (existing) {
     if (isSerialItem) {
      const existingSerials = existing.serialNumbers ?? [];
-     if (existingSerials.includes(product.serialNumber!)) return prev;
-     const serial = product.serialNumber!;
+     if (!serial || existingSerials.some((s) => s.trim() === serial)) return prev;
      const serialColours = { ...(existing.serialColours ?? {}), [serial]: productColour(product) };
      const serialInventoryDates = { ...(existing.serialInventoryDates ?? {}), [serial]: (product as POSProduct).inventoryDate ?? "" };
      const serialPrices = { ...(existing.serialPrices ?? {}), [serial]: product.price };
@@ -323,10 +327,11 @@ export const useSalesDashboard = (options?: {
      };
      // Use incoming serial's price (from API = Rate list) so Rate list updates show in cart when adding this item
      const newLinePrice = product.price;
-     didAdd = true;
-     return prev.map((i) =>
+     const next = prev.map((i) =>
       i === existing ? { ...updated, price: newLinePrice } : i
      );
+     cartStateRef.current = next;
+     return next;
     }
     const nextQty = existing.quantity + addedQty;
     const baseSerials = existing.serialNumbers ?? [];
@@ -337,8 +342,7 @@ export const useSalesDashboard = (options?: {
         : `${product.serialNumber}-${existing.quantity + i + 1}`
       )
      : [];
-    didAdd = true;
-    return prev.map((i) =>
+    const next = prev.map((i) =>
      i.sku === existing.sku
       ? {
         ...i,
@@ -351,6 +355,8 @@ export const useSalesDashboard = (options?: {
        }
       : i
     );
+    cartStateRef.current = next;
+    return next;
    }
    const serialNumbers = serial ? [serial] : undefined;
    const serialColours = serial && isSerialItem ? { [serial]: productColour(product) } : undefined;
@@ -364,8 +370,7 @@ export const useSalesDashboard = (options?: {
     serial && isSerialItem && pg ? { [serial]: pg } : undefined;
    const serialBrandModels =
     serial && isSerialItem && pm ? { [serial]: pm } : undefined;
-   didAdd = true;
-   return [
+   const next = [
     ...prev,
     {
      sku: product.sku,
@@ -392,8 +397,11 @@ export const useSalesDashboard = (options?: {
      cost_missing: p.unitCost == null && !p.purchaseId,
     },
    ];
+   cartStateRef.current = next;
+   return next;
   });
-  return didAdd;
+  if (serialNorm) return cartHasSerial(cartStateRef.current, serialNorm);
+  return true;
  }, [soldInfoMap, blockNegativeStock]);
 
  /** Add multiple serial items — merged by variant; line price = price of serial most recently added to inventory. */

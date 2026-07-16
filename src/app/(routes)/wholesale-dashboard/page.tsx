@@ -222,6 +222,8 @@ const Page = () => {
  const [refStatus, setRefStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
  const refCheckSeqRef = useRef(0);
  const customerSelectRef = useRef<CustomerAccountSelectRef>(null);
+ /** Prevent double Enter / scanner double-fire from adding the same IMEI twice and toasting "already in order". */
+ const inFlightSerialAddsRef = useRef<Set<string>>(new Set());
 
  // Live invoice-number availability check (debounced). Empty input → idle (server will auto-generate).
  useEffect(() => {
@@ -854,11 +856,23 @@ const Page = () => {
  setSerialLookupLoading(true);
  try {
  if (looksLikeSerial(t)) {
+ // Duplicate scan (scanner often sends Enter twice) or serial already on this order:
+ // no-op silently — do not replace a success toast with a red error.
+ const alreadyOnOrder = cartRef.current.some((line) =>
+  (line.serialNumbers ?? []).some((s) => s.trim() === t)
+ );
+ if (alreadyOnOrder) return true;
+ if (inFlightSerialAddsRef.current.has(t)) return true;
+ inFlightSerialAddsRef.current.add(t);
  // Always use API for serial add so price is from backend (Rate List updates SerialIndex; grid can be stale).
  // In-stock first: one round trip for the common case (serial in stock)
  try {
   const res = await salesApi.getFindInStockSerial(t, customerPricingGroupId);
   const d = res.data;
+  const apiSerial = String(d.serial ?? t).trim();
+  if (cartRef.current.some((line) => (line.serialNumbers ?? []).some((s) => s.trim() === apiSerial))) {
+   return true;
+  }
   const product = {
   sku: d.sku,
   name: d.name,
@@ -868,7 +882,7 @@ const Page = () => {
   unit: "piece" as const,
   qty: 1,
   iconColor: "text-orange-600",
-  serialNumber: d.serial,
+  serialNumber: apiSerial,
   grade: (d as { grade?: string }).grade,
   colour: (d as { colour?: string }).colour,
   brandModel: (d as { brandModel?: string }).brandModel,
@@ -880,7 +894,7 @@ const Page = () => {
   // skipSoldCheck: find-in-stock already confirmed availability; soldInfoMap can be stale after returns.
   const added = addToCart(product, 1, { skipSoldCheck: true });
   if (added) showMessage("success", `Added ${d.name} (serial)`);
-  else showMessage("error", "This serial is already in the order.");
+  // If not added, another in-flight scan won the race — stay silent (item is on the order).
   return true;
  } catch (err) {
   const e = err as Error & { status?: string; soldInfo?: { reference?: string; customerName?: string } | null };
@@ -912,6 +926,8 @@ const Page = () => {
   setNotFoundModal({ open: true, term: t, message: "Serial not found or returned to supplier." });
   }
   return true;
+ } finally {
+  inFlightSerialAddsRef.current.delete(t);
  }
  }
  const ok = await addBySku(t);
@@ -939,15 +955,14 @@ const Page = () => {
  };
  const added = addToCart(product, 1, { skipSoldCheck: true });
  if (added) showMessage("success", `Added ${d.name} (serial)`);
- else showMessage("error", "This serial is already in the order.");
  return true;
  } catch {
  const soldRes = await salesApi.getFindBySerial(t).catch(() => null);
  if (soldRes?.data) {
-  const { reference, customerName } = soldRes.data;
-  setAlreadySoldModal({ open: true, term: t, reference: reference || "", customerName: customerName || "" });
+ const { reference, customerName } = soldRes.data;
+ setAlreadySoldModal({ open: true, term: t, reference: reference || "", customerName: customerName || "" });
  } else {
-  setNotFoundModal({ open: true, term: t, message: "Product or serial not found" });
+ setNotFoundModal({ open: true, term: t, message: "Product or serial not found" });
  }
  }
  return true;

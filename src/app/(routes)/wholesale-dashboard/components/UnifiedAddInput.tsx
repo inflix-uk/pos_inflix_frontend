@@ -47,6 +47,7 @@ export function UnifiedAddInput({
 }: UnifiedAddInputProps) {
  const inputRef = useRef<HTMLInputElement>(null);
  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+ const lastSubmitRef = useRef<{ term: string; at: number } | null>(null);
  // Local "what user typed right now" — separate from debounced value pushed up via onChange
  const [localValue, setLocalValue] = useState(value);
  const [suggestionsOpen, setSuggestionsOpen] = React.useState(false);
@@ -79,6 +80,19 @@ export function UnifiedAddInput({
  // Use ref value so barcode scanner (fast key events) never misses digits; state can be stale
  const term = (inputRef.current?.value ?? localValue).trim();
  if (!term) return;
+ // Scanners often append Enter twice (or CR+LF). Ignore a second submit of the same term within 800ms.
+ const now = Date.now();
+ if (
+  lastSubmitRef.current &&
+  lastSubmitRef.current.term === term &&
+  now - lastSubmitRef.current.at < 800
+ ) {
+  flushChange("");
+  setLocalValue("");
+  if (inputRef.current) inputRef.current.value = "";
+  return;
+ }
+ lastSubmitRef.current = { term, at: now };
  flushChange("");
  setLocalValue("");
  setSuggestionsOpen(false);
