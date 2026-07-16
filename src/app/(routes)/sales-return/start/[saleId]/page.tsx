@@ -180,19 +180,42 @@ export default function StartReturnPage() {
  });
  }, [returnType, refundMethod, paymentAccounts]);
 
- const addToBasketFromSelect = (line: ReturnLine, qty: number) => {
+ const addToBasketFromSelect = (line: ReturnLine, qty: number, preferredSerials?: string[]) => {
  if (qty < 1 || qty > line.qtyReturnable) return;
- const serials = line.returnableSerials.length > 0 ? line.returnableSerials.slice(0, qty) : undefined;
+ const pickSerials = (count: number, already: string[] = []) => {
+  if (line.returnableSerials.length === 0 || count <= 0) return undefined as string[] | undefined;
+  const available = line.returnableSerials.filter((s) => !already.includes(s));
+  if (available.length === 0) return already.length ? already : undefined;
+  const preferred = (preferredSerials || []).filter((s) => available.includes(s));
+  const rest = available.filter((s) => !preferred.includes(s));
+  return [...already, ...preferred, ...rest].slice(0, already.length + count);
+ };
  setBasket((prev) => {
- const existing = prev.find((b) => b.lineIndex === line.lineIndex);
- if (existing) {
- const newQty = Math.min(line.qtyReturnable, existing.qtyToReturn + qty);
- const newSerials = line.returnableSerials.length > 0 ? line.returnableSerials.slice(0, newQty) : undefined;
- return prev.map((b) =>
-  b.lineIndex === line.lineIndex ? { ...b, qtyToReturn: newQty, serials: newSerials } : b
- );
- }
- return [...prev, { lineIndex: line.lineIndex, sku: line.sku, name: line.name, price: line.price, qtyToReturn: qty, serials, returnDestination: "restock" as ReturnDestination }];
+  const existing = prev.find((b) => b.lineIndex === line.lineIndex);
+  if (existing) {
+   const newQty = Math.min(line.qtyReturnable, existing.qtyToReturn + qty);
+   const need = newQty - (existing.serials?.length ?? 0);
+   const newSerials =
+    line.returnableSerials.length > 0
+     ? pickSerials(need, existing.serials ?? [])
+     : existing.serials;
+   return prev.map((b) =>
+    b.lineIndex === line.lineIndex ? { ...b, qtyToReturn: newQty, serials: newSerials } : b
+   );
+  }
+  const serials = pickSerials(qty);
+  return [
+   ...prev,
+   {
+    lineIndex: line.lineIndex,
+    sku: line.sku,
+    name: line.name,
+    price: line.price,
+    qtyToReturn: qty,
+    serials,
+    returnDestination: "restock" as ReturnDestination,
+   },
+  ];
  });
  };
 
@@ -224,7 +247,12 @@ export default function StartReturnPage() {
  serialNumbers: line.serialNumbers ?? [],
  returnableSerials: [foundSerial],
  };
- addToBasketFromSelect(rl, 1);
+ // Prefer the exact scanned serial (multi-IMEI lines used to pick the first returnable instead).
+ if (rl.returnableSerials.length > 0 && !rl.returnableSerials.includes(foundSerial)) {
+  setScanError("This serial is not returnable on this invoice (already returned or not on the sale).");
+  return;
+ }
+ addToBasketFromSelect(rl, 1, [foundSerial]);
  setScanValue("");
  } catch {
  const bySku = returnLines.find((l) => l.sku === serial || l.sku.toUpperCase() === serial.toUpperCase());

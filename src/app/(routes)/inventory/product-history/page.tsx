@@ -119,10 +119,20 @@ export default function ProductHistoryPage() {
    className={`inline-flex items-center gap-1.5 @[640px]:gap-2 px-3 @[640px]:px-4 py-1.5 @[640px]:py-2 rounded-full text-xs @[640px]:text-sm font-semibold ${
    history.status === "sold"
    ? "bg-neutral-100 text-neutral-800"
-   : "bg-emerald-100 text-emerald-800"
+   : history.status === "returned"
+    ? "bg-amber-100 text-amber-900"
+    : history.status === "not_in_stock"
+     ? "bg-gray-100 text-gray-600"
+     : "bg-emerald-100 text-emerald-800"
    }`}
    >
-   {history.status === "sold" ? "Sold" : "In stock"}
+   {history.status === "sold"
+    ? "Sold"
+    : history.status === "returned"
+     ? "Returned"
+     : history.status === "not_in_stock"
+      ? "Not in stock"
+      : "In stock"}
    </span>
   </div>
   {o?.item && (
