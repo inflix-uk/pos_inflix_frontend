@@ -877,8 +877,10 @@ const Page = () => {
   categoryId: (d as { categoryId?: string }).categoryId,
   variantValues: (d as { variantValues?: { slug?: string; value?: string }[] }).variantValues,
   };
-  addToCart(product, 1);
-  showMessage("success", `Added ${d.name} (serial)`);
+  // skipSoldCheck: find-in-stock already confirmed availability; soldInfoMap can be stale after returns.
+  const added = addToCart(product, 1, { skipSoldCheck: true });
+  if (added) showMessage("success", `Added ${d.name} (serial)`);
+  else showMessage("error", "This serial is already in the order.");
   return true;
  } catch (err) {
   const e = err as Error & { status?: string; soldInfo?: { reference?: string; customerName?: string } | null };
@@ -935,8 +937,9 @@ const Page = () => {
   categoryId: (d as { categoryId?: string }).categoryId,
   variantValues: (d as { variantValues?: { slug?: string; value?: string }[] }).variantValues,
  };
- addToCart(product, 1);
- showMessage("success", `Added ${d.name} (serial)`);
+ const added = addToCart(product, 1, { skipSoldCheck: true });
+ if (added) showMessage("success", `Added ${d.name} (serial)`);
+ else showMessage("error", "This serial is already in the order.");
  return true;
  } catch {
  const soldRes = await salesApi.getFindBySerial(t).catch(() => null);

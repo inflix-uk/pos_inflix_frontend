@@ -256,12 +256,12 @@ export const useSalesDashboard = (options?: {
   return ["all", ...Array.from(set).sort()];
  }, [posProducts, categoriesOverride]);
 
- const addToCart = useCallback((product: POSProduct, qty = 1) => {
-  if (product.serialNumber && Object.keys(soldInfoMap).length > 0) {
+ const addToCart = useCallback((product: POSProduct, qty = 1, opts?: { skipSoldCheck?: boolean }): boolean => {
+  if (!opts?.skipSoldCheck && product.serialNumber && Object.keys(soldInfoMap).length > 0) {
    const info = soldInfoMap[(product.serialNumber as string).trim()];
    if (info) {
     showMessage("error", `Already sold to ${info.customerName}`);
-    return;
+    return false;
    }
   }
   const isSerialItem = !!product.serialNumber;
@@ -278,9 +278,10 @@ export const useSalesDashboard = (options?: {
     } else {
      showMessage("error", `Only ${remaining} more available for "${product.name}" (in stock: ${stock}).`);
     }
-    return;
+    return false;
    }
   }
+  let didAdd = false;
   setCart((prev) => {
    const serial = product.serialNumber ?? null;
    // Serial already in cart (any line) — skip to avoid duplicate after price splits
@@ -322,6 +323,7 @@ export const useSalesDashboard = (options?: {
      };
      // Use incoming serial's price (from API = Rate list) so Rate list updates show in cart when adding this item
      const newLinePrice = product.price;
+     didAdd = true;
      return prev.map((i) =>
       i === existing ? { ...updated, price: newLinePrice } : i
      );
@@ -335,6 +337,7 @@ export const useSalesDashboard = (options?: {
         : `${product.serialNumber}-${existing.quantity + i + 1}`
       )
      : [];
+    didAdd = true;
     return prev.map((i) =>
      i.sku === existing.sku
       ? {
@@ -361,6 +364,7 @@ export const useSalesDashboard = (options?: {
     serial && isSerialItem && pg ? { [serial]: pg } : undefined;
    const serialBrandModels =
     serial && isSerialItem && pm ? { [serial]: pm } : undefined;
+   didAdd = true;
    return [
     ...prev,
     {
@@ -389,6 +393,7 @@ export const useSalesDashboard = (options?: {
     },
    ];
   });
+  return didAdd;
  }, [soldInfoMap, blockNegativeStock]);
 
  /** Add multiple serial items — merged by variant; line price = price of serial most recently added to inventory. */

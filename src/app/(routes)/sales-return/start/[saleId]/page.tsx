@@ -19,6 +19,7 @@ import { salesApi } from "../../../sales-dashboard/service/salesApi";
 import type { SaleRecord } from "../../../sales-dashboard/service/salesApi";
 import { salesReturnApi } from "../../service";
 import { getPaymentAccounts } from "../../../money-transfer/service/paymentAccountApi";
+import { emitInventoryEvent } from "@/lib/inventoryEvents";
 
 const formatMoney = (n: number) =>
  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2 }).format(n);
@@ -321,6 +322,8 @@ export default function StartReturnPage() {
    : undefined,
  adminOtpCode,
  });
+ emitInventoryEvent({ type: "sale-return" });
+ salesApi.clearSerialCache();
  };
 
  const handleCreateReturn = async () => {
