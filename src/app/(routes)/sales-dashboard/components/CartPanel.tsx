@@ -199,9 +199,14 @@ const SummaryTableRow: React.FC<{
  : undefined;
  const [priceInput, setPriceInput] = useState(parsePriceDisplay(item.price));
  const [editingPrice, setEditingPrice] = useState(false);
+ const [qtyInput, setQtyInput] = useState(String(item.quantity));
+ const [editingQty, setEditingQty] = useState(false);
  useEffect(() => {
  if (!editingPrice) setPriceInput(parsePriceDisplay(item.price));
  }, [item.price, editingPrice]);
+ useEffect(() => {
+ if (!editingQty) setQtyInput(String(item.quantity));
+ }, [item.quantity, editingQty]);
  const commitPrice = () => {
  setEditingPrice(false);
  const num = parseFloat(priceInput.replace(/[^0-9.-]/g, ""));
@@ -209,6 +214,16 @@ const SummaryTableRow: React.FC<{
  // Items Summary: update whole group price (no split). Pass first serial to identify the line.
  onUpdatePrice(item.sku, num.toFixed(2), item.serialNumbers?.[0], true);
  }
+ };
+ const commitQty = () => {
+ setEditingQty(false);
+ const n = parseInt(qtyInput.replace(/[^0-9]/g, ""), 10);
+ if (!Number.isFinite(n) || n < 1) {
+  setQtyInput(String(item.quantity));
+  return;
+ }
+ const delta = n - item.quantity;
+ if (delta !== 0) onUpdateQty(item.sku, delta);
  };
  const rateNum = parseFloat(item.price.replace(/[^0-9.-]/g, "")) || 0;
  const serials = item.serialNumbers ?? [];
@@ -240,7 +255,23 @@ const SummaryTableRow: React.FC<{
   >
   <Minus className="h-3.5 w-3.5" />
   </button>
-  <span className="min-w-[1.5rem] text-center text-sm font-semibold tabular-nums">{item.quantity}</span>
+  <input
+  type="text"
+  inputMode="numeric"
+  value={editingQty ? qtyInput : String(item.quantity)}
+  onChange={(e) => {
+  setQtyInput(e.target.value.replace(/[^0-9]/g, ""));
+  setEditingQty(true);
+  }}
+  onFocus={() => {
+  setQtyInput(String(item.quantity));
+  setEditingQty(true);
+  }}
+  onBlur={commitQty}
+  onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+  className="w-10 min-w-[2rem] text-center text-sm font-semibold tabular-nums rounded border border-blue-200 bg-blue-50 text-blue-900 py-0.5 px-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+  aria-label="Quantity"
+  />
   <button
   type="button"
   onClick={() => onUpdateQty(item.sku, 1)}
