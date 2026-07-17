@@ -34,20 +34,31 @@ function isColourVariantSlug(slug: string | undefined): boolean {
  return s.includes("colour") || s.includes("color");
 }
 
-/** Merge key for serial lines: variant attribute values except colour; else name+grade fallback. */
+/** Merge key for serial lines: variant attribute values except colour; else name+grade fallback.
+ * Always appends grade so different conditions never share a summary line.
+ * When grade is missing (e.g. old index snapshot), also key by unit price so £125 and £110 stay separate.
+ */
 function serialVariantMergeKey(item: {
  name?: string;
  grade?: string;
+ price?: string;
  variantValues?: { slug?: string; value?: string }[];
 }): string {
+ const grade = productGradeString(item).toUpperCase();
  const raw = item.variantValues?.filter((v) => v?.slug && !isColourVariantSlug(v.slug));
+ let base: string;
  if (raw && raw.length > 0) {
   const parts = [...raw]
    .sort((a, b) => (a.slug ?? "").localeCompare(b.slug ?? ""))
    .map((v) => `${(v.slug ?? "").toLowerCase()}\t${(v.value ?? "").trim().toUpperCase()}`);
-  return `vv:${parts.join("\x1f")}`;
+  // If variantValues already include grade/condition, don't double-key — still append normalized grade below for safety.
+  base = `vv:${parts.join("\x1f")}`;
+ } else {
+  base = variantKey(item);
  }
- return variantKey(item);
+ if (grade) return `${base}\tg:${grade}`;
+ const priceKey = parsePrice(String(item.price ?? "0")).toFixed(2);
+ return `${base}\tp:${priceKey}`;
 }
 
 function productGradeString(p: { grade?: string; name?: string }): string {
@@ -70,6 +81,16 @@ function firstSerialPrice(line: CartLineItem): string {
  if (first && prices[first]) return prices[first];
  const anyPrice = Object.values(prices)[0];
  return anyPrice ?? line.price;
+}
+
+/** Line amount: sum per-serial prices when present so mixed rates are not flattened to qty × unit. */
+function cartLineAmount(line: CartLineItem): number {
+ const serials = line.serialNumbers ?? [];
+ const prices = line.serialPrices ?? {};
+ if (serials.length > 0 && Object.keys(prices).length > 0) {
+  return serials.reduce((sum, sn) => sum + parsePrice(prices[sn] ?? line.price), 0);
+ }
+ return parsePrice(line.price) * line.quantity;
 }
 
 /** Colour for a product (from API or parsed from name) so we can store per-serial. */
@@ -384,7 +405,7 @@ export const useSalesDashboard = (options?: {
      serialPrices,
      serialGrades,
      serialBrandModels,
-     grade: product.grade,
+     grade: productGradeString(product) || product.grade,
      brand: product.brand,
      colour: product.colour,
      brandModel: product.brandModel,
@@ -450,7 +471,7 @@ export const useSalesDashboard = (options?: {
       serialPrices: {},
       serialGrades: {},
       serialBrandModels: {},
-      grade: p.grade,
+      grade: productGradeString(p) || p.grade,
       brand: p.brand,
       colour: p.colour,
       brandModel: p.brandModel,
@@ -807,7 +828,7 @@ export const useSalesDashboard = (options?: {
  );
 
  const subtotal = useMemo(() => {
-  return cart.reduce((sum, i) => sum + parsePrice(i.price) * i.quantity, 0);
+  return cart.reduce((sum, i) => sum + cartLineAmount(i), 0);
  }, [cart]);
 
  const taxConfig = useCartTaxConfig();

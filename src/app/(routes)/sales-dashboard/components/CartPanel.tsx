@@ -211,7 +211,15 @@ const SummaryTableRow: React.FC<{
  }
  };
  const rateNum = parseFloat(item.price.replace(/[^0-9.-]/g, "")) || 0;
- const amount = rateNum * item.quantity;
+ const serials = item.serialNumbers ?? [];
+ const prices = item.serialPrices ?? {};
+ const amount =
+  serials.length > 0 && Object.keys(prices).length > 0
+   ? serials.reduce((sum, sn) => {
+    const raw = (prices[sn] ?? item.price).replace(/[^0-9.-]/g, "");
+    return sum + (parseFloat(raw) || 0);
+   }, 0)
+   : rateNum * item.quantity;
  const isSerialItem = (item.serialNumbers?.length ?? 0) > 0;
  return (
  <tr className="border-b border-slate-100 last:border-0 align-middle bg-white hover:bg-slate-50/80 transition-colors">
@@ -291,14 +299,12 @@ function compactGradeToken(grade: string): string {
  return g;
 }
 
-/** One line: base name + grade + colour (e.g. "APPLE IPHONE 7 PLUS 128GB GRADE A BLACK"). */
+/** Base name + colour only (grade has its own column). */
 function serialRowInlineDescription(row: SerialDetailRow): string {
  const base = nameWithoutColour(row.name ?? "").trim();
- const token = compactGradeToken(row.grade);
- const g = token ? `GRADE ${token}` : "";
  const c = (row.colour ?? "").trim();
  const colourPart = c && c !== "—" && c.toLowerCase() !== base.toLowerCase() ? c : "";
- return [base, g, colourPart].filter(Boolean).join(" ").trim() || "—";
+ return [base, colourPart].filter(Boolean).join(" ").trim() || "—";
 }
 
 /** Editable rate cell for a single serial row */
@@ -363,7 +369,8 @@ const SerialItemsDetailTable: React.FC<{
   <tr className="text-left text-neutral-800/90 text-xs font-semibold uppercase tracking-wide border-b border-neutral-100 bg-neutral-50/80">
   <th className="py-1.5 px-2 w-8 shrink-0">#</th>
   <th className="py-1.5 pl-2 pr-1 min-w-[100px]">Serial / IMEI</th>
-  <th className="py-1.5 pl-1 pr-2 min-w-[180px]">Product</th>
+  <th className="py-1.5 pl-1 pr-2 min-w-[160px]">Product</th>
+  <th className="py-1.5 px-2 w-20 shrink-0">Grade</th>
   <th className="py-1.5 px-2 text-right w-24 shrink-0">Unit</th>
   <th className="py-1.5 px-2 w-10 shrink-0" aria-label="Remove" />
   </tr>
@@ -378,8 +385,11 @@ const SerialItemsDetailTable: React.FC<{
   <td className="py-1.5 pl-2 pr-1 min-w-[100px] align-top">
   <span className="font-mono text-xs font-semibold text-neutral-900">{r.serial}</span>
   </td>
-  <td className="py-1.5 pl-1 pr-2 min-w-[180px] align-top text-gray-900">
+  <td className="py-1.5 pl-1 pr-2 min-w-[160px] align-top text-gray-900">
   <span className="text-sm font-medium leading-snug">{serialRowInlineDescription(r)}</span>
+  </td>
+  <td className="py-1.5 px-2 align-top text-sm font-semibold text-slate-800 whitespace-nowrap">
+  {compactGradeToken(r.grade) ? `GRADE ${compactGradeToken(r.grade)}` : (r.grade?.trim() && r.grade !== "—" ? r.grade : "—")}
   </td>
   <SerialDetailRateCell row={r} onUpdatePrice={onUpdatePrice} currencySymbol={currencySymbol} />
   <td className="py-1.5 px-2 w-10 align-top">
