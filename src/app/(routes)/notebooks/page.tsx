@@ -125,7 +125,9 @@ export default function NotebooksPage() {
   const [newNotebookColor, setNewNotebookColor] = useState<string>("sky");
   const [creatingNotebook, setCreatingNotebook] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<
-    null | { type: "notebook"; id: string; name: string } | { type: "note"; id: string; title: string }
+    | null
+    | { type: "notebook"; id: string; name: string; isLast: boolean }
+    | { type: "note"; id: string; title: string }
   >(null);
   const [deleting, setDeleting] = useState(false);
   const newNotebookInputRef = useRef<HTMLInputElement>(null);
@@ -307,8 +309,7 @@ export default function NotebooksPage() {
   };
 
   const requestDeleteNotebook = (id: string, name: string) => {
-    if (notebooks.length <= 1) return;
-    setConfirmDelete({ type: "notebook", id, name });
+    setConfirmDelete({ type: "notebook", id, name, isLast: notebooks.length <= 1 });
   };
 
   const requestDeleteNote = () => {
@@ -507,7 +508,6 @@ export default function NotebooksPage() {
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
-                        {notebooks.length > 1 && (
                         <button
                           type="button"
                           className="p-1 rounded text-red-500 hover:bg-red-50"
@@ -519,7 +519,6 @@ export default function NotebooksPage() {
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                        )}
                       </div>
                     )}
                     {!active && nb.pinned && (
@@ -883,10 +882,17 @@ export default function NotebooksPage() {
             </div>
             <p className="text-sm text-slate-600">
               {confirmDelete.type === "notebook" ? (
-                <>
-                  Delete <span className="font-semibold text-slate-900">{confirmDelete.name}</span> and all notes
-                  inside it? This cannot be undone.
-                </>
+                confirmDelete.isLast ? (
+                  <>
+                    Delete <span className="font-semibold text-slate-900">{confirmDelete.name}</span> and all notes
+                    inside it? A new empty notebook will be created so you can keep writing.
+                  </>
+                ) : (
+                  <>
+                    Delete <span className="font-semibold text-slate-900">{confirmDelete.name}</span> and all notes
+                    inside it? This cannot be undone.
+                  </>
+                )
               ) : (
                 <>
                   Delete <span className="font-semibold text-slate-900">{confirmDelete.title}</span>? This cannot be
