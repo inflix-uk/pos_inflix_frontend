@@ -19,6 +19,7 @@ import {
   Search,
   Loader2,
   BookOpen,
+  Pin,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -91,6 +92,15 @@ export default function NotebooksPage() {
   const [error, setError] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [createNotebookOpen, setCreateNotebookOpen] = useState(false);
+  const [newNotebookName, setNewNotebookName] = useState("");
+  const [newNotebookColor, setNewNotebookColor] = useState<string>("sky");
+  const [creatingNotebook, setCreatingNotebook] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<
+    null | { type: "notebook"; id: string; name: string } | { type: "note"; id: string; title: string }
+  >(null);
+  const [deleting, setDeleting] = useState(false);
+  const newNotebookInputRef = useRef<HTMLInputElement>(null);
 
   const titleRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -237,15 +247,26 @@ export default function NotebooksPage() {
     scheduleSave({ color: next });
   };
 
+  const openCreateNotebook = () => {
+    setNewNotebookName("");
+    setNewNotebookColor(NOTEBOOK_COLORS[notebooks.length % NOTEBOOK_COLORS.length]);
+    setCreateNotebookOpen(true);
+    setTimeout(() => newNotebookInputRef.current?.focus(), 50);
+  };
+
   const handleCreateNotebook = async () => {
-    const name = window.prompt("Notebook name");
-    if (!name?.trim()) return;
-    const color = NOTEBOOK_COLORS[notebooks.length % NOTEBOOK_COLORS.length];
-    const res = await notebooksApi.createNotebook({ name: name.trim(), color });
+    const name = newNotebookName.trim();
+    if (!name || creatingNotebook) return;
+    setCreatingNotebook(true);
+    setError(null);
+    const res = await notebooksApi.createNotebook({ name, color: newNotebookColor });
+    setCreatingNotebook(false);
     if (!res.success || !res.data) {
       setError(res.message || "Failed to create notebook");
       return;
     }
+    setCreateNotebookOpen(false);
+    setNewNotebookName("");
     await loadNotebooks(res.data._id);
   };
 
@@ -257,16 +278,46 @@ export default function NotebooksPage() {
     if (res.success) await loadNotebooks(selectedNotebookId);
   };
 
-  const handleDeleteNotebook = async (id: string) => {
-    if (!window.confirm("Delete this notebook and all its notes?")) return;
-    const res = await notebooksApi.deleteNotebook(id);
-    if (!res.success) {
-      setError(res.message || "Failed to delete notebook");
+  const requestDeleteNotebook = (id: string, name: string) => {
+    if (notebooks.length <= 1) return;
+    setConfirmDelete({ type: "notebook", id, name });
+  };
+
+  const requestDeleteNote = () => {
+    if (!activeNote) return;
+    setConfirmDelete({ type: "note", id: activeNote._id, title: activeNote.title || "Untitled" });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDelete || deleting) return;
+    setDeleting(true);
+    setError(null);
+    if (confirmDelete.type === "notebook") {
+      const res = await notebooksApi.deleteNotebook(confirmDelete.id);
+      setDeleting(false);
+      if (!res.success) {
+        setError(res.message || "Failed to delete notebook");
+        return;
+      }
+      setConfirmDelete(null);
+      setSelectedNoteId(null);
+      setActiveNote(null);
+      await loadNotebooks(null);
       return;
     }
+    const res = await notebooksApi.deleteNote(confirmDelete.id);
+    setDeleting(false);
+    if (!res.success) {
+      setError(res.message || "Failed to delete note");
+      return;
+    }
+    setConfirmDelete(null);
     setSelectedNoteId(null);
     setActiveNote(null);
-    await loadNotebooks(null);
+    if (selectedNotebookId) {
+      await loadNotes(selectedNotebookId, search);
+      await loadNotebooks(selectedNotebookId);
+    }
   };
 
   const handleCreateNote = async () => {
@@ -282,27 +333,51 @@ export default function NotebooksPage() {
     setTimeout(() => titleRef.current?.focus(), 50);
   };
 
-  const handleDeleteNote = async () => {
-    if (!activeNote) return;
-    if (!window.confirm("Delete this note?")) return;
-    const id = activeNote._id;
-    const res = await notebooksApi.deleteNote(id);
+  const togglePinNotebook = async (nb: Notebook, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = !nb.pinned;
+    setNotebooks((prev) =>
+      [...prev.map((n) => (n._id === nb._id ? { ...n, pinned: next } : n))].sort((a, b) => {
+        if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      })
+    );
+    const res = await notebooksApi.updateNotebook(nb._id, { pinned: next });
     if (!res.success) {
-      setError(res.message || "Failed to delete note");
-      return;
-    }
-    setSelectedNoteId(null);
-    setActiveNote(null);
-    if (selectedNotebookId) {
-      await loadNotes(selectedNotebookId, search);
+      setError(res.message || "Failed to update pin");
       await loadNotebooks(selectedNotebookId);
     }
   };
 
+  const togglePinNote = async (noteId: string, currentlyPinned: boolean) => {
+    const next = !currentlyPinned;
+    setNotes((prev) =>
+      [...prev.map((n) => (n._id === noteId ? { ...n, pinned: next } : n))].sort((a, b) => {
+        if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      })
+    );
+    if (activeNote?._id === noteId) {
+      setActiveNote({ ...activeNote, pinned: next });
+    }
+    const res = await notebooksApi.updateNote(noteId, { pinned: next });
+    if (!res.success) {
+      setError(res.message || "Failed to update pin");
+      if (selectedNotebookId) await loadNotes(selectedNotebookId, search);
+      return;
+    }
+    if (res.data && activeNote?._id === noteId) setActiveNote(res.data);
+  };
+
   const notesByDate = useMemo(() => {
+    const pinned = notes.filter((n) => n.pinned);
+    const unpinned = notes.filter((n) => !n.pinned);
     const groups: { label: string; items: NoteListItem[] }[] = [];
+    if (pinned.length > 0) {
+      groups.push({ label: "PINNED", items: pinned });
+    }
     const map = new Map<string, NoteListItem[]>();
-    for (const n of notes) {
+    for (const n of unpinned) {
       const label = dateGroupLabel(n.updatedAt);
       if (!map.has(label)) map.set(label, []);
       map.get(label)!.push(n);
@@ -321,7 +396,7 @@ export default function NotebooksPage() {
           <h2 className="text-sm font-semibold text-slate-800">Notebooks</h2>
           <button
             type="button"
-            onClick={() => void handleCreateNotebook()}
+            onClick={openCreateNotebook}
             className="p-1.5 rounded-md text-slate-600 hover:bg-slate-200/80"
             aria-label="Add notebook"
             title="Add notebook"
@@ -344,6 +419,7 @@ export default function NotebooksPage() {
                     active ? "bg-white shadow-sm ring-1 ring-slate-200" : "hover:bg-white/70"
                   }`}
                   onClick={() => {
+                    setError(null);
                     setSelectedNotebookId(nb._id);
                     setSelectedNoteId(null);
                     setActiveNote(null);
@@ -375,7 +451,22 @@ export default function NotebooksPage() {
                       </p>
                     </div>
                     {active && (
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div
+                        className={`flex items-center gap-0.5 transition-opacity ${
+                          nb.pinned ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          className={`p-1 rounded hover:bg-slate-100 ${
+                            nb.pinned ? "text-amber-600 opacity-100" : "text-slate-500"
+                          }`}
+                          aria-label={nb.pinned ? "Unpin notebook" : "Pin notebook"}
+                          title={nb.pinned ? "Unpin" : "Pin"}
+                          onClick={(e) => void togglePinNotebook(nb, e)}
+                        >
+                          <Pin className={`h-3.5 w-3.5 ${nb.pinned ? "fill-amber-500" : ""}`} />
+                        </button>
                         <button
                           type="button"
                           className="p-1 rounded text-slate-500 hover:bg-slate-100"
@@ -388,18 +479,23 @@ export default function NotebooksPage() {
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
+                        {notebooks.length > 1 && (
                         <button
                           type="button"
                           className="p-1 rounded text-red-500 hover:bg-red-50"
                           aria-label="Delete notebook"
                           onClick={(e) => {
                             e.stopPropagation();
-                            void handleDeleteNotebook(nb._id);
+                            requestDeleteNotebook(nb._id, nb.name);
                           }}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
+                        )}
                       </div>
+                    )}
+                    {!active && nb.pinned && (
+                      <Pin className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0 mt-1" aria-label="Pinned" />
                     )}
                   </div>
                 </div>
@@ -463,8 +559,11 @@ export default function NotebooksPage() {
                     <button
                       key={n._id}
                       type="button"
-                      onClick={() => setSelectedNoteId(n._id)}
-                      className={`w-full text-left rounded-lg px-3 py-2.5 mb-1 border transition-colors ${
+                      onClick={() => {
+                        setError(null);
+                        setSelectedNoteId(n._id);
+                      }}
+                      className={`group/note w-full text-left rounded-lg px-3 py-2.5 mb-1 border transition-colors ${
                         active
                           ? "border-blue-300 bg-blue-50/60 ring-1 ring-blue-200"
                           : "border-transparent hover:bg-slate-50"
@@ -474,9 +573,25 @@ export default function NotebooksPage() {
                         <p className="text-sm font-semibold text-slate-900 line-clamp-1">
                           {n.title || "Untitled"}
                         </p>
-                        {n.color ? (
-                          <span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${COLOR_DOT[n.color] || "bg-slate-400"}`} />
-                        ) : null}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            className={`p-0.5 rounded hover:bg-white/80 ${
+                              n.pinned ? "text-amber-600" : "text-slate-400 opacity-0 group-hover/note:opacity-100"
+                            }`}
+                            aria-label={n.pinned ? "Unpin note" : "Pin note"}
+                            title={n.pinned ? "Unpin" : "Pin"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void togglePinNote(n._id, !!n.pinned);
+                            }}
+                          >
+                            <Pin className={`h-3.5 w-3.5 ${n.pinned ? "fill-amber-500" : ""}`} />
+                          </button>
+                          {n.color ? (
+                            <span className={`h-2 w-2 rounded-full ${COLOR_DOT[n.color] || "bg-slate-400"}`} />
+                          ) : null}
+                        </div>
                       </div>
                       {n.snippet ? (
                         <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{n.snippet}</p>
@@ -494,8 +609,16 @@ export default function NotebooksPage() {
       {/* Editor */}
       <main className="flex-1 min-w-0 flex flex-col bg-white">
         {error && (
-          <div className="mx-4 mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
+          <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="shrink-0 text-red-500 hover:text-red-800 font-semibold"
+              aria-label="Dismiss error"
+            >
+              ×
+            </button>
           </div>
         )}
         {!selectedNoteId ? (
@@ -525,6 +648,19 @@ export default function NotebooksPage() {
                 ))}
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-500 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => void togglePinNote(activeNote._id, !!activeNote.pinned)}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs font-medium transition-colors ${
+                    activeNote.pinned
+                      ? "border-amber-300 bg-amber-50 text-amber-800"
+                      : "border-gray-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                  aria-label={activeNote.pinned ? "Unpin note" : "Pin note"}
+                >
+                  <Pin className={`h-3.5 w-3.5 ${activeNote.pinned ? "fill-amber-500" : ""}`} />
+                  {activeNote.pinned ? "Pinned" : "Pin"}
+                </button>
                 <span>
                   {saveStatus === "saving"
                     ? "Saving…"
@@ -536,7 +672,7 @@ export default function NotebooksPage() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => void handleDeleteNote()}
+                  onClick={() => void requestDeleteNote()}
                   className="p-1.5 rounded-md text-red-500 hover:bg-red-50"
                   aria-label="Delete note"
                 >
@@ -623,6 +759,135 @@ export default function NotebooksPage() {
           </>
         ) : null}
       </main>
+
+      {createNotebookOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close"
+            onClick={() => !creatingNotebook && setCreateNotebookOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-notebook-title"
+            className="relative w-full max-w-md rounded-xl bg-white shadow-xl border border-gray-200 p-5"
+          >
+            <h3 id="create-notebook-title" className="text-lg font-semibold text-slate-900">
+              New notebook
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">Give it a name and colour so it’s easy to find.</p>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Name
+            </label>
+            <input
+              ref={newNotebookInputRef}
+              type="text"
+              value={newNotebookName}
+              onChange={(e) => setNewNotebookName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleCreateNotebook();
+                if (e.key === "Escape") setCreateNotebookOpen(false);
+              }}
+              placeholder="e.g. Daily Stock"
+              className="mt-1.5 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+              maxLength={120}
+            />
+            <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Colour</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {NOTEBOOK_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setNewNotebookColor(c)}
+                  className={`h-7 w-7 rounded-full ${COLOR_DOT[c]} ring-offset-2 ${
+                    newNotebookColor === c ? "ring-2 ring-slate-800" : "hover:opacity-80"
+                  }`}
+                  aria-label={c}
+                  title={c}
+                />
+              ))}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={creatingNotebook}
+                onClick={() => setCreateNotebookOpen(false)}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={creatingNotebook || !newNotebookName.trim()}
+                onClick={() => void handleCreateNotebook()}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {creatingNotebook ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close"
+            onClick={() => !deleting && setConfirmDelete(null)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-md rounded-xl bg-white shadow-xl border border-gray-200 p-5"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-full bg-red-100">
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900">
+                {confirmDelete.type === "notebook" ? "Delete notebook?" : "Delete note?"}
+              </h3>
+            </div>
+            <p className="text-sm text-slate-600">
+              {confirmDelete.type === "notebook" ? (
+                <>
+                  Delete <span className="font-semibold text-slate-900">{confirmDelete.name}</span> and all notes
+                  inside it? This cannot be undone.
+                </>
+              ) : (
+                <>
+                  Delete <span className="font-semibold text-slate-900">{confirmDelete.title}</span>? This cannot be
+                  undone.
+                </>
+              )}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => void handleConfirmDelete()}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -21,6 +21,8 @@ export type Notebook = {
   name: string;
   color: string;
   noteCount: number;
+  pinned?: boolean;
+  pinnedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -30,6 +32,8 @@ export type NoteListItem = {
   notebookId: string;
   title: string;
   color: string;
+  pinned?: boolean;
+  pinnedAt?: string | null;
   snippet: string;
   createdAt: string;
   updatedAt: string;
@@ -41,6 +45,8 @@ export type Note = {
   title: string;
   bodyHtml: string;
   color: string;
+  pinned?: boolean;
+  pinnedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -91,7 +97,7 @@ export const notebooksApi = {
 
   updateNotebook: async (
     id: string,
-    payload: { name?: string; color?: string }
+    payload: { name?: string; color?: string; pinned?: boolean }
   ): Promise<{ success: boolean; data?: Notebook; message?: string }> => {
     const res = await fetch(`${API_URL}/api/notebooks/${id}`, {
       method: "PATCH",
@@ -139,7 +145,7 @@ export const notebooksApi = {
 
   updateNote: async (
     id: string,
-    payload: { title?: string; bodyHtml?: string; color?: string; notebookId?: string }
+    payload: { title?: string; bodyHtml?: string; color?: string; notebookId?: string; pinned?: boolean }
   ): Promise<{ success: boolean; data?: Note; message?: string }> => {
     const res = await fetch(`${API_URL}/api/notes/${id}`, {
       method: "PATCH",
