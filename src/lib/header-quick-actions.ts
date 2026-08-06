@@ -1,5 +1,5 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-const CACHE_KEY = "pos_header_quick_actions_cache_v3";
+const CACHE_KEY = "pos_header_quick_actions_cache_v4";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
 
 /** When false, the matching control is hidden (permissions still apply). All default to true. */
@@ -18,6 +18,8 @@ export interface HeaderQuickActionsVisibility {
   showSalesOnline: boolean;
   /** Create Invoice shortcut */
   showNewInvoice: boolean;
+  /** Notebooks shortcut */
+  showNotebooks: boolean;
 }
 
 const defaults: HeaderQuickActionsVisibility = {
@@ -30,6 +32,7 @@ const defaults: HeaderQuickActionsVisibility = {
   showStockList: true,
   showSalesOnline: true,
   showNewInvoice: false,
+  showNotebooks: true,
 };
 
 function normalize(partial: Partial<HeaderQuickActionsVisibility> | null | undefined): HeaderQuickActionsVisibility {
@@ -43,6 +46,7 @@ function normalize(partial: Partial<HeaderQuickActionsVisibility> | null | undef
     showStockList: partial?.showStockList !== false,
     showSalesOnline: partial?.showSalesOnline !== false,
     showNewInvoice: partial?.showNewInvoice === true,
+    showNotebooks: partial?.showNotebooks !== false,
   };
 }
 

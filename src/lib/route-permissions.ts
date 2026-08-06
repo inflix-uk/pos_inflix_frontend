@@ -49,6 +49,9 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   "/sales-dashboard": ["sale.create"], // redirects to /create-sales
   "/create-sales": ["sale.create"],
 
+  // Notebooks
+  "/notebooks": ["sale.view"],
+
   // Sales
   "/sales-online-orders": ["sale.view"],
   "/sales-online-orders/edit": ["sale.view", "sale.edit"],
@@ -201,6 +204,7 @@ export const NAV_CONFIG: NavSection[] = [
     items: [
       { title: "Dashboard", path: "/dashboard", icon: LayoutDashboard, requiredPermsAnyOf: [] },
       { title: "Create Sales", path: "/create-sales", icon: LayoutDashboard, requiredPermsAnyOf: ["sale.create"], featureKey: "sales" },
+      { title: "Notebooks", path: "/notebooks", icon: FileText, requiredPermsAnyOf: ["sale.view"] },
     ],
   },
   {

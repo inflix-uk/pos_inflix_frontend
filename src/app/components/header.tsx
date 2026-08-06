@@ -5,7 +5,7 @@ import type React from "react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Command, Menu, User, FileText, Settings, LogOut, PlusCircle, Wrench, Truck, RotateCcw, ShoppingBag, FileSpreadsheet, Boxes, Globe } from "lucide-react";
+import { Search, Command, Menu, User, FileText, Settings, LogOut, PlusCircle, Wrench, Truck, RotateCcw, ShoppingBag, FileSpreadsheet, Boxes, Globe, BookOpen } from "lucide-react";
 import { ProductHistoryModal } from "@/app/(routes)/inventory/product-history/ProductHistoryModal";
 import { usePermissions } from "@/hooks/usePermissions";
 import { globalSearch, type GlobalSearchResult } from "@/app/(routes)/dashboard/service/dashboardApi";
@@ -191,6 +191,7 @@ export function Header() {
   const showStockList = quickActions.showStockList && (can("product.view") || can("stock.view"));
   const showSalesOnline = quickActions.showSalesOnline && can("sale.view");
   const showNewInvoice = quickActions.showNewInvoice && can("invoice.create");
+  const showNotebooks = quickActions.showNotebooks && can("sale.view");
   const showAnyPrimaryQuickAction =
     showNewSale ||
     showNewRepair ||
@@ -199,7 +200,8 @@ export function Header() {
     showAccounts ||
     showStockList ||
     showSalesOnline ||
-    showNewInvoice;
+    showNewInvoice ||
+    showNotebooks;
 
   return (
     <>
@@ -321,6 +323,15 @@ export function Header() {
                 >
                   <FileText className="h-4.5 w-4.5 shrink-0 text-sky-600" />
                   <span className="hidden xl:inline">Invoice</span>
+                </Link>
+              )}
+              {showNotebooks && (
+                <Link
+                  href="/notebooks"
+                  className="inline-flex items-center gap-2 px-2.5 xl:px-3.5 py-2 rounded-lg text-sm font-semibold text-fuchsia-800 bg-fuchsia-50 border border-fuchsia-200 hover:bg-fuchsia-100 hover:border-fuchsia-300 active:bg-fuchsia-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500 focus-visible:ring-offset-2 transition-colors whitespace-nowrap"
+                >
+                  <BookOpen className="h-4.5 w-4.5 shrink-0 text-fuchsia-600" />
+                  <span className="hidden xl:inline">Notes</span>
                 </Link>
               )}
               {showSalesModeToggle && (

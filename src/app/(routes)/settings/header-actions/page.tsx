@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, LayoutPanelTop, Loader2, PlusCircle, Wrench, Truck, RotateCcw, ShoppingBag, FileSpreadsheet, Boxes, Globe, FileText } from "lucide-react";
+import { ArrowLeft, LayoutPanelTop, Loader2, PlusCircle, Wrench, Truck, RotateCcw, ShoppingBag, FileSpreadsheet, Boxes, Globe, FileText, BookOpen } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
  fetchHeaderQuickActionsVisibility,
@@ -73,6 +73,12 @@ const ROWS: Row[] = [
  label: "Invoice",
  description: "Shortcut to Create Invoice.",
  Icon: FileText,
+ },
+ {
+ key: "showNotebooks",
+ label: "Notes",
+ description: "Shortcut to Notebooks.",
+ Icon: BookOpen,
  },
 ];
 
