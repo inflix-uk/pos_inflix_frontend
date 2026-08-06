@@ -70,12 +70,40 @@ function dateGroupLabel(iso: string): string {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }).toUpperCase();
 }
 
-function exec(cmd: string, value?: string) {
+/** Run a contentEditable command with focus/selection restored so list buttons work. */
+function runEditorCommand(editor: HTMLDivElement | null, cmd: string, value?: string) {
+  if (!editor) return;
+  editor.focus();
+  const sel = window.getSelection();
+  const selectionInEditor =
+    sel &&
+    sel.rangeCount > 0 &&
+    sel.anchorNode &&
+    (editor === sel.anchorNode || editor.contains(sel.anchorNode));
+  if (!selectionInEditor) {
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }
+  // Ensure there is editable content for list commands (empty editor → insert a paragraph first).
+  if ((cmd === "insertUnorderedList" || cmd === "insertOrderedList") && !editor.textContent?.trim()) {
+    document.execCommand("insertHTML", false, "<div><br></div>");
+  }
   try {
-    document.execCommand(cmd, false, value);
+    if (cmd === "formatBlock" && value) {
+      // Browsers differ on tag form; try both.
+      const ok = document.execCommand(cmd, false, value);
+      if (!ok) document.execCommand(cmd, false, `<${value.toLowerCase()}>`);
+    } else {
+      document.execCommand(cmd, false, value);
+    }
   } catch {
     // ignore unsupported commands
   }
+  // Notify React so autosave picks up list markup.
+  editor.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 export default function NotebooksPage() {
@@ -694,55 +722,55 @@ export default function NotebooksPage() {
 
             <div className="px-4 pb-2">
               <div className="flex flex-wrap items-center gap-0.5 rounded-lg border border-gray-200 bg-slate-50 px-1.5 py-1">
-                <ToolbarBtn title="Heading 1" onClick={() => exec("formatBlock", "H1")}>
+                <ToolbarBtn title="Heading 1" onClick={() => runEditorCommand(bodyRef.current, "formatBlock", "H1")}>
                   <Heading1 className="h-4 w-4" />
                 </ToolbarBtn>
-                <ToolbarBtn title="Heading 2" onClick={() => exec("formatBlock", "H2")}>
+                <ToolbarBtn title="Heading 2" onClick={() => runEditorCommand(bodyRef.current, "formatBlock", "H2")}>
                   <Heading2 className="h-4 w-4" />
                 </ToolbarBtn>
-                <ToolbarBtn title="Heading 3" onClick={() => exec("formatBlock", "H3")}>
+                <ToolbarBtn title="Heading 3" onClick={() => runEditorCommand(bodyRef.current, "formatBlock", "H3")}>
                   <Heading3 className="h-4 w-4" />
                 </ToolbarBtn>
                 <Sep />
-                <ToolbarBtn title="Bold" onClick={() => exec("bold")}>
+                <ToolbarBtn title="Bold" onClick={() => runEditorCommand(bodyRef.current, "bold")}>
                   <Bold className="h-4 w-4" />
                 </ToolbarBtn>
-                <ToolbarBtn title="Italic" onClick={() => exec("italic")}>
+                <ToolbarBtn title="Italic" onClick={() => runEditorCommand(bodyRef.current, "italic")}>
                   <Italic className="h-4 w-4" />
                 </ToolbarBtn>
-                <ToolbarBtn title="Underline" onClick={() => exec("underline")}>
+                <ToolbarBtn title="Underline" onClick={() => runEditorCommand(bodyRef.current, "underline")}>
                   <Underline className="h-4 w-4" />
                 </ToolbarBtn>
-                <ToolbarBtn title="Strikethrough" onClick={() => exec("strikeThrough")}>
+                <ToolbarBtn title="Strikethrough" onClick={() => runEditorCommand(bodyRef.current, "strikeThrough")}>
                   <Strikethrough className="h-4 w-4" />
                 </ToolbarBtn>
                 <Sep />
-                <ToolbarBtn title="Align left" onClick={() => exec("justifyLeft")}>
+                <ToolbarBtn title="Align left" onClick={() => runEditorCommand(bodyRef.current, "justifyLeft")}>
                   <AlignLeft className="h-4 w-4" />
                 </ToolbarBtn>
-                <ToolbarBtn title="Align center" onClick={() => exec("justifyCenter")}>
+                <ToolbarBtn title="Align center" onClick={() => runEditorCommand(bodyRef.current, "justifyCenter")}>
                   <AlignCenter className="h-4 w-4" />
                 </ToolbarBtn>
-                <ToolbarBtn title="Align right" onClick={() => exec("justifyRight")}>
+                <ToolbarBtn title="Align right" onClick={() => runEditorCommand(bodyRef.current, "justifyRight")}>
                   <AlignRight className="h-4 w-4" />
                 </ToolbarBtn>
                 <Sep />
-                <ToolbarBtn title="Bullet list" onClick={() => exec("insertUnorderedList")}>
+                <ToolbarBtn title="Bullet list" onClick={() => runEditorCommand(bodyRef.current, "insertUnorderedList")}>
                   <List className="h-4 w-4" />
                 </ToolbarBtn>
-                <ToolbarBtn title="Numbered list" onClick={() => exec("insertOrderedList")}>
+                <ToolbarBtn title="Numbered list" onClick={() => runEditorCommand(bodyRef.current, "insertOrderedList")}>
                   <ListOrdered className="h-4 w-4" />
                 </ToolbarBtn>
                 <ToolbarBtn
                   title="Link"
                   onClick={() => {
                     const url = window.prompt("URL");
-                    if (url) exec("createLink", url);
+                    if (url) runEditorCommand(bodyRef.current, "createLink", url);
                   }}
                 >
                   <LinkIcon className="h-4 w-4" />
                 </ToolbarBtn>
-                <ToolbarBtn title="Clear formatting" onClick={() => exec("removeFormat")}>
+                <ToolbarBtn title="Clear formatting" onClick={() => runEditorCommand(bodyRef.current, "removeFormat")}>
                   <Eraser className="h-4 w-4" />
                 </ToolbarBtn>
               </div>
@@ -753,7 +781,7 @@ export default function NotebooksPage() {
               contentEditable
               suppressContentEditableWarning
               onInput={handleBodyInput}
-              className="flex-1 overflow-y-auto px-6 pb-8 text-sm text-slate-800 leading-relaxed outline-none prose prose-sm max-w-none [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:text-lg [&_h3]:font-semibold"
+              className="flex-1 overflow-y-auto px-6 pb-8 text-sm text-slate-800 leading-relaxed outline-none prose prose-sm max-w-none [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:text-lg [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-2 [&_li]:my-0.5 [&_li]:marker:text-slate-500"
               data-placeholder="Start writing…"
             />
           </>

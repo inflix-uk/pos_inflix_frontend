@@ -1183,20 +1183,34 @@ export const useEditPurchase = () => {
   let variantValuesArr: { slug: string; value: string }[] = [];
   if (useDynamic) {
    const resolved = resolveVariantValues(attrs, d.variantValues);
-   gradeVal = resolved.grade;
-   brandVal = resolved.brand;
-   modelVal = resolved.brandModel;
-   capacityVal = resolved.capacity;
-   colourVal = resolved.colour;
+   gradeVal = resolved.grade || toUpper(d.grade) || undefined;
+   brandVal = resolved.brand || toUpper(d.brand) || undefined;
+   modelVal = resolved.brandModel || toUpper(d.brandModel) || undefined;
+   capacityVal = resolved.capacity || toUpper(d.capacity) || undefined;
+   colourVal = resolved.colour || toUpper(d.colour) || undefined;
    variantValuesArr = resolved.variantValues;
+   // Ensure brand_model is present in variantValues when we have a model from legacy fields
+   if (modelVal && !variantValuesArr.some((v) => /brand_?model|^model$/i.test(v.slug || ""))) {
+    variantValuesArr = [...variantValuesArr, { slug: "brand_model", value: toUpper(modelVal) }];
+   }
   } else {
-   const brand = brandsRaw.find((b) => b._id === d.brand);
+   const brand =
+    brandsRaw.find((b) => b._id === d.brand) ||
+    brandsRaw.find(
+     (b) => (b.name || "").trim().toUpperCase() === String(d.brand || "").trim().toUpperCase()
+    );
    const modelsForBrand = brand?.models ?? [];
-   modelVal = modelsForBrand.find((m) => m._id === d.brandModel)?.name;
-   gradeVal = grades.find((g) => g._id === d.grade)?.name || d.grade;
-   brandVal = brands.find((b) => b._id === d.brand)?.name || d.brand;
-   capacityVal = capacities.find((c) => c._id === d.capacity)?.name || d.capacity;
-   colourVal = colours.find((c) => c._id === d.colour)?.name || d.colour;
+   const modelName =
+    modelsForBrand.find((m) => m._id === d.brandModel)?.name ||
+    modelsForBrand.find(
+     (m) => (m.name || "").trim().toUpperCase() === String(d.brandModel || "").trim().toUpperCase()
+    )?.name;
+   // Preserve stored model name when option ID lookup fails (loaded edit rows store names, not IDs).
+   modelVal = toUpper(modelName || d.brandModel) || undefined;
+   gradeVal = toUpper(grades.find((g) => g._id === d.grade)?.name || d.grade) || undefined;
+   brandVal = toUpper(brands.find((b) => b._id === d.brand)?.name || d.brand) || undefined;
+   capacityVal = toUpper(capacities.find((c) => c._id === d.capacity)?.name || d.capacity) || undefined;
+   colourVal = toUpper(colours.find((c) => c._id === d.colour)?.name || d.colour) || undefined;
    if (gradeVal) variantValuesArr.push({ slug: "grade", value: toUpper(gradeVal) });
    if (brandVal) variantValuesArr.push({ slug: "brands", value: toUpper(brandVal) });
    if (modelVal) variantValuesArr.push({ slug: "brand_model", value: toUpper(modelVal) });
@@ -1232,20 +1246,32 @@ export const useEditPurchase = () => {
   let variantValuesArr: { slug: string; value: string }[] = [];
   if (useDynamic) {
    const resolved = resolveVariantValues(attrs, d.variantValues);
-   gradeVal = resolved.grade;
-   brandVal = resolved.brand;
-   modelVal = resolved.brandModel;
-   capacityVal = resolved.capacity;
-   colourVal = resolved.colour;
+   gradeVal = resolved.grade || toUpper(d.grade) || undefined;
+   brandVal = resolved.brand || toUpper(d.brand) || undefined;
+   modelVal = resolved.brandModel || toUpper(d.brandModel) || undefined;
+   capacityVal = resolved.capacity || toUpper(d.capacity) || undefined;
+   colourVal = resolved.colour || toUpper(d.colour) || undefined;
    variantValuesArr = resolved.variantValues;
+   if (modelVal && !variantValuesArr.some((v) => /brand_?model|^model$/i.test(v.slug || ""))) {
+    variantValuesArr = [...variantValuesArr, { slug: "brand_model", value: toUpper(modelVal) }];
+   }
   } else {
-   const brand = brandsRaw.find((b) => b._id === d.brand);
+   const brand =
+    brandsRaw.find((b) => b._id === d.brand) ||
+    brandsRaw.find(
+     (b) => (b.name || "").trim().toUpperCase() === String(d.brand || "").trim().toUpperCase()
+    );
    const modelsForBrand = brand?.models ?? [];
-   modelVal = modelsForBrand.find((m) => m._id === d.brandModel)?.name;
-   gradeVal = grades.find((g) => g._id === d.grade)?.name || d.grade;
-   brandVal = brands.find((b) => b._id === d.brand)?.name || d.brand;
-   capacityVal = capacities.find((c) => c._id === d.capacity)?.name || d.capacity;
-   colourVal = colours.find((c) => c._id === d.colour)?.name || d.colour;
+   const modelName =
+    modelsForBrand.find((m) => m._id === d.brandModel)?.name ||
+    modelsForBrand.find(
+     (m) => (m.name || "").trim().toUpperCase() === String(d.brandModel || "").trim().toUpperCase()
+    )?.name;
+   modelVal = toUpper(modelName || d.brandModel) || undefined;
+   gradeVal = toUpper(grades.find((g) => g._id === d.grade)?.name || d.grade) || undefined;
+   brandVal = toUpper(brands.find((b) => b._id === d.brand)?.name || d.brand) || undefined;
+   capacityVal = toUpper(capacities.find((c) => c._id === d.capacity)?.name || d.capacity) || undefined;
+   colourVal = toUpper(colours.find((c) => c._id === d.colour)?.name || d.colour) || undefined;
    if (gradeVal) variantValuesArr.push({ slug: "grade", value: toUpper(gradeVal) });
    if (brandVal) variantValuesArr.push({ slug: "brands", value: toUpper(brandVal) });
    if (modelVal) variantValuesArr.push({ slug: "brand_model", value: toUpper(modelVal) });
