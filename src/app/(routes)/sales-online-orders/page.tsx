@@ -920,7 +920,7 @@ const Page = () => {
  const controller = new AbortController();
  fetchAbortRef.current = controller;
  const seq = ++fetchSeqRef.current;
- const timeoutId = window.setTimeout(() => controller.abort(), 30000);
+ const timeoutId = window.setTimeout(() => controller.abort(), 15000);
  setLoading(true);
  setError(null);
  try {
