@@ -555,6 +555,152 @@ export const useEditPurchase = () => {
   });
  }, [categoryVariantAttributesOther]);
 
+ const [isRestoringModels, setIsRestoringModels] = useState(false);
+ const [missingModelsCount, setMissingModelsCount] = useState(0);
+ const autoRestoreAttemptedRef = useRef(false);
+
+ type ApiPurchaseItem = {
+  sendTo?: { _id: string } | string;
+  tax?: { _id: string } | string;
+  category?: { _id: string } | string;
+  subCategory?: { _id: string } | string;
+  grade?: string;
+  brand?: string;
+  brandModel?: string;
+  capacity?: string;
+  colour?: string;
+  purchasePrice?: number;
+  salePrice?: number;
+  imeis?: string[];
+  quantity?: number;
+  name?: string;
+  barcode?: string;
+  variantValues?: { slug: string; value: string }[];
+  isOtherItem?: boolean;
+ };
+
+ const toId = (v: { _id?: string } | string | null | undefined): string =>
+  v && typeof v === "object" && v._id != null ? String(v._id) : v != null ? String(v) : "";
+
+ const mapApiItemsToEntries = useCallback((items: ApiPurchaseItem[]) => {
+  const imeiItems = items.filter((item) => !item.isOtherItem);
+  const otherItems = items.filter((item) => !!item.isOtherItem);
+  const entries: ItemEntry[] = imeiItems.map((item, idx) => {
+   const imeis = item.imeis || [];
+   const summaryParts = [item.brand, item.brandModel, item.capacity].filter(Boolean);
+   const rawVariantValues =
+    Array.isArray(item.variantValues) && item.variantValues.length > 0 ? item.variantValues : undefined;
+   return {
+    id: `loaded-imei-${idx}`,
+    data: {
+     sendTo: toId(item.sendTo),
+     taxCategory: toId(item.tax),
+     type: toId(item.category),
+     make: toId(item.subCategory),
+     grade: item.grade != null ? String(item.grade).trim() : "",
+     brand: item.brand != null ? String(item.brand).trim() : "",
+     brandModel: item.brandModel != null ? String(item.brandModel).trim() : "",
+     capacity: item.capacity != null ? String(item.capacity).trim() : "",
+     colour: item.colour != null ? String(item.colour).trim() : "",
+     purchasePrice: item.purchasePrice != null ? String(item.purchasePrice) : "",
+     salePrice: item.salePrice != null ? String(item.salePrice) : "",
+     multiIMEIs: imeis.join("\n"),
+     variantValues: {},
+     rawVariantValues,
+    },
+    imeiCount: imeis.length,
+    specsSummary: summaryParts.length > 0 ? summaryParts.join(" / ") : `Item ${idx + 1}`,
+   } as ItemEntry;
+  });
+  const otherEntries: OtherItemEntry[] = otherItems.map((item, idx) => {
+   const qty = item.quantity ?? 1;
+   const summaryParts = [item.brand, item.brandModel, item.capacity].filter(Boolean);
+   const rawVariantValues =
+    Array.isArray(item.variantValues) && item.variantValues.length > 0 ? item.variantValues : undefined;
+   return {
+    id: `loaded-other-${idx}`,
+    data: {
+     sendTo: toId(item.sendTo),
+     taxCategory: toId(item.tax),
+     type: toId(item.category),
+     make: toId(item.subCategory),
+     grade: item.grade != null ? String(item.grade).trim() : "",
+     brand: item.brand != null ? String(item.brand).trim() : "",
+     brandModel: item.brandModel != null ? String(item.brandModel).trim() : "",
+     capacity: item.capacity != null ? String(item.capacity).trim() : "",
+     colour: item.colour != null ? String(item.colour).trim() : "",
+     purchasePrice: item.purchasePrice != null ? String(item.purchasePrice) : "",
+     salePrice: item.salePrice != null ? String(item.salePrice) : "",
+     quantity: String(qty),
+     name: item.name != null ? String(item.name) : "",
+     barcode: item.barcode != null ? String(item.barcode) : "",
+     variantValues: {},
+     rawVariantValues,
+    },
+    quantity: qty,
+    specsSummary: summaryParts.length > 0 ? summaryParts.join(" / ") : `Other ${idx + 1}`,
+   } as OtherItemEntry;
+  });
+  return { entries, otherEntries };
+ }, []);
+
+ const countMissingModels = (entries: ItemEntry[]) =>
+  entries.filter((e) => e.imeiCount > 0 && !(e.data.brandModel || "").trim()).length;
+
+ const applyPurchaseItems = useCallback(
+  (items: ApiPurchaseItem[]) => {
+   const { entries, otherEntries } = mapApiItemsToEntries(items);
+   setSavedItems(entries);
+   setSavedOtherItems(otherEntries);
+   setMissingModelsCount(countMissingModels(entries));
+  },
+  [mapApiItemsToEntries]
+ );
+
+ const handleRestoreBrandModels = useCallback(async () => {
+  if (!purchaseId || isRestoringModels) return;
+  setIsRestoringModels(true);
+  setSubmitMessage({ type: "", text: "" });
+  try {
+   const response = await fetch(`${API_URL}/api/purchases/${purchaseId}/restore-brand-models`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+   });
+   const result = await response.json();
+   if (result.success) {
+    const restored = result.data?.restored?.length || 0;
+    const skipped = result.data?.skipped?.length || 0;
+    if (result.data?.purchase?.items) {
+     applyPurchaseItems(result.data.purchase.items);
+     const firstCat = result.data.purchase.items[0]?.category;
+     const firstCatId = firstCat && typeof firstCat === "object" ? firstCat._id : firstCat || "";
+     if (firstCatId) fetchSubCategories(firstCatId);
+    }
+    if (restored > 0) {
+     setSubmitMessage({
+      type: "success",
+      text: `Restored model on ${restored} group(s)${skipped ? `; ${skipped} still need a manual model` : ""}.`,
+     });
+    } else if (skipped > 0) {
+     setSubmitMessage({
+      type: "error",
+      text: `Could not recover model for ${skipped} group(s). Set the model manually, then save.`,
+     });
+     setMissingModelsCount(skipped);
+    } else {
+     setSubmitMessage({ type: "success", text: result.message || "No missing models" });
+     setMissingModelsCount(0);
+    }
+   } else {
+    setSubmitMessage({ type: "error", text: result.message || "Failed to restore models" });
+   }
+  } catch {
+   setSubmitMessage({ type: "error", text: "Failed to restore models" });
+  } finally {
+   setIsRestoringModels(false);
+  }
+ }, [purchaseId, isRestoringModels, applyPurchaseItems]);
+
  // Fetch existing purchase data
  useEffect(() => {
   const fetchPurchase = async () => {
@@ -587,98 +733,12 @@ export const useEditPurchase = () => {
      setDetailsSaved(true);
 
      if (p.items && p.items.length > 0) {
-      const toId = (v: { _id?: string } | string | null | undefined): string =>
-       v && typeof v === "object" && v._id != null ? String(v._id) : v != null ? String(v) : "";
-      // Load all items into savedItems list so user can edit any variant and re-save
-      type ApiItem = {
-       sendTo?: { _id: string } | string;
-       tax?: { _id: string } | string;
-       category?: { _id: string } | string;
-       subCategory?: { _id: string } | string;
-       grade?: string;
-       brand?: string;
-       brandModel?: string;
-       capacity?: string;
-       colour?: string;
-       purchasePrice?: number;
-       salePrice?: number;
-       imeis?: string[];
-       quantity?: number;
-       name?: string;
-       barcode?: string;
-       variantValues?: { slug: string; value: string }[];
-       isOtherItem?: boolean;
-      };
-      const imeiItems = p.items.filter((item: ApiItem) => !item.isOtherItem);
-      const otherItems = p.items.filter((item: ApiItem) => !!item.isOtherItem);
-      const entries: ItemEntry[] = imeiItems.map((item: ApiItem, idx: number) => {
-       const imeis = item.imeis || [];
-       const summaryParts = [item.brand, item.brandModel, item.capacity].filter(Boolean);
-       const rawVariantValues =
-        Array.isArray(item.variantValues) && item.variantValues.length > 0 ? item.variantValues : undefined;
-       return {
-        id: `loaded-imei-${idx}`,
-        data: {
-         sendTo: toId(item.sendTo),
-         taxCategory: toId(item.tax),
-         type: toId(item.category),
-         make: toId(item.subCategory),
-         grade: item.grade != null ? String(item.grade).trim() : "",
-         brand: item.brand != null ? String(item.brand).trim() : "",
-         brandModel: item.brandModel != null ? String(item.brandModel).trim() : "",
-         capacity: item.capacity != null ? String(item.capacity).trim() : "",
-         colour: item.colour != null ? String(item.colour).trim() : "",
-         purchasePrice: item.purchasePrice != null ? String(item.purchasePrice) : "",
-         salePrice: item.salePrice != null ? String(item.salePrice) : "",
-         multiIMEIs: imeis.join("\n"),
-         variantValues: {},
-         rawVariantValues,
-        },
-        imeiCount: imeis.length,
-        specsSummary: summaryParts.length > 0 ? summaryParts.join(" / ") : `Item ${idx + 1}`,
-       } as ItemEntry;
-      });
-      const otherEntries: OtherItemEntry[] = otherItems.map((item: ApiItem, idx: number) => {
-       const qty = item.quantity ?? 1;
-       const summaryParts = [item.brand, item.brandModel, item.capacity].filter(Boolean);
-       const rawVariantValues =
-        Array.isArray(item.variantValues) && item.variantValues.length > 0 ? item.variantValues : undefined;
-       return {
-        id: `loaded-other-${idx}`,
-        data: {
-         sendTo: toId(item.sendTo),
-         taxCategory: toId(item.tax),
-         type: toId(item.category),
-         make: toId(item.subCategory),
-         grade: item.grade != null ? String(item.grade).trim() : "",
-         brand: item.brand != null ? String(item.brand).trim() : "",
-         brandModel: item.brandModel != null ? String(item.brandModel).trim() : "",
-         capacity: item.capacity != null ? String(item.capacity).trim() : "",
-         colour: item.colour != null ? String(item.colour).trim() : "",
-         purchasePrice: item.purchasePrice != null ? String(item.purchasePrice) : "",
-         salePrice: item.salePrice != null ? String(item.salePrice) : "",
-         quantity: String(qty),
-         name: item.name != null ? String(item.name) : "",
-         barcode: item.barcode != null ? String(item.barcode) : "",
-         variantValues: {},
-         rawVariantValues,
-        },
-        quantity: qty,
-        specsSummary: summaryParts.length > 0 ? summaryParts.join(" / ") : `Other ${idx + 1}`,
-       } as OtherItemEntry;
-      });
-      setSavedItems(entries);
-      setSavedOtherItems(otherEntries);
-
-      // Don't populate the form — leave it empty for adding new items
-      // But still load subcategories for the first item for reference
+      applyPurchaseItems(p.items);
       const firstCat = p.items[0]?.category;
       const firstCatId = firstCat && typeof firstCat === "object" ? firstCat._id : firstCat || "";
       if (firstCatId) {
        fetchSubCategories(firstCatId);
       }
-
-      // Clear rawItem since we're not populating the form
       setRawItem(null);
      }
     } else {
@@ -691,8 +751,15 @@ export const useEditPurchase = () => {
    }
   };
   fetchPurchase();
- }, [purchaseId]);
+ }, [purchaseId, applyPurchaseItems]);
 
+ // Auto-restore once when edit page loads with missing models
+ useEffect(() => {
+  if (isLoadingData || autoRestoreAttemptedRef.current) return;
+  if (missingModelsCount <= 0) return;
+  autoRestoreAttemptedRef.current = true;
+  handleRestoreBrandModels();
+ }, [isLoadingData, missingModelsCount, handleRestoreBrandModels]);
  // Resolve variant name strings to _id values once dropdown options are loaded
  useEffect(() => {
   if (!rawItem) return;
@@ -1478,6 +1545,9 @@ export const useEditPurchase = () => {
   loadError,
   isSubmitting,
   submitMessage,
+  missingModelsCount,
+  isRestoringModels,
+  handleRestoreBrandModels,
   handleParcelChange,
   handleQuantityChange,
   handleItemChange,
