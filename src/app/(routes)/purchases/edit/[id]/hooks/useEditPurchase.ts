@@ -988,7 +988,7 @@ export const useEditPurchase = () => {
  const buildOtherSpecsSummary = () => {
   const parts: string[] = [];
   const brandName = brands.find((b) => b._id === otherItemData.brand)?.name;
-  const modelName = brandModels.find((m) => m._id === otherItemData.brandModel)?.name;
+  const modelName = brandModels.find((m) => m._id === otherItemData.brandModel)?.name || otherItemData.brandModel;
   const capName = capacities.find((c) => c._id === otherItemData.capacity)?.name;
   if (brandName) parts.push(brandName);
   if (modelName) parts.push(modelName);
@@ -1206,6 +1206,32 @@ export const useEditPurchase = () => {
 
  const toUpper = (s: string | undefined) => (s != null && String(s).trim() !== "" ? String(s).trim().toUpperCase() : "");
 
+ /** Model from API-loaded variantValues when legacy brandModel is empty. */
+ const modelFromRawVariants = (d: { rawVariantValues?: { slug?: string; value?: string }[] }) => {
+  const vv = Array.isArray(d.rawVariantValues) ? d.rawVariantValues : [];
+  const entry = vv.find((v) => /brand_?models?|^model$/i.test(String(v.slug || "")));
+  return entry?.value != null ? String(entry.value).trim() : "";
+ };
+
+ /** Resolve model name for save (edit rows store names, not option IDs). */
+ const resolveModelNameForSave = (brandRef: string, modelRef: string): string => {
+  if (!modelRef?.trim()) return "";
+  const brand =
+   brandsRaw.find((b) => b._id === brandRef) ||
+   brandsRaw.find((b) => (b.name || "").trim().toUpperCase() === String(brandRef || "").trim().toUpperCase());
+  const modelsForBrand = brand?.models ?? [];
+  const modelName =
+   modelsForBrand.find((m) => m._id === modelRef)?.name ||
+   modelsForBrand.find(
+    (m) => (m.name || "").trim().toUpperCase() === String(modelRef || "").trim().toUpperCase()
+   )?.name ||
+   brandModels.find((m) => m._id === modelRef)?.name ||
+   brandModels.find(
+    (m) => (m.name || "").trim().toUpperCase() === String(modelRef || "").trim().toUpperCase()
+   )?.name;
+  return toUpper(modelName || modelRef) || "";
+ };
+
  const getVariantValueName = (attributes: CategoryVariantAttribute[], variantValues: Record<string, string>, attributeIndex: number): string | undefined => {
   const options = getVariantOptionsForAttributeIndex(attributes, variantValues, attributeIndex);
   const attr = attributes[attributeIndex];
@@ -1252,7 +1278,11 @@ export const useEditPurchase = () => {
    const resolved = resolveVariantValues(attrs, d.variantValues);
    gradeVal = resolved.grade || toUpper(d.grade) || undefined;
    brandVal = resolved.brand || toUpper(d.brand) || undefined;
-   modelVal = resolved.brandModel || toUpper(d.brandModel) || undefined;
+   modelVal =
+    resolved.brandModel ||
+    resolveModelNameForSave(d.brand, d.brandModel) ||
+    toUpper(modelFromRawVariants(d)) ||
+    undefined;
    capacityVal = resolved.capacity || toUpper(d.capacity) || undefined;
    colourVal = resolved.colour || toUpper(d.colour) || undefined;
    variantValuesArr = resolved.variantValues;
@@ -1261,19 +1291,8 @@ export const useEditPurchase = () => {
     variantValuesArr = [...variantValuesArr, { slug: "brand_model", value: toUpper(modelVal) }];
    }
   } else {
-   const brand =
-    brandsRaw.find((b) => b._id === d.brand) ||
-    brandsRaw.find(
-     (b) => (b.name || "").trim().toUpperCase() === String(d.brand || "").trim().toUpperCase()
-    );
-   const modelsForBrand = brand?.models ?? [];
-   const modelName =
-    modelsForBrand.find((m) => m._id === d.brandModel)?.name ||
-    modelsForBrand.find(
-     (m) => (m.name || "").trim().toUpperCase() === String(d.brandModel || "").trim().toUpperCase()
-    )?.name;
-   // Preserve stored model name when option ID lookup fails (loaded edit rows store names, not IDs).
-   modelVal = toUpper(modelName || d.brandModel) || undefined;
+   modelVal =
+    resolveModelNameForSave(d.brand, d.brandModel) || toUpper(modelFromRawVariants(d)) || undefined;
    gradeVal = toUpper(grades.find((g) => g._id === d.grade)?.name || d.grade) || undefined;
    brandVal = toUpper(brands.find((b) => b._id === d.brand)?.name || d.brand) || undefined;
    capacityVal = toUpper(capacities.find((c) => c._id === d.capacity)?.name || d.capacity) || undefined;
@@ -1315,7 +1334,11 @@ export const useEditPurchase = () => {
    const resolved = resolveVariantValues(attrs, d.variantValues);
    gradeVal = resolved.grade || toUpper(d.grade) || undefined;
    brandVal = resolved.brand || toUpper(d.brand) || undefined;
-   modelVal = resolved.brandModel || toUpper(d.brandModel) || undefined;
+   modelVal =
+    resolved.brandModel ||
+    resolveModelNameForSave(d.brand, d.brandModel) ||
+    toUpper(modelFromRawVariants(d)) ||
+    undefined;
    capacityVal = resolved.capacity || toUpper(d.capacity) || undefined;
    colourVal = resolved.colour || toUpper(d.colour) || undefined;
    variantValuesArr = resolved.variantValues;
@@ -1323,18 +1346,8 @@ export const useEditPurchase = () => {
     variantValuesArr = [...variantValuesArr, { slug: "brand_model", value: toUpper(modelVal) }];
    }
   } else {
-   const brand =
-    brandsRaw.find((b) => b._id === d.brand) ||
-    brandsRaw.find(
-     (b) => (b.name || "").trim().toUpperCase() === String(d.brand || "").trim().toUpperCase()
-    );
-   const modelsForBrand = brand?.models ?? [];
-   const modelName =
-    modelsForBrand.find((m) => m._id === d.brandModel)?.name ||
-    modelsForBrand.find(
-     (m) => (m.name || "").trim().toUpperCase() === String(d.brandModel || "").trim().toUpperCase()
-    )?.name;
-   modelVal = toUpper(modelName || d.brandModel) || undefined;
+   modelVal =
+    resolveModelNameForSave(d.brand, d.brandModel) || toUpper(modelFromRawVariants(d)) || undefined;
    gradeVal = toUpper(grades.find((g) => g._id === d.grade)?.name || d.grade) || undefined;
    brandVal = toUpper(brands.find((b) => b._id === d.brand)?.name || d.brand) || undefined;
    capacityVal = toUpper(capacities.find((c) => c._id === d.capacity)?.name || d.capacity) || undefined;
