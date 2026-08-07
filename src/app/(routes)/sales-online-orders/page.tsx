@@ -29,7 +29,7 @@ import {
  formatCustomerAddressForInvoice,
  getSaleCustomerDisplay,
 } from "../sales-dashboard/service/salesApi";
-import { downloadInvoiceA4, printInvoiceA4, printReceipt80mm } from "@/lib/invoicePrint";
+import { downloadInvoiceA4, printInvoiceA4, printReceipt80mm, invoiceItemDescriptionForPrint } from "@/lib/invoicePrint";
 import { formatDateTimeLondon } from "@/lib/dateUtils";
 import { usePermissionsContext } from "@/contexts/PermissionsContext";
 import {
@@ -624,7 +624,7 @@ function InvoicePreviewModal({
     <div className="min-w-0 flex-1">
     <div className="flex items-start gap-1.5">
      <span className="text-[11px] font-medium text-gray-400 mt-0.5">#{idx + 1}</span>
-     <p className="text-sm font-medium text-gray-900 break-words">{item.name}</p>
+     <p className="text-sm font-medium text-gray-900 break-words">{invoiceItemDescriptionForPrint(item)}</p>
     </div>
     {item.grade && <span className="mt-1 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">{item.grade}</span>}
     </div>
@@ -670,7 +670,7 @@ function InvoicePreviewModal({
    <tr key={item._id || idx}>
    <td className="px-3 py-2 text-gray-500">{idx + 1}</td>
    <td className="px-3 py-2 text-gray-900">
-    {item.name}
+    {invoiceItemDescriptionForPrint(item)}
     {item.grade && <span className="ml-1.5 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">{item.grade}</span>}
     {item.serialNumbers && item.serialNumbers.length > 0 && (() => {
     const sc = item.serialColours || {};
@@ -846,7 +846,12 @@ const Page = () => {
  quantity: i.quantity,
  unit: i.unit,
  serialNumbers: i.serialNumbers,
+ serialColours: i.serialColours,
  grade: i.grade,
+ brand: i.brand,
+ colour: i.colour,
+ brandModel: i.brandModel,
+ capacity: i.capacity,
  })),
  subtotal: s.subtotal,
  tax: s.tax,
