@@ -225,7 +225,8 @@ export default function StartReturnPage() {
  const serial = scanValue.trim();
  if (!serial) return;
  setScanError(null);
- const alreadyInBasket = basket.some((b) => b.serials?.includes(serial));
+ const serialKey = (s: string) => s.trim().toUpperCase();
+ const alreadyInBasket = basket.some((b) => b.serials?.some((s) => serialKey(s) === serialKey(serial)));
  if (alreadyInBasket) {
  setScanError("This serial is already in the return basket.");
  return;
@@ -249,7 +250,7 @@ export default function StartReturnPage() {
  returnableSerials: [foundSerial],
  };
  // Prefer the exact scanned serial (multi-IMEI lines used to pick the first returnable instead).
- if (rl.returnableSerials.length > 0 && !rl.returnableSerials.includes(foundSerial)) {
+ if (rl.returnableSerials.length > 0 && !rl.returnableSerials.some((s) => serialKey(s) === serialKey(foundSerial))) {
   setScanError("This serial is not returnable on this invoice (already returned or not on the sale).");
   return;
  }

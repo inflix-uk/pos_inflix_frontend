@@ -14,6 +14,7 @@ import {
  Receipt,
  Download,
  Trash2,
+ RotateCcw,
  Filter,
  Eye,
  X,
@@ -1424,6 +1425,12 @@ const Page = () => {
       disabled: printLoading === sale._id || downloadInvoiceLoadingId === sale._id,
       },
       {
+      key: "return",
+      label: "Start return",
+      icon: <RotateCcw className="h-4 w-4 text-gray-700" />,
+      onClick: () => router.push(`/sales-return/start/${sale._id}`),
+      },
+      {
       key: "edit",
       label: sale.hasReturn ? "Cannot edit — sale has been returned" : "Edit",
       icon: <Pencil className="h-4 w-4 text-gray-700" />,
@@ -1650,6 +1657,12 @@ const Page = () => {
       icon: <Receipt className="h-4 w-4 text-orange-600" />,
       onClick: () => handlePrintReceipt(sale),
       disabled: printLoading === sale._id || downloadInvoiceLoadingId === sale._id,
+      },
+      {
+      key: "return",
+      label: "Start return",
+      icon: <RotateCcw className="h-4 w-4 text-gray-700" />,
+      onClick: () => router.push(`/sales-return/start/${sale._id}`),
       },
       {
       key: "edit",
