@@ -749,11 +749,11 @@ export default function AccountStatementPage() {
    <Plus className="h-4 w-4" />
    Add balance
   </button>
-  {accountType === "customer" && balance > 0 && (
+  {accountType === "customer" && customerStatement && (
    <button
    onClick={() => setPaymentModalOpen(true)}
    className="px-5 py-2.5 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 shadow-sm flex items-center gap-2 transition-colors"
-   title="Record payment received from this customer"
+   title="Record payment received from this customer. Extra over the balance is stored as credit."
    >
    <DollarSign className="h-4 w-4" />
    Record payment from customer
@@ -1080,7 +1080,7 @@ export default function AccountStatementPage() {
   </button>
   </div>
   <form onSubmit={handleRecordPayment} className="p-6 space-y-5">
-  <p className="text-sm text-gray-600 -mt-2">Record money received from this customer against their balance.</p>
+  <p className="text-sm text-gray-600 -mt-2">Record money received from this customer. Any amount over what they owe is stored as credit.</p>
   {accountType === "customer" && customerStatement && (
   <div className="p-3 rounded-xl border border-gray-200 bg-gray-50/50">
    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
@@ -1091,9 +1091,6 @@ export default function AccountStatementPage() {
    >
    {balance >= 0 ? formatMoney(balance) : `${formatMoney(Math.abs(balance))} (credit)`}
    </p>
-   {balance <= 0 && (
-   <p className="text-sm text-neutral-600 mt-2">No balance owed. Use this only when the customer pays you against what they owe.</p>
-   )}
   </div>
   )}
   <div>
@@ -1102,13 +1099,22 @@ export default function AccountStatementPage() {
    type="number"
    step="0.01"
    min="0"
-   max={balance > 0 ? balance : undefined}
    value={paymentAmount}
    onChange={(e) => setPaymentAmount(e.target.value)}
    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
    required
-   placeholder={balance > 0 ? `Max ${formatMoney(balance)}` : undefined}
+   placeholder="Amount received"
   />
+  {(() => {
+   const payNow = Number(paymentAmount) || 0;
+   const creditFromThis = Math.round((payNow - Math.max(0, balance)) * 100) / 100;
+   if (payNow <= 0 || creditFromThis <= 0) return null;
+   return (
+   <p className="mt-2 text-sm text-blue-700">
+    Extra {formatMoney(creditFromThis)} will be stored as credit.
+   </p>
+   );
+  })()}
   </div>
   <div>
   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Payment method</label>
@@ -1142,7 +1148,7 @@ export default function AccountStatementPage() {
   </button>
   <button
    type="submit"
-   disabled={paymentSubmitting || !paymentAmount || Number(paymentAmount) <= 0 || (accountType === "customer" && balance <= 0)}
+   disabled={paymentSubmitting || !paymentAmount || Number(paymentAmount) <= 0}
    className="flex-1 py-2.5 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm transition-colors"
   >
    {paymentSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
