@@ -23,6 +23,8 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  ChevronLeft,
+  Palette,
 } from "lucide-react";
 import {
   notebooksApi,
@@ -46,6 +48,24 @@ const COLOR_DOT: Record<string, string> = {
   red: "bg-red-500",
   slate: "bg-slate-500",
 };
+
+/** Text colours for the rich-text editor (hex for execCommand foreColor). */
+const EDITOR_TEXT_COLORS: { label: string; hex: string }[] = [
+  { label: "Default", hex: "#334155" },
+  { label: "Red", hex: "#dc2626" },
+  { label: "Orange", hex: "#ea580c" },
+  { label: "Amber", hex: "#d97706" },
+  { label: "Green", hex: "#16a34a" },
+  { label: "Emerald", hex: "#059669" },
+  { label: "Sky", hex: "#0284c7" },
+  { label: "Blue", hex: "#2563eb" },
+  { label: "Violet", hex: "#7c3aed" },
+  { label: "Purple", hex: "#9333ea" },
+  { label: "Rose", hex: "#e11d48" },
+  { label: "Slate", hex: "#64748b" },
+];
+
+const DEFAULT_TEXT_COLOR = EDITOR_TEXT_COLORS[0].hex;
 
 function relativeTime(iso: string): string {
   const t = new Date(iso).getTime();
@@ -92,7 +112,10 @@ function runEditorCommand(editor: HTMLDivElement | null, cmd: string, value?: st
     document.execCommand("insertHTML", false, "<div><br></div>");
   }
   try {
-    if (cmd === "formatBlock" && value) {
+    if (cmd === "foreColor" && value) {
+      document.execCommand("styleWithCSS", false, "true");
+      document.execCommand("foreColor", false, value);
+    } else if (cmd === "formatBlock" && value) {
       // Browsers differ on tag form; try both.
       const ok = document.execCommand(cmd, false, value);
       if (!ok) document.execCommand(cmd, false, `<${value.toLowerCase()}>`);
@@ -417,16 +440,33 @@ export default function NotebooksPage() {
     return groups;
   }, [notes]);
 
+  const goBackToNotebooks = () => {
+    setError(null);
+    setSelectedNotebookId(null);
+    setSelectedNoteId(null);
+    setActiveNote(null);
+  };
+
+  const goBackToNotes = () => {
+    setError(null);
+    setSelectedNoteId(null);
+    setActiveNote(null);
+  };
+
   return (
-    <div className="flex h-[calc(100vh-4rem)] min-h-[480px] bg-white border-t border-gray-200">
+    <div className="flex h-[calc(100dvh-4rem)] min-h-0 bg-white border-t border-gray-200 max-md:flex-col">
       {/* Notebooks column */}
-      <aside className="w-[220px] shrink-0 border-r border-gray-200 flex flex-col bg-slate-50/80">
-        <div className="flex items-center justify-between px-3 py-3 border-b border-gray-200">
+      <aside
+        className={`w-full md:w-[220px] shrink-0 border-r border-gray-200 flex-col bg-slate-50/80 min-h-0 ${
+          selectedNotebookId ? "max-md:hidden" : "flex"
+        } md:flex`}
+      >
+        <div className="flex items-center justify-between px-3 py-3 border-b border-gray-200 min-h-[52px]">
           <h2 className="text-sm font-semibold text-slate-800">Notebooks</h2>
           <button
             type="button"
             onClick={openCreateNotebook}
-            className="p-1.5 rounded-md text-slate-600 hover:bg-slate-200/80"
+            className="p-2 rounded-lg text-slate-600 hover:bg-slate-200/80 min-h-[44px] min-w-[44px] flex items-center justify-center md:p-1.5 md:min-h-0 md:min-w-0"
             aria-label="Add notebook"
             title="Add notebook"
           >
@@ -444,8 +484,8 @@ export default function NotebooksPage() {
               return (
                 <div
                   key={nb._id}
-                  className={`group mx-2 mb-0.5 rounded-lg px-2.5 py-2 cursor-pointer ${
-                    active ? "bg-white shadow-sm ring-1 ring-slate-200" : "hover:bg-white/70"
+                  className={`group mx-2 mb-0.5 rounded-lg px-2.5 py-3 md:py-2 cursor-pointer min-h-[56px] md:min-h-0 ${
+                    active ? "bg-white shadow-sm ring-1 ring-slate-200" : "hover:bg-white/70 active:bg-white/90"
                   }`}
                   onClick={() => {
                     setError(null);
@@ -482,12 +522,12 @@ export default function NotebooksPage() {
                     {active && (
                       <div
                         className={`flex items-center gap-0.5 transition-opacity ${
-                          nb.pinned ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                          nb.pinned ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100"
                         }`}
                       >
                         <button
                           type="button"
-                          className={`p-1 rounded hover:bg-slate-100 ${
+                          className={`p-2 md:p-1 rounded-lg md:rounded hover:bg-slate-100 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center ${
                             nb.pinned ? "text-amber-600 opacity-100" : "text-slate-500"
                           }`}
                           aria-label={nb.pinned ? "Unpin notebook" : "Pin notebook"}
@@ -498,7 +538,7 @@ export default function NotebooksPage() {
                         </button>
                         <button
                           type="button"
-                          className="p-1 rounded text-slate-500 hover:bg-slate-100"
+                          className="p-2 md:p-1 rounded-lg md:rounded text-slate-500 hover:bg-slate-100 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center"
                           aria-label="Rename notebook"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -510,7 +550,7 @@ export default function NotebooksPage() {
                         </button>
                         <button
                           type="button"
-                          className="p-1 rounded text-red-500 hover:bg-red-50"
+                          className="p-2 md:p-1 rounded-lg md:rounded text-red-500 hover:bg-red-50 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center"
                           aria-label="Delete notebook"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -533,35 +573,54 @@ export default function NotebooksPage() {
       </aside>
 
       {/* Notes column */}
-      <aside className="w-[280px] shrink-0 border-r border-gray-200 flex flex-col bg-white">
-        <div className="flex items-center justify-between px-3 py-3 border-b border-gray-200 gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+      <aside
+        className={`w-full md:w-[280px] shrink-0 border-r border-gray-200 flex-col bg-white min-h-0 ${
+          !selectedNotebookId
+            ? "max-md:hidden"
+            : selectedNoteId
+              ? "max-md:hidden"
+              : "flex"
+        } md:flex`}
+      >
+        <div className="flex items-center gap-2 px-2 py-2 md:px-3 md:py-3 border-b border-gray-200 min-h-[52px]">
+          <button
+            type="button"
+            onClick={goBackToNotebooks}
+            className="md:hidden p-2 -ml-1 rounded-lg text-slate-600 hover:bg-slate-100 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
+            aria-label="Back to notebooks"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             <span
               className={`h-2.5 w-2.5 rounded-full shrink-0 ${
                 COLOR_DOT[selectedNotebook?.color || ""] || "bg-orange-400"
               }`}
             />
-            <h2 className="text-sm font-semibold text-slate-800 truncate">Notes</h2>
+            <h2 className="text-sm font-semibold text-slate-800 truncate">
+              {selectedNotebook?.name ?? "Notes"}
+            </h2>
           </div>
           <button
             type="button"
             onClick={() => void handleCreateNote()}
             disabled={!selectedNotebookId}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1 px-3 py-2 md:px-2.5 md:py-1.5 rounded-lg md:rounded-md text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 min-h-[44px] md:min-h-0 shrink-0"
           >
             <Plus className="h-3.5 w-3.5" />
-            Note
+            <span className="md:hidden">New</span>
+            <span className="hidden md:inline">Note</span>
           </button>
         </div>
         <div className="px-3 py-2 border-b border-gray-100">
-          <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-slate-50 px-2.5 py-1.5">
-            <Search className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+          <div className="flex items-center gap-2 rounded-lg md:rounded-md border border-gray-200 bg-slate-50 px-3 py-2.5 md:px-2.5 md:py-1.5">
+            <Search className="h-4 w-4 md:h-3.5 md:w-3.5 text-slate-400 shrink-0" />
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search notes..."
-              className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
+              className="flex-1 min-w-0 bg-transparent text-base md:text-sm outline-none placeholder:text-slate-400"
             />
           </div>
         </div>
@@ -590,21 +649,21 @@ export default function NotebooksPage() {
                         setError(null);
                         setSelectedNoteId(n._id);
                       }}
-                      className={`group/note w-full text-left rounded-lg px-3 py-2.5 mb-1 border transition-colors ${
+                      className={`group/note w-full text-left rounded-lg px-3 py-3 md:py-2.5 mb-1 border transition-colors min-h-[72px] md:min-h-0 active:scale-[0.99] ${
                         active
                           ? "border-blue-300 bg-blue-50/60 ring-1 ring-blue-200"
-                          : "border-transparent hover:bg-slate-50"
+                          : "border-transparent hover:bg-slate-50 active:bg-slate-100"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold text-slate-900 line-clamp-1">
+                        <p className="text-base md:text-sm font-semibold text-slate-900 line-clamp-2 md:line-clamp-1">
                           {n.title || "Untitled"}
                         </p>
                         <div className="flex items-center gap-1 shrink-0">
                           <button
                             type="button"
-                            className={`p-0.5 rounded hover:bg-white/80 ${
-                              n.pinned ? "text-amber-600" : "text-slate-400 opacity-0 group-hover/note:opacity-100"
+                            className={`p-1.5 md:p-0.5 rounded-lg md:rounded hover:bg-white/80 min-h-[36px] min-w-[36px] md:min-h-0 md:min-w-0 flex items-center justify-center ${
+                              n.pinned ? "text-amber-600" : "text-slate-400 opacity-100 md:opacity-0 md:group-hover/note:opacity-100"
                             }`}
                             aria-label={n.pinned ? "Unpin note" : "Pin note"}
                             title={n.pinned ? "Unpin" : "Pin"}
@@ -634,7 +693,38 @@ export default function NotebooksPage() {
       </aside>
 
       {/* Editor */}
-      <main className="flex-1 min-w-0 flex flex-col bg-white">
+      <main
+        className={`flex-1 min-w-0 flex-col bg-white min-h-0 ${
+          selectedNoteId ? "flex" : "max-md:hidden"
+        } md:flex`}
+      >
+        {selectedNoteId && (
+          <div className="md:hidden flex items-center gap-2 px-2 py-2 border-b border-gray-200 bg-white shrink-0 min-h-[52px]">
+            <button
+              type="button"
+              onClick={goBackToNotes}
+              className="p-2 -ml-1 rounded-lg text-slate-600 hover:bg-slate-100 min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
+              aria-label="Back to notes"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <p className="text-sm font-semibold text-slate-900 truncate flex-1 min-w-0">
+              {activeNote?.title?.trim() || "Untitled"}
+            </p>
+            {activeNote && (
+              <button
+                type="button"
+                onClick={() => void togglePinNote(activeNote._id, !!activeNote.pinned)}
+                className={`p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0 ${
+                  activeNote.pinned ? "text-amber-600 bg-amber-50" : "text-slate-500 hover:bg-slate-100"
+                }`}
+                aria-label={activeNote.pinned ? "Unpin note" : "Pin note"}
+              >
+                <Pin className={`h-4 w-4 ${activeNote.pinned ? "fill-amber-500" : ""}`} />
+              </button>
+            )}
+          </div>
+        )}
         {error && (
           <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             <span>{error}</span>
@@ -659,7 +749,7 @@ export default function NotebooksPage() {
           </div>
         ) : activeNote ? (
           <>
-            <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-gray-100">
+            <div className="hidden md:flex items-center justify-between gap-3 px-4 py-2.5 border-b border-gray-100">
               <div className="flex items-center gap-1.5 flex-wrap">
                 {NOTE_TAG_COLORS.map((c) => (
                   <button
@@ -708,19 +798,55 @@ export default function NotebooksPage() {
               </div>
             </div>
 
-            <div className="px-6 pt-5 pb-2">
+            <div className="md:hidden flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 overflow-x-auto shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
+                {NOTE_TAG_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => handleColorTag(c)}
+                    className={`h-6 w-6 rounded-full ${COLOR_DOT[c]} ring-offset-1 ${
+                      activeNote.color === c ? "ring-2 ring-slate-700" : "hover:opacity-80"
+                    }`}
+                    aria-label={`Tag ${c}`}
+                    title={c}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-500 shrink-0">
+                <span>
+                  {saveStatus === "saving"
+                    ? "Saving…"
+                    : saveStatus === "saved"
+                      ? "Saved"
+                      : saveStatus === "error"
+                        ? "Failed"
+                        : "Saved"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void requestDeleteNote()}
+                  className="p-2 rounded-lg text-red-500 hover:bg-red-50 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  aria-label="Delete note"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-4 md:px-6 pt-4 md:pt-5 pb-2">
               <input
                 ref={titleRef}
                 type="text"
                 value={activeNote.title}
                 onChange={(e) => handleTitleChange(e.target.value)}
                 placeholder="Untitled"
-                className="w-full text-2xl font-bold text-slate-900 outline-none placeholder:text-slate-300"
+                className="w-full text-xl md:text-2xl font-bold text-slate-900 outline-none placeholder:text-slate-300"
               />
             </div>
 
-            <div className="px-4 pb-2">
-              <div className="flex flex-wrap items-center gap-0.5 rounded-lg border border-gray-200 bg-slate-50 px-1.5 py-1">
+            <div className="px-3 md:px-4 pb-2 shrink-0">
+              <div className="flex items-center gap-0.5 rounded-lg border border-gray-200 bg-slate-50 px-1.5 py-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
                 <ToolbarBtn title="Heading 1" onClick={() => runEditorCommand(bodyRef.current, "formatBlock", "H1")}>
                   <Heading1 className="h-4 w-4" />
                 </ToolbarBtn>
@@ -743,6 +869,11 @@ export default function NotebooksPage() {
                 <ToolbarBtn title="Strikethrough" onClick={() => runEditorCommand(bodyRef.current, "strikeThrough")}>
                   <Strikethrough className="h-4 w-4" />
                 </ToolbarBtn>
+                <Sep />
+                <TextColorPicker
+                  editorRef={bodyRef}
+                  onApplied={handleBodyInput}
+                />
                 <Sep />
                 <ToolbarBtn title="Align left" onClick={() => runEditorCommand(bodyRef.current, "justifyLeft")}>
                   <AlignLeft className="h-4 w-4" />
@@ -780,7 +911,7 @@ export default function NotebooksPage() {
               contentEditable
               suppressContentEditableWarning
               onInput={handleBodyInput}
-              className="flex-1 overflow-y-auto px-6 pb-8 text-sm text-slate-800 leading-relaxed outline-none prose prose-sm max-w-none [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:text-lg [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-2 [&_li]:my-0.5 [&_li]:marker:text-slate-500"
+              className="flex-1 overflow-y-auto px-4 md:px-6 pb-8 text-base md:text-sm text-slate-800 leading-relaxed outline-none prose prose-sm max-w-none min-h-0 [&_h1]:text-xl [&_h1]:md:text-2xl [&_h1]:font-bold [&_h2]:text-lg [&_h2]:md:text-xl [&_h2]:font-semibold [&_h3]:text-base [&_h3]:md:text-lg [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-2 [&_li]:my-0.5 [&_li]:marker:text-slate-500"
               data-placeholder="Start writing…"
             />
           </>
@@ -926,6 +1057,98 @@ export default function NotebooksPage() {
   );
 }
 
+function TextColorPicker({
+  editorRef,
+  onApplied,
+}: {
+  editorRef: React.RefObject<HTMLDivElement | null>;
+  onApplied: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const apply = (hex: string) => {
+    runEditorCommand(editorRef.current, "foreColor", hex);
+    onApplied();
+    setOpen(false);
+  };
+
+  const toggleOpen = () => {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setMenuPos({ top: r.bottom + 4, left: Math.max(8, r.left) });
+    }
+    setOpen((v) => !v);
+  };
+
+  return (
+    <div ref={wrapRef} className="relative shrink-0">
+      <button
+        ref={btnRef}
+        type="button"
+        title="Text color"
+        aria-label="Text color"
+        aria-expanded={open}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={toggleOpen}
+        className="p-2 md:p-1.5 rounded-lg md:rounded text-slate-600 hover:bg-white hover:text-slate-900 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center gap-0.5"
+      >
+        <Palette className="h-4 w-4" />
+        <span
+          className="hidden sm:block h-1 w-3 rounded-full bg-slate-800"
+          aria-hidden
+        />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="fixed z-[100] p-2 rounded-lg border border-gray-200 bg-white shadow-lg min-w-[168px]"
+          style={{ top: menuPos.top, left: menuPos.left }}
+        >
+          <p className="px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            Text color
+          </p>
+          <div className="grid grid-cols-6 gap-1.5">
+            {EDITOR_TEXT_COLORS.map(({ label, hex }) => (
+              <button
+                key={hex}
+                type="button"
+                role="menuitem"
+                title={label}
+                aria-label={label}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => apply(hex)}
+                className="h-7 w-7 md:h-6 md:w-6 rounded-full ring-1 ring-black/10 hover:scale-110 transition-transform"
+                style={{ backgroundColor: hex }}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            role="menuitem"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => apply(DEFAULT_TEXT_COLOR)}
+            className="mt-2 w-full text-left text-xs font-medium text-slate-600 hover:text-slate-900 px-1 py-1.5 rounded hover:bg-slate-50 min-h-[44px] md:min-h-0"
+          >
+            Reset to default
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ToolbarBtn({
   children,
   onClick,
@@ -942,7 +1165,7 @@ function ToolbarBtn({
       aria-label={title}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className="p-1.5 rounded text-slate-600 hover:bg-white hover:text-slate-900"
+      className="p-2 md:p-1.5 rounded-lg md:rounded text-slate-600 hover:bg-white hover:text-slate-900 min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center shrink-0"
     >
       {children}
     </button>
