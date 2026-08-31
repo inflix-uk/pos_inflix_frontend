@@ -201,11 +201,22 @@ export const invoicesApi = {
   id: string,
   payload: { to: string; pdfBase64: string; filename: string }
  ): Promise<{ success: boolean; message?: string }> => {
-  const response = await fetch(`${API_BASE_URL}/invoices/${id}/send-email`, {
-   method: "POST",
-   headers: getAuthHeaders(),
-   body: JSON.stringify(payload),
-  });
+  let response: Response;
+  try {
+   response = await fetch(`${API_BASE_URL}/invoices/${id}/send-email`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+   });
+  } catch (e) {
+   const raw = e instanceof Error ? e.message : "Network error";
+   if (/failed to fetch|networkerror|load failed|network request failed/i.test(raw)) {
+    throw new Error(
+     "Could not reach the server to send email. Check Settings → Email (SMTP), then try Send test email. If that works, try again — a large PDF can time out on the network."
+    );
+   }
+   throw e instanceof Error ? e : new Error("Failed to send invoice email");
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
    throw new Error((data as { message?: string }).message || "Failed to send invoice email");

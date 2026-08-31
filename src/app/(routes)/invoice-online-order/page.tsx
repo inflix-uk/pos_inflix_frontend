@@ -335,7 +335,18 @@ export default function InvoiceOnlineOrderPage() {
   setEmailSending(true);
   setActionError(null);
   try {
-   const { base64, filename } = await getInvoiceA4PdfBase64(invoiceToPrintable(emailTarget));
+   let base64: string;
+   let filename: string;
+   try {
+    ({ base64, filename } = await getInvoiceA4PdfBase64(invoiceToPrintable(emailTarget)));
+   } catch (e) {
+    const msg = e instanceof Error ? e.message : "Failed to build PDF";
+    throw new Error(
+     /failed to fetch|networkerror|load failed/i.test(msg)
+      ? "Could not build the invoice PDF (network error while loading settings). Check your connection and try again."
+      : msg
+    );
+   }
    const res = await invoicesApi.sendInvoiceEmail(emailTarget._id, {
     to,
     pdfBase64: base64,
