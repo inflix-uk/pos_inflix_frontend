@@ -75,7 +75,15 @@ export const useEmailSettings = () => {
  // Handle input changes
  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
   const { name, value } = e.target;
-  setFormData((prev) => ({ ...prev, [name]: value }));
+  setFormData((prev) => {
+   const next = { ...prev, [name]: value };
+   if (name === "smtpPort") {
+    const port = parseInt(value, 10);
+    if (port === 465) next.smtpSecure = "ssl";
+    else if (port === 587 || port === 2525) next.smtpSecure = "tls";
+   }
+   return next;
+  });
  };
 
  // Handle checkbox changes
@@ -182,6 +190,27 @@ export const useEmailSettings = () => {
  const testEmail = async (testEmailAddress: string): Promise<boolean> => {
   setIsTesting(true);
   setMessage({ type: "", text: "" });
+
+  const port = parseInt(formData.smtpPort, 10);
+  if (port === 587 && formData.smtpSecure === "ssl") {
+   setMessage({
+    type: "error",
+    text: "Port 587 requires TLS encryption (not SSL). Encryption has been corrected — try Test Email again.",
+   });
+   setFormData((prev) => ({ ...prev, smtpSecure: "tls" }));
+   setIsTesting(false);
+   return false;
+  }
+  if (port === 465 && formData.smtpSecure === "tls") {
+   setMessage({
+    type: "error",
+    text: "Port 465 requires SSL encryption (not TLS). Encryption has been corrected — try Test Email again.",
+   });
+   setFormData((prev) => ({ ...prev, smtpSecure: "ssl" }));
+   setIsTesting(false);
+   return false;
+  }
+
   try {
    const response = await emailSettingsApi.testEmail(testEmailAddress, formData);
 

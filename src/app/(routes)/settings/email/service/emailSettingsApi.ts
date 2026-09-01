@@ -111,6 +111,7 @@ export const emailSettingsApi = {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(45000),
    });
    const raw = await response.text();
    let data: ApiResponse = { success: false };
@@ -134,9 +135,14 @@ export const emailSettingsApi = {
    return data;
   } catch (e) {
    const raw = e instanceof Error ? e.message : "Network error";
+   if (e instanceof Error && e.name === "TimeoutError") {
+    throw new Error(
+     "The test email request timed out. Check SMTP host/port and encryption (587 + TLS or 465 + SSL). Your server may also block outbound SMTP."
+    );
+   }
    if (/failed to fetch|networkerror|load failed|network request failed/i.test(raw)) {
     throw new Error(
-     "Could not reach the API to send a test email. Redeploy the backend, then try again. If this persists, SMTP may be blocked from your server."
+     "Could not reach the server (connection dropped or timed out). Redeploy the backend if you have not yet, then try 587 + TLS or 465 + SSL. Outbound SMTP may be blocked on your hosting server."
     );
    }
    throw e instanceof Error ? e : new Error("Failed to test email settings");
