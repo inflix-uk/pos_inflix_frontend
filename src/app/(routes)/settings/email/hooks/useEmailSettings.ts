@@ -61,12 +61,13 @@ export const useEmailSettings = () => {
   fetchSettings();
  }, [fetchSettings]);
 
- // Clear message after 5 seconds
+ // Clear message after delay (longer for errors so SMTP details can be read)
  useEffect(() => {
   if (message.text) {
+   const delay = message.type === "error" ? 20000 : 5000;
    const timer = setTimeout(() => {
     setMessage({ type: "", text: "" });
-   }, 5000);
+   }, delay);
    return () => clearTimeout(timer);
   }
  }, [message]);
@@ -182,7 +183,7 @@ export const useEmailSettings = () => {
   setIsTesting(true);
   setMessage({ type: "", text: "" });
   try {
-   const response = await emailSettingsApi.testEmail(testEmailAddress);
+   const response = await emailSettingsApi.testEmail(testEmailAddress, formData);
 
    if (response.success) {
     setMessage({ type: "success", text: response.message || "Test email sent successfully" });

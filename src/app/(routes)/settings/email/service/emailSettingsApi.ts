@@ -90,21 +90,48 @@ export const emailSettingsApi = {
  /**
   * Test email settings
   */
- testEmail: async (testEmail: string): Promise<ApiResponse> => {
+ testEmail: async (
+  testEmailAddress: string,
+  form?: Partial<EmailFormData>
+ ): Promise<ApiResponse> => {
   try {
+   const payload: Record<string, unknown> = { testEmail: testEmailAddress };
+   if (form) {
+    payload.smtpHost = form.smtpHost;
+    payload.smtpPort = form.smtpPort ? parseInt(form.smtpPort, 10) : undefined;
+    payload.smtpSecure = form.smtpSecure;
+    payload.smtpUsername = form.smtpUsername;
+    payload.smtpPassword = form.smtpPassword;
+    payload.fromEmail = form.fromEmail;
+    payload.fromName = form.fromName;
+    payload.replyToEmail = form.replyToEmail;
+    payload.replyToName = form.replyToName;
+   }
    const response = await fetch(`${API_URL}/api/settings/email/test`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ testEmail }),
+    body: JSON.stringify(payload),
    });
-   const data = await response.json().catch(() => ({}));
+   const raw = await response.text();
+   let data: ApiResponse = { success: false };
+   try {
+    data = raw ? JSON.parse(raw) : { success: false };
+   } catch {
+    const snippet = raw.replace(/\s+/g, " ").trim().slice(0, 180);
+    return {
+     success: false,
+     message: snippet
+      ? `Server error (${response.status}): ${snippet}`
+      : `Server error (${response.status}). The request may have timed out — check SMTP host/port and that outbound mail is allowed on your server.`,
+    };
+   }
    if (!response.ok) {
     return {
      success: false,
-     message: (data as { message?: string }).message || "Failed to send test email",
+     message: data.message || `Failed to send test email (HTTP ${response.status})`,
     };
    }
-   return data as ApiResponse;
+   return data;
   } catch (e) {
    const raw = e instanceof Error ? e.message : "Network error";
    if (/failed to fetch|networkerror|load failed|network request failed/i.test(raw)) {

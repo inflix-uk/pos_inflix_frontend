@@ -98,6 +98,9 @@ export const EmailForm: React.FC<EmailFormProps> = ({
   <option value="tls">TLS (Recommended)</option>
   <option value="ssl">SSL</option>
   </select>
+  <p className="text-xs text-gray-500 mt-1">
+  Use port <strong>587 + TLS</strong> or <strong>465 + SSL</strong>. If one fails, try the other.
+  </p>
   </div>
 
   {/* SMTP Username */}
