@@ -14,6 +14,11 @@ export interface SmtpSettings {
   replyToName?: string;
 }
 
+function isMaskedPassword(value: string | undefined): boolean {
+  const p = String(value || "").trim();
+  return !p || p === "********" || /^[*•]+$/.test(p);
+}
+
 function normalizeSmtpSecure(port: number, mode: string): "none" | "ssl" | "tls" {
   const m = (mode || "tls").toLowerCase();
   if (port === 465) return "ssl";
@@ -58,9 +63,9 @@ function transportOptions(settings: SmtpSettings) {
       user: settings.smtpUsername,
       pass: settings.smtpPassword,
     },
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 12000,
+    connectionTimeout: 6000,
+    greetingTimeout: 6000,
+    socketTimeout: 10000,
     tls: {
       servername: host,
       minVersion: "TLSv1.2" as const,
@@ -130,11 +135,11 @@ export async function sendTestEmail(settings: SmtpSettings, to: string): Promise
   if (!settings.smtpHost?.trim() || !settings.smtpUsername?.trim() || !settings.fromEmail?.trim()) {
     throw new Error("Email is not configured. Fill in SMTP host, username, and from email, then save.");
   }
-  if (!settings.smtpPassword?.trim()) {
-    throw new Error("SMTP password is required. Re-enter your password and save settings, then test again.");
+  if (!settings.smtpPassword?.trim() || isMaskedPassword(settings.smtpPassword)) {
+    throw new Error("SMTP password is required. Re-enter your password, click Save settings, then test again.");
   }
 
-  await probeSmtpReachability(settings, 7000).catch((err) => {
+  await probeSmtpReachability(settings, 5000).catch((err) => {
     throw new Error(formatSmtpError(err, settings));
   });
 
@@ -149,7 +154,7 @@ export async function sendTestEmail(settings: SmtpSettings, to: string): Promise
         text: "This is a test email to verify your email settings are working correctly.",
         html: "<p>This is a test email to verify your email settings are working correctly.</p>",
       }),
-      14000,
+      12000,
       formatSmtpError(new Error("ETIMEDOUT"), settings)
     );
   } catch (err) {

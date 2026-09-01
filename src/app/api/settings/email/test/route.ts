@@ -55,9 +55,14 @@ async function verifyAuth(auth: string, tenantId?: string): Promise<boolean> {
   }
 }
 
-async function loadStoredSettings(auth: string, tenantId?: string): Promise<Partial<SmtpSettings> | null> {
+function isMaskedPassword(value: string | undefined): boolean {
+  const p = String(value || "").trim();
+  return !p || p === "********" || /^[*•]+$/.test(p);
+}
+
+async function loadSmtpSecrets(auth: string, tenantId?: string): Promise<Partial<SmtpSettings> | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/settings/email`, {
+    const res = await fetch(`${API_BASE}/api/settings/email/smtp-secrets`, {
       headers: backendHeaders(auth, tenantId),
       cache: "no-store",
       signal: AbortSignal.timeout(8000),
@@ -75,8 +80,12 @@ function buildSettings(body: TestBody, stored: Partial<SmtpSettings> | null): Sm
   const port = typeof portRaw === "string" ? parseInt(portRaw, 10) : Number(portRaw);
   const formPassword = String(body.smtpPassword || "").trim();
   const storedPassword = String(stored?.smtpPassword || "").trim();
-  const password =
-    formPassword && formPassword !== "********" ? formPassword : storedPassword;
+  let password = "";
+  if (!isMaskedPassword(formPassword)) {
+    password = formPassword;
+  } else if (!isMaskedPassword(storedPassword)) {
+    password = storedPassword;
+  }
 
   return {
     smtpHost: String(body.smtpHost ?? stored?.smtpHost ?? "").trim(),
@@ -98,10 +107,6 @@ export async function POST(req: NextRequest) {
   }
 
   const tenantId = tenantIdFromRequest(req);
-  const ok = await verifyAuth(auth, tenantId);
-  if (!ok) {
-    return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
-  }
 
   let body: TestBody;
   try {
@@ -115,7 +120,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: "Enter a valid test email address" }, { status: 400 });
   }
 
-  const stored = await loadStoredSettings(auth, tenantId);
+  const [ok, stored] = await Promise.all([
+    verifyAuth(auth, tenantId),
+    loadSmtpSecrets(auth, tenantId),
+  ]);
+  if (!ok) {
+    return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+  }
+
   const settings = buildSettings(body, stored);
 
   try {
@@ -126,6 +138,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to send test email";
-    return NextResponse.json({ success: false, message }, { status: 502 });
+    // HTTP 200 so Cloudflare/proxies do not replace JSON with an HTML 502 page.
+    return NextResponse.json({ success: false, message });
   }
 }

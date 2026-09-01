@@ -127,10 +127,16 @@ export const emailSettingsApi = {
         `Failed to send test email (HTTP ${response.status}).`,
     };
    }
-   if (!response.ok) {
+   if (!response.ok && !data.message) {
     return {
      success: false,
-     message: data.message || `Failed to send test email (HTTP ${response.status})`,
+     message: `Failed to send test email (HTTP ${response.status})`,
+    };
+   }
+   if (!data.success) {
+    return {
+     success: false,
+     message: data.message || "Failed to send test email",
     };
    }
    return data;
