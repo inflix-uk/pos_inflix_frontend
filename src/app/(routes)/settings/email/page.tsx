@@ -35,8 +35,8 @@ const EmailSettingsPage = () => {
  };
 
  const handleTestEmail = async (email: string) => {
- await testEmail(email);
- setShowTestModal(false);
+  const ok = await testEmail(email);
+  if (ok) setShowTestModal(false);
  };
 
  const handleDeleteClick = () => {

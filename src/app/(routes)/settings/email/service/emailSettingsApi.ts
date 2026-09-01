@@ -97,16 +97,22 @@ export const emailSettingsApi = {
     headers: getAuthHeaders(),
     body: JSON.stringify({ testEmail }),
    });
-   const data = await response.json();
+   const data = await response.json().catch(() => ({}));
    if (!response.ok) {
     return {
      success: false,
-     message: data.message || "Failed to send test email",
+     message: (data as { message?: string }).message || "Failed to send test email",
     };
    }
-   return data;
-  } catch {
-   throw new Error("Failed to test email settings");
+   return data as ApiResponse;
+  } catch (e) {
+   const raw = e instanceof Error ? e.message : "Network error";
+   if (/failed to fetch|networkerror|load failed|network request failed/i.test(raw)) {
+    throw new Error(
+     "Could not reach the API to send a test email. Redeploy the backend, then try again. If this persists, SMTP may be blocked from your server."
+    );
+   }
+   throw e instanceof Error ? e : new Error("Failed to test email settings");
   }
  },
 };

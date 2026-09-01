@@ -177,19 +177,25 @@ export const useEmailSettings = () => {
   }
  };
 
- // Test email settings
- const testEmail = async (testEmailAddress: string) => {
+ // Test email settings — returns true when sent successfully.
+ const testEmail = async (testEmailAddress: string): Promise<boolean> => {
   setIsTesting(true);
+  setMessage({ type: "", text: "" });
   try {
    const response = await emailSettingsApi.testEmail(testEmailAddress);
 
    if (response.success) {
     setMessage({ type: "success", text: response.message || "Test email sent successfully" });
-   } else {
-    setMessage({ type: "error", text: response.message || "Failed to send test email" });
+    return true;
    }
-  } catch {
-   setMessage({ type: "error", text: "Failed to send test email" });
+   setMessage({ type: "error", text: response.message || "Failed to send test email" });
+   return false;
+  } catch (e) {
+   setMessage({
+    type: "error",
+    text: e instanceof Error ? e.message : "Failed to send test email",
+   });
+   return false;
   } finally {
    setIsTesting(false);
   }
