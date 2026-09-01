@@ -118,12 +118,13 @@ export const emailSettingsApi = {
    try {
     data = raw ? JSON.parse(raw) : { success: false };
    } catch {
-    const snippet = raw.replace(/\s+/g, " ").trim().slice(0, 180);
+    const isHtml = /<!doctype|<html/i.test(raw);
     return {
      success: false,
-     message: snippet
-      ? `Server error (${response.status}): ${snippet}`
-      : `Server error (${response.status}). The request may have timed out — check SMTP host/port and that outbound mail is allowed on your server.`,
+     message: isHtml
+      ? `Email test failed (HTTP ${response.status}). The mail server may be unreachable from your server — try 587 + TLS, re-save your password, or use an email relay.`
+      : raw.replace(/\s+/g, " ").trim().slice(0, 200) ||
+        `Failed to send test email (HTTP ${response.status}).`,
     };
    }
    if (!response.ok) {
