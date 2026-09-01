@@ -107,11 +107,11 @@ export const emailSettingsApi = {
     payload.replyToEmail = form.replyToEmail;
     payload.replyToName = form.replyToName;
    }
-   const response = await fetch(`${API_URL}/api/settings/email/test`, {
+   const response = await fetch("/api/settings/email/test", {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(45000),
+    signal: AbortSignal.timeout(25000),
    });
    const raw = await response.text();
    let data: ApiResponse = { success: false };
