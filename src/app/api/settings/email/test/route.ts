@@ -37,7 +37,10 @@ export async function POST(req: NextRequest) {
     "Content-Type": "application/json",
     Authorization: auth,
   };
-  if (tenantId) headers["X-Tenant-Id"] = tenantId;
+  if (tenantId) {
+    headers["X-Tenant-Id"] = tenantId;
+    headers["Origin"] = `https://${tenantId}.inflix.uk`;
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20000);
