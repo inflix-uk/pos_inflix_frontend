@@ -148,8 +148,8 @@ export default function ProductsPage() {
  row.brand,
  row.brandModel,
  row.capacity,
- row.sku,
  row.barcode,
+ row.imei,
  ]
  .filter(Boolean)
  .map((s) => String(s).toLowerCase())
