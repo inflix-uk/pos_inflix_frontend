@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { Package, List, ShoppingBag, DollarSign, FileSpreadsheet, FileText } from "lucide-react";
+import { Package, List, ShoppingBag, DollarSign, FileSpreadsheet, FileText, Search, X } from "lucide-react";
 import { useStockView } from "../../stock/view/hooks/useStockView";
 import { stockViewApi } from "../../stock/view/services/stockViewApi";
 import { useStockList } from "../../stock/stock-1/hooks/useStockList";
@@ -111,6 +111,7 @@ export default function ProductsPage() {
 
  const [rateListRows, setRateListRows] = useState<typeof filteredRows>([]);
  const [rateListLoading, setRateListLoading] = useState(false);
+ const [rateListSearch, setRateListSearch] = useState("");
  const fetchRateListRows = useCallback(async () => {
  setRateListLoading(true);
  try {
@@ -135,6 +136,27 @@ export default function ProductsPage() {
  useEffect(() => {
  if (activeTab === "rate-list") fetchRateListRows();
  }, [activeTab, fetchRateListRows]);
+
+ const filteredRateListRows = useMemo(() => {
+ const q = rateListSearch.trim().toLowerCase();
+ if (!q) return rateListRows;
+ return rateListRows.filter((row) => {
+ const haystack = [
+ row.name,
+ row.category,
+ row.grade,
+ row.brand,
+ row.brandModel,
+ row.capacity,
+ row.sku,
+ row.barcode,
+ ]
+ .filter(Boolean)
+ .map((s) => String(s).toLowerCase())
+ .join(" ");
+ return haystack.includes(q);
+ });
+ }, [rateListRows, rateListSearch]);
 
  const handleQuantityChange = useCallback(
  async (purchaseId: string, itemId: string, quantity: number) => {
@@ -243,7 +265,7 @@ export default function ProductsPage() {
  else if (activeTab === "products") setStatusFilter("available");
  }, [activeTab, setStatusFilter]);
 
- const rateListItems = useMemo(() => groupRowsByVariant(rateListRows), [rateListRows]);
+ const rateListItems = useMemo(() => groupRowsByVariant(filteredRateListRows), [filteredRateListRows]);
 
  const [isExportingRateList, setIsExportingRateList] = useState(false);
  const exportRateListAsExcel = useCallback(() => {
@@ -574,17 +596,38 @@ export default function ProductsPage() {
 
  {activeTab === "rate-list" && (
  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[560px] flex flex-col">
-  <div className="flex-shrink-0 flex items-center justify-between gap-4 px-5 py-4 border-b border-gray-200 bg-gray-50/50">
-  <div className="flex items-center gap-3">
+  <div className="flex-shrink-0 flex flex-wrap items-center justify-between gap-4 px-5 py-4 border-b border-gray-200 bg-gray-50/50">
+  <div className="flex items-center gap-3 min-w-0">
   <div className="p-2 rounded-lg bg-orange-100">
   <DollarSign className="h-5 w-5 text-orange-600" />
   </div>
-  <div>
+  <div className="min-w-0">
   <h2 className="text-lg font-semibold text-gray-900">Rate list</h2>
   <p className="text-xs text-gray-500 mt-0.5">Update sale prices by SKU — serial items grouped by purchase line</p>
   </div>
   </div>
-  <div className="flex items-center gap-2">
+  <div className="flex flex-wrap items-center gap-2">
+  <div className="relative">
+  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+  <input
+  type="search"
+  value={rateListSearch}
+  onChange={(e) => setRateListSearch(e.target.value)}
+  placeholder="Search by name…"
+  aria-label="Search rate list by name"
+  className="pl-9 pr-8 py-2 w-56 sm:w-64 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+  />
+  {rateListSearch.trim() ? (
+  <button
+  type="button"
+  onClick={() => setRateListSearch("")}
+  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600"
+  aria-label="Clear search"
+  >
+  <X className="h-4 w-4" />
+  </button>
+  ) : null}
+  </div>
   <button
   type="button"
   onClick={exportRateListAsExcel}
@@ -619,9 +662,14 @@ export default function ProductsPage() {
   </button>
   </div>
   </div>
+  {rateListSearch.trim() ? (
+  <div className="flex-shrink-0 px-5 py-2 border-b border-gray-100 bg-white text-xs text-gray-500">
+  Showing {rateListItems.length} match{rateListItems.length === 1 ? "" : "es"} for “{rateListSearch.trim()}”
+  </div>
+  ) : null}
   <div className="flex-1 overflow-auto p-5">
   <ProductsRateTable
-  rows={rateListRows}
+  rows={filteredRateListRows}
   isLoading={rateListLoading}
   onSalePriceChange={handleRateListSalePriceChange}
   refetch={async () => {
