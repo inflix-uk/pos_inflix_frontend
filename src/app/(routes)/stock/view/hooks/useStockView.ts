@@ -49,6 +49,11 @@ export function useStockView() {
  }>({ categories: [], brands: [], brandModels: [], capacities: [], colours: [], locations: [] });
 
  const [soldInfoMap, setSoldInfoMap] = useState<Record<string, { customerName: string; saleReference: string; saleId?: string }>>({});
+ const [stockValue, setStockValue] = useState<{ serial: number; nonSerial: number; currency: string }>({
+  serial: 0,
+  nonSerial: 0,
+  currency: "GBP",
+ });
 
  const fetchStock = useCallback(async () => {
   const seq = ++fetchSeqRef.current;
@@ -79,6 +84,7 @@ export function useStockView() {
     setRows([]);
     setTotalRows(0);
     setTotalPages(1);
+    setStockValue({ serial: 0, nonSerial: 0, currency: "GBP" });
     setError(data.message || "Failed to load stock");
     return;
    }
@@ -86,6 +92,15 @@ export function useStockView() {
    setRows(data.data);
    setTotalRows(data.total ?? data.data.length);
    setTotalPages(data.pages ?? 1);
+   if (data.stockValue) {
+    setStockValue({
+     serial: Number(data.stockValue.serial) || 0,
+     nonSerial: Number(data.stockValue.nonSerial) || 0,
+     currency: data.stockValue.currency || "GBP",
+    });
+   } else {
+    setStockValue({ serial: 0, nonSerial: 0, currency: "GBP" });
+   }
    if (data.filterOptions) {
     setFilterOptions({
      ...data.filterOptions,
@@ -415,6 +430,7 @@ export function useStockView() {
   rows,
   filteredRows,
   totalRows,
+  stockValue,
   soldInfoMap,
   statusFilter,
   setStatusFilter: setStatusFilterAndResetPage,

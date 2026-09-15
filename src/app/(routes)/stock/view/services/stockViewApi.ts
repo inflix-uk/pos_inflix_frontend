@@ -93,6 +93,11 @@ export interface StockViewRowsResponse {
  total?: number;
  page?: number;
  pages?: number;
+ stockValue?: {
+  serial: number;
+  nonSerial: number;
+  currency?: string;
+ };
  filterOptions?: {
   categories: string[];
   brands: string[];

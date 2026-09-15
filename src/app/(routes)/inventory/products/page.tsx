@@ -66,6 +66,7 @@ export default function ProductsPage() {
  const {
  filteredRows,
  totalRows,
+ stockValue,
  soldInfoMap,
  statusFilter,
  setStatusFilter,
@@ -422,6 +423,9 @@ export default function ProductsPage() {
   onExportPdf={exportAllAsPdf}
   isExporting={isExportingStock}
   totalCount={totalRows}
+  serialStockValue={stockValue.serial}
+  nonSerialStockValue={stockValue.nonSerial}
+  stockValueCurrency={stockValue.currency}
   />
 
   <div ref={tableScrollRef} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

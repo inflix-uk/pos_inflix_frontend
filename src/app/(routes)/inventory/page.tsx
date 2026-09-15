@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
  Package,
@@ -11,6 +11,7 @@ import {
  QrCode,
  ChevronRight,
 } from "lucide-react";
+import { stockViewApi } from "../stock/view/services/stockViewApi";
 
 interface InventoryItem {
  title: string;
@@ -72,11 +73,65 @@ const inventoryItems: InventoryItem[] = [
  },
 ];
 
+function formatStockMoney(amount: number, currency = "GBP"): string {
+ try {
+  return new Intl.NumberFormat("en-GB", {
+   style: "currency",
+   currency: currency || "GBP",
+   minimumFractionDigits: 2,
+   maximumFractionDigits: 2,
+  }).format(amount || 0);
+ } catch {
+  return `${currency || "GBP"} ${(amount || 0).toFixed(2)}`;
+ }
+}
+
 const InventoryPage = () => {
+ const [stockValue, setStockValue] = useState<{
+  serial: number;
+  nonSerial: number;
+  currency: string;
+ }>({ serial: 0, nonSerial: 0, currency: "GBP" });
+ const [stockValueLoading, setStockValueLoading] = useState(true);
+
+ useEffect(() => {
+  let cancelled = false;
+  (async () => {
+   setStockValueLoading(true);
+   try {
+    const res = await stockViewApi.getStockViewRows({
+     page: 1,
+     limit: 1,
+     excludeSold: true,
+     statusFilter: "available",
+     productType: "all",
+    });
+    if (cancelled) return;
+    if (res.success && res.stockValue) {
+     setStockValue({
+      serial: Number(res.stockValue.serial) || 0,
+      nonSerial: Number(res.stockValue.nonSerial) || 0,
+      currency: res.stockValue.currency || "GBP",
+     });
+    } else {
+     setStockValue({ serial: 0, nonSerial: 0, currency: "GBP" });
+    }
+   } catch {
+    if (!cancelled) setStockValue({ serial: 0, nonSerial: 0, currency: "GBP" });
+   } finally {
+    if (!cancelled) setStockValueLoading(false);
+   }
+  })();
+  return () => {
+   cancelled = true;
+  };
+ }, []);
+
  return (
  <div className="@container min-h-screen bg-gray-50 p-3 @[640px]:p-4 @[768px]:p-6">
  {/* Page Header */}
  <div className="mb-4 @[640px]:mb-5 @[768px]:mb-6">
+ <div className="flex flex-col gap-3 @[768px]:flex-row @[768px]:items-start @[768px]:justify-between">
  <div className="flex items-center gap-2 @[640px]:gap-3">
   <div className="p-1.5 @[640px]:p-2 bg-orange-100 rounded-lg">
   <Package className="h-5 w-5 @[640px]:h-6 @[640px]:w-6 text-orange-500" />
@@ -87,6 +142,25 @@ const InventoryPage = () => {
   Manage products, categories, and inventory settings
   </p>
   </div>
+ </div>
+ <div className="flex flex-wrap items-stretch gap-2 @[640px]:gap-3">
+  <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 @[640px]:px-4 @[640px]:py-2.5 min-w-[150px]">
+  <p className="text-[10px] @[640px]:text-xs font-medium uppercase tracking-wide text-gray-500">
+   Serial stock value
+  </p>
+  <p className="mt-0.5 text-sm @[640px]:text-base font-semibold text-gray-900 tabular-nums">
+   {stockValueLoading ? "…" : formatStockMoney(stockValue.serial, stockValue.currency)}
+  </p>
+  </div>
+  <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 @[640px]:px-4 @[640px]:py-2.5 min-w-[150px]">
+  <p className="text-[10px] @[640px]:text-xs font-medium uppercase tracking-wide text-gray-500">
+   Non-serial stock value
+  </p>
+  <p className="mt-0.5 text-sm @[640px]:text-base font-semibold text-gray-900 tabular-nums">
+   {stockValueLoading ? "…" : formatStockMoney(stockValue.nonSerial, stockValue.currency)}
+  </p>
+  </div>
+ </div>
  </div>
  </div>
 
