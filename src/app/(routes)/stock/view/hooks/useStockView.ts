@@ -13,7 +13,8 @@ export function empty(v: string | number | undefined | null): string | number {
  return v;
 }
 
-export function useStockView() {
+export function useStockView(options?: { enabled?: boolean }) {
+ const enabled = options?.enabled !== false;
  const [rows, setRows] = useState<StockViewRow[]>([]);
  const [totalRows, setTotalRows] = useState(0);
  const [isLoading, setIsLoading] = useState(true);
@@ -147,12 +148,18 @@ export function useStockView() {
  ]);
 
  useEffect(() => {
+  if (!enabled) {
+   setIsLoading(false);
+   setIsFetching(false);
+   return;
+  }
   fetchStock();
- }, [fetchStock]);
+ }, [fetchStock, enabled]);
 
  // Re-fetch when the tab regains focus or becomes visible, so qty reflects sales
  // made in another tab (e.g. /create-sales). Without this, stock looks stale.
  useEffect(() => {
+  if (!enabled) return;
   const onVisible = () => {
    if (document.visibilityState === "visible") fetchStock();
   };
@@ -163,13 +170,14 @@ export function useStockView() {
    document.removeEventListener("visibilitychange", onVisible);
    window.removeEventListener("focus", onFocus);
   };
- }, [fetchStock]);
+ }, [fetchStock, enabled]);
 
  // Live cross-tab refresh: re-fetch the moment a sale (or other inventory write) lands
  // in any tab, even if this tab is in the background and never receives a focus event.
  useEffect(() => {
+  if (!enabled) return;
   return onInventoryEvent(() => fetchStock());
- }, [fetchStock]);
+ }, [fetchStock, enabled]);
 
  const handlePageChange = useCallback((page: number) => {
   setCurrentPage(page);

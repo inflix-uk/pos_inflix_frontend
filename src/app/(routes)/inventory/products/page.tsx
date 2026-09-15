@@ -62,7 +62,9 @@ export default function ProductsPage() {
  [router, pathname, searchParams]
  );
 
- const stockView = useStockView();
+ const stockView = useStockView({
+  enabled: activeTab === "products" || activeTab === "sold",
+ });
  const {
  filteredRows,
  totalRows,
