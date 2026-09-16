@@ -41,6 +41,18 @@ export const CreatableSearchableSelect: React.FC<CreatableSearchableSelectProps>
  const triggerRef = useRef<HTMLDivElement>(null);
  const inputRef = useRef<HTMLInputElement>(null);
  const listRef = useRef<HTMLUListElement>(null);
+ /** Avoid re-opening when we focus the trigger after select / Escape. */
+ const suppressOpenOnFocusRef = useRef(false);
+ /** Pointer click focuses then clicks — let onClick toggle; keyboard Tab should auto-open. */
+ const pointerInteractionRef = useRef(false);
+
+ const focusTriggerQuietly = () => {
+ suppressOpenOnFocusRef.current = true;
+ triggerRef.current?.focus();
+ requestAnimationFrame(() => {
+  suppressOpenOnFocusRef.current = false;
+ });
+ };
 
  const selectedOption = options.find((o) => o._id === value);
 
@@ -130,7 +142,7 @@ export const CreatableSearchableSelect: React.FC<CreatableSearchableSelectProps>
  if (newId) {
   onChange(newId);
   closeList();
-  queueMicrotask(() => triggerRef.current?.focus());
+  queueMicrotask(focusTriggerQuietly);
  } else {
   setCreateError("Failed to create. Check console or try again.");
  }
@@ -144,7 +156,7 @@ export const CreatableSearchableSelect: React.FC<CreatableSearchableSelectProps>
  setCreateError(null);
  onChange(id);
  closeList();
- queueMicrotask(() => triggerRef.current?.focus());
+ queueMicrotask(focusTriggerQuietly);
  };
 
  const handleNewOptionMouseDown = (e: React.MouseEvent) => {
@@ -191,8 +203,17 @@ export const CreatableSearchableSelect: React.FC<CreatableSearchableSelectProps>
  if (e.key === "Escape") {
  e.preventDefault();
  closeList();
- triggerRef.current?.focus();
+ queueMicrotask(focusTriggerQuietly);
  }
+ };
+
+ const handleTriggerFocus = () => {
+ if (disabled || suppressOpenOnFocusRef.current || isOpen) return;
+ if (pointerInteractionRef.current) {
+  pointerInteractionRef.current = false;
+  return;
+ }
+ setIsOpen(true);
  };
 
  const handleTriggerKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -202,9 +223,18 @@ export const CreatableSearchableSelect: React.FC<CreatableSearchableSelectProps>
  setIsOpen(true);
  return;
  }
- if (e.key === "Tab") {
- // Natural tab order via focusAdjacentField when needed; allow default
+ // Start typing immediately without an extra click — open and seed the search.
+ if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+ e.preventDefault();
+ setSearch(e.key);
+ setCreateError(null);
+ setIsOpen(true);
  return;
+ }
+ if (e.key === "Backspace") {
+ e.preventDefault();
+ setSearch("");
+ setIsOpen(true);
  }
  };
 
@@ -224,7 +254,11 @@ export const CreatableSearchableSelect: React.FC<CreatableSearchableSelectProps>
  aria-haspopup="listbox"
  aria-disabled={disabled}
  tabIndex={disabled ? -1 : 0}
- onClick={() => !disabled && setIsOpen(!isOpen)}
+ onPointerDown={() => {
+  pointerInteractionRef.current = true;
+ }}
+ onClick={() => !disabled && setIsOpen((open) => !open)}
+ onFocus={handleTriggerFocus}
  onKeyDown={handleTriggerKeyDown}
  className={`flex items-center w-full pl-8 pr-8 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${disabled ? "cursor-not-allowed bg-gray-50 opacity-90" : "cursor-pointer"}`}
  >
