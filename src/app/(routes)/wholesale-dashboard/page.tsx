@@ -1143,15 +1143,15 @@ const Page = () => {
    placeholder={retailModeEnabled ? "Walk-in Customer" : "Customer *"}
    onAddCustomerClick={() => setAddCustomerModalOpen(true)}
    compact
-   className={retailModeEnabled ? "ml-auto min-w-[160px] @[640px]:min-w-[180px] max-w-[220px] @[768px]:max-w-[240px]" : "min-w-[90px] @[640px]:min-w-[110px] max-w-[140px] @[768px]:max-w-[160px]"}
+   className={retailModeEnabled ? "ml-auto shrink-0" : "shrink-0"}
   />
   {locations.length > 0 && (
-   <div className="relative shrink-0 h-7 @[640px]:h-8">
+   <div className="relative shrink-0 h-7 @[640px]:h-8 z-0">
    <MapPin className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-500" />
    <select
     value={selectedLocationId ?? ""}
     onChange={(e) => handleLocationChange(e.target.value)}
-    className={`h-full appearance-none rounded-md border border-gray-300 bg-white pl-6 pr-5 text-[11px] @[640px]:text-xs font-medium text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${retailModeEnabled ? "min-w-[120px] @[640px]:min-w-[140px]" : ""}`}
+    className={`h-full appearance-none rounded-md border border-gray-300 bg-white pl-6 pr-5 text-[11px] @[640px]:text-xs font-medium text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-[9rem] @[640px]:max-w-[11rem] truncate ${retailModeEnabled ? "min-w-[7.5rem]" : "min-w-[6.5rem]"}`}
     aria-label="Sale location"
    >
     {locations.map((loc) => (
