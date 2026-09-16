@@ -158,6 +158,7 @@ const CustomerAccountSelectComponent: React.ForwardRefRenderFunction<
   )}
  </div>
  )}
+ <div className={compact && onAddCustomerClick ? "flex items-center gap-1.5" : undefined}>
  <button
  ref={triggerRef}
  type="button"
@@ -192,6 +193,21 @@ const CustomerAccountSelectComponent: React.ForwardRefRenderFunction<
   className={`${compact ? "h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4" : "h-5 w-5"} text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
  />
  </button>
+ {compact && onAddCustomerClick && (
+ <button
+  type="button"
+  onClick={() => {
+  setOpen(false);
+  onAddCustomerClick();
+  }}
+  className="inline-flex items-center justify-center shrink-0 h-8 w-8 @[420px]:h-9 @[420px]:w-9 @[768px]:h-10 @[768px]:w-10 rounded-lg border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 touch-manipulation"
+  title="Add new customer"
+  aria-label="Add new customer"
+ >
+  <UserPlus className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4" />
+ </button>
+ )}
+ </div>
 
  {error && (
  <div className="mt-1 flex items-center gap-2 flex-wrap">
@@ -268,6 +284,22 @@ const CustomerAccountSelectComponent: React.ForwardRefRenderFunction<
   ))
   )}
   </ul>
+  {onAddCustomerClick && (
+  <div className="border-t border-gray-100 p-1.5">
+   <button
+   type="button"
+   onClick={() => {
+   setOpen(false);
+   setSearch("");
+   onAddCustomerClick();
+   }}
+   className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 touch-manipulation min-h-[44px]"
+   >
+   <UserPlus className="h-4 w-4 shrink-0" />
+   Add new customer
+   </button>
+  </div>
+  )}
   </div>
  </>,
  document.body
