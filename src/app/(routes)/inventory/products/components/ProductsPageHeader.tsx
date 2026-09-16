@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { Search, Download, Plus, Package, ChevronDown, FileSpreadsheet, FileText } from "lucide-react";
+import { Search, Download, Plus, Package, ChevronDown, FileSpreadsheet, FileText, MapPin, RefreshCw } from "lucide-react";
 
 export type InventoryStatusFilter = "available" | "sold" | "all";
 export type ProductTypeFilter = "all" | "serial" | "non-serial";
@@ -34,6 +34,12 @@ export interface ProductsPageHeaderProps {
  locationId?: string;
  onLocationChange?: (value: string) => void;
  locationOptions?: { _id: string; name: string }[];
+ dateFrom?: string;
+ onDateFromChange?: (value: string) => void;
+ dateTo?: string;
+ onDateToChange?: (value: string) => void;
+ onRefresh?: () => void;
+ isRefreshing?: boolean;
  onExportCsv?: () => void;
  onExportExcel?: () => void;
  onExportPdf?: () => void;
@@ -85,6 +91,12 @@ export function ProductsPageHeader(props: ProductsPageHeaderProps) {
  locationId = "",
  onLocationChange,
  locationOptions = [],
+ dateFrom = "",
+ onDateFromChange,
+ dateTo = "",
+ onDateToChange,
+ onRefresh,
+ isRefreshing = false,
  onExportCsv,
  onExportExcel,
  onExportPdf,
@@ -138,7 +150,63 @@ export function ProductsPageHeader(props: ProductsPageHeaderProps) {
   </div>
   </div>
  </div>
- <div className="flex items-center gap-2 @[640px]:gap-3 flex-wrap">
+ <div className="flex flex-wrap items-center gap-1.5 @[640px]:gap-2">
+  {(onLocationChange || onDateFromChange || onDateToChange || onRefresh) && (
+  <>
+  {onLocationChange && (
+  <div className="flex items-center gap-1.5">
+  <MapPin className="h-3.5 w-3.5 @[640px]:h-4 @[640px]:w-4 shrink-0 text-gray-500" />
+  <label htmlFor="products-stock-location" className="sr-only">Location</label>
+  <select
+  id="products-stock-location"
+  value={locationId || "all"}
+  onChange={(e) => onLocationChange(e.target.value === "all" ? "" : e.target.value)}
+  disabled={isRefreshing}
+  className="rounded-xl border border-gray-200 px-2.5 @[640px]:px-3 py-1.5 @[640px]:py-2 text-[11px] @[640px]:text-xs font-medium bg-white focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 disabled:opacity-50 min-w-[10rem] max-w-[14rem]"
+  >
+  <option value="all">All locations</option>
+  {locationOptions.map((loc) => (
+   <option key={loc._id} value={loc._id}>{loc.name}</option>
+  ))}
+  </select>
+  </div>
+  )}
+  {onDateFromChange && (
+  <input
+  type="date"
+  value={dateFrom}
+  onChange={(e) => onDateFromChange(e.target.value)}
+  disabled={isRefreshing}
+  className="rounded-xl border border-gray-200 px-2.5 @[640px]:px-3 py-1.5 @[640px]:py-2 text-[11px] @[640px]:text-xs font-medium bg-white focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 disabled:opacity-50"
+  title="From date (purchase/received)"
+  />
+  )}
+  {onDateFromChange && onDateToChange && (
+  <span className="text-gray-400 text-[11px] @[640px]:text-xs">to</span>
+  )}
+  {onDateToChange && (
+  <input
+  type="date"
+  value={dateTo}
+  onChange={(e) => onDateToChange(e.target.value)}
+  disabled={isRefreshing}
+  className="rounded-xl border border-gray-200 px-2.5 @[640px]:px-3 py-1.5 @[640px]:py-2 text-[11px] @[640px]:text-xs font-medium bg-white focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 disabled:opacity-50"
+  title="To date (purchase/received)"
+  />
+  )}
+  {onRefresh && (
+  <button
+  type="button"
+  onClick={onRefresh}
+  disabled={isRefreshing}
+  className="p-1.5 @[640px]:p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+  title="Refresh"
+  >
+  <RefreshCw className={`h-4 w-4 text-gray-600 ${isRefreshing ? "animate-spin" : ""}`} />
+  </button>
+  )}
+  </>
+  )}
   <Link
   href="/inventory/create-product"
   className="inline-flex items-center gap-1.5 @[640px]:gap-2 px-3 @[640px]:px-4 py-1.5 @[640px]:py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-xs @[640px]:text-sm font-medium rounded-lg transition-colors"

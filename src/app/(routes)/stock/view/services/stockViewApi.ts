@@ -84,6 +84,9 @@ export interface GetStockViewRowsParams {
  imei?: string;
  /** Filter stock by location */
  locationId?: string;
+ /** Inclusive purchase/received date range (YYYY-MM-DD) */
+ dateFrom?: string;
+ dateTo?: string;
 }
 
 /** Response shape from GET /api/purchases/stock-view-rows */
@@ -191,6 +194,8 @@ export const stockViewApi = {
    if (params.colour) queryParams.set("colour", params.colour);
    if (params.imei) queryParams.set("imei", params.imei);
    if (params.locationId) queryParams.set("locationId", params.locationId);
+   if (params.dateFrom) queryParams.set("dateFrom", params.dateFrom);
+   if (params.dateTo) queryParams.set("dateTo", params.dateTo);
 
    const response = await fetch(
     `${API_BASE_URL}/purchases/stock-view-rows?${queryParams.toString()}`,

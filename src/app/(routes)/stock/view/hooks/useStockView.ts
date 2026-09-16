@@ -32,6 +32,8 @@ export function useStockView(options?: { enabled?: boolean }) {
  const [colour, setColour] = useState("");
  const [imei, setImei] = useState("");
  const [locationId, setLocationId] = useState("");
+ const [dateFrom, setDateFrom] = useState("");
+ const [dateTo, setDateTo] = useState("");
  /** "available" = only in-stock (backend excludeSold); "sold" = only sold; "all" = show both */
  const [statusFilter, setStatusFilter] = useState<"available" | "sold" | "all">("available");
  /** "all" = both; "serial" = serial/IMEI products only; "non-serial" = other items only */
@@ -76,6 +78,8 @@ export function useStockView(options?: { enabled?: boolean }) {
     colour: colour || undefined,
     imei: imei || undefined,
     locationId: locationId || undefined,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
    });
 
    // Drop stale responses (newer request already fired)
@@ -145,6 +149,8 @@ export function useStockView(options?: { enabled?: boolean }) {
   colour,
   imei,
   locationId,
+  dateFrom,
+  dateTo,
  ]);
 
  useEffect(() => {
@@ -222,6 +228,14 @@ export function useStockView(options?: { enabled?: boolean }) {
  }, []);
  const setLocationIdAndResetPage = useCallback((value: string) => {
   setLocationId(value);
+  setCurrentPage(1);
+ }, []);
+ const setDateFromAndResetPage = useCallback((value: string) => {
+  setDateFrom(value);
+  setCurrentPage(1);
+ }, []);
+ const setDateToAndResetPage = useCallback((value: string) => {
+  setDateTo(value);
   setCurrentPage(1);
  }, []);
  const setStatusFilterAndResetPage = useCallback((value: "available" | "sold" | "all") => {
@@ -365,6 +379,8 @@ export function useStockView(options?: { enabled?: boolean }) {
     colour: colour || undefined,
     imei: imei || undefined,
     locationId: locationId || undefined,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
    });
    const rowsToExport = data.success && Array.isArray(data.data) ? data.data : [];
    const map: Record<string, { customerName: string; saleReference: string; saleId?: string }> = { ...soldInfoMap };
@@ -386,6 +402,8 @@ export function useStockView(options?: { enabled?: boolean }) {
   colour,
   imei,
   locationId,
+  dateFrom,
+  dateTo,
   soldInfoMap,
   exportAsCsv,
  ]);
@@ -405,6 +423,8 @@ export function useStockView(options?: { enabled?: boolean }) {
    colour: colour || undefined,
    imei: imei || undefined,
    locationId: locationId || undefined,
+   dateFrom: dateFrom || undefined,
+   dateTo: dateTo || undefined,
   });
   const rowsToExport = data.success && Array.isArray(data.data) ? data.data : [];
   const map: Record<string, { customerName: string; saleReference: string; saleId?: string }> = { ...soldInfoMap };
@@ -412,7 +432,7 @@ export function useStockView(options?: { enabled?: boolean }) {
    if (r.imei && r.soldInfo) map[(r.imei || "").trim()] = r.soldInfo;
   });
   return { rowsToExport, map };
- }, [statusFilter, productTypeFilter, debouncedSearch, category, brand, brandModel, capacity, colour, imei, locationId, soldInfoMap]);
+ }, [statusFilter, productTypeFilter, debouncedSearch, category, brand, brandModel, capacity, colour, imei, locationId, dateFrom, dateTo, soldInfoMap]);
 
  const exportAllAsExcel = useCallback(async () => {
   setIsExporting(true);
@@ -469,6 +489,10 @@ export function useStockView(options?: { enabled?: boolean }) {
   setImei: setImeiAndResetPage,
   locationId,
   setLocationId: setLocationIdAndResetPage,
+  dateFrom,
+  setDateFrom: setDateFromAndResetPage,
+  dateTo,
+  setDateTo: setDateToAndResetPage,
   categoryOptions,
   brandOptions,
   brandModelOptions,
