@@ -96,10 +96,6 @@ export default function ProductsPage() {
  setImei,
  locationId,
  setLocationId,
- dateFrom,
- setDateFrom,
- dateTo,
- setDateTo,
  categoryOptions,
  brandOptions,
  brandModelOptions,
@@ -420,12 +416,6 @@ export default function ProductsPage() {
   locationId={locationId}
   onLocationChange={setLocationId}
   locationOptions={locationOptions}
-  dateFrom={dateFrom}
-  onDateFromChange={setDateFrom}
-  dateTo={dateTo}
-  onDateToChange={setDateTo}
-  onRefresh={refetchStockView}
-  isRefreshing={stockViewFetching || stockViewLoading}
   statusFilter={statusFilter}
   onStatusFilterChange={setStatusFilter}
   productTypeFilter={productTypeFilter}
