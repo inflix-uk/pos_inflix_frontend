@@ -16,6 +16,9 @@ interface AccountTableProps {
  onCustomerClick?: (row: AccountRow) => void;
 }
 
+const formatBalance = (n: number) =>
+ new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(Math.abs(n));
+
 export const AccountTable: React.FC<AccountTableProps> = ({
  rows,
  isLoading,
@@ -46,7 +49,13 @@ export const AccountTable: React.FC<AccountTableProps> = ({
  if (addr.country) parts.push(addr.country);
  return parts.length > 0 ? parts.join(", ") : "-";
  };
- const getIsActive = (row: AccountRow) => row.data.isActive;
+  const getIsActive = (row: AccountRow) => row.data.isActive;
+ const getCustomerBalance = (row: AccountRow): number | null => {
+  if (row.kind !== "customer") return null;
+  const balance = (row.data as { balance?: number }).balance;
+  if (balance == null || balance === 0) return null;
+  return balance;
+ };
 
  if (isLoading) {
  return (
@@ -96,20 +105,35 @@ export const AccountTable: React.FC<AccountTableProps> = ({
   </td>
   </tr>
   ) : (
-  rows.map((row) => (
+  rows.map((row) => {
+   const balance = getCustomerBalance(row);
+   const isCredit = balance != null && balance < 0;
+   return (
   <tr key={`${row.kind}-${row.id}`} className="hover:bg-gray-50">
   <td className="px-3 @[640px]:px-4 @[768px]:px-6 py-2.5 @[640px]:py-3 @[768px]:py-4 text-xs @[640px]:text-sm font-medium text-gray-900">
+   <div className="flex items-center gap-2 min-w-0">
    {row.kind === "customer" && onCustomerClick ? (
    <button
     type="button"
     onClick={() => onCustomerClick(row)}
-    className="text-left hover:text-orange-600 hover:underline"
+    className="text-left hover:text-orange-600 hover:underline truncate"
    >
     {getCompanyName(row)}
    </button>
    ) : (
-   getCompanyName(row)
+   <span className="truncate">{getCompanyName(row)}</span>
    )}
+   {balance != null && (
+   <span
+    className={`shrink-0 font-medium tabular-nums ${
+    isCredit ? "text-blue-600" : "text-emerald-700"
+    }`}
+    title={isCredit ? "Store credit" : "Outstanding balance"}
+   >
+    ({formatBalance(balance)}{isCredit ? " credit" : ""})
+   </span>
+   )}
+   </div>
   </td>
   <td className="px-3 @[640px]:px-4 @[768px]:px-6 py-2.5 @[640px]:py-3 @[768px]:py-4 text-xs @[640px]:text-sm text-gray-600">{getContactName(row)}</td>
   <td className="px-3 @[640px]:px-4 @[768px]:px-6 py-2.5 @[640px]:py-3 @[768px]:py-4 text-xs @[640px]:text-sm text-gray-600">{getPhone(row)}</td>
@@ -171,7 +195,8 @@ export const AccountTable: React.FC<AccountTableProps> = ({
    </div>
   </td>
   </tr>
-  ))
+  );
+  })
   )}
  </tbody>
  </table>

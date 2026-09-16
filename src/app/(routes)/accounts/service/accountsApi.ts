@@ -101,6 +101,7 @@ export interface ProfitAndLossProductRow {
 export interface ProfitAndLossData {
  from: string;
  to: string;
+ timezone?: string;
  location?: { locationId: string; name: string };
  revenue: number;
  salesRevenue?: number;
