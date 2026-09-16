@@ -41,90 +41,72 @@ export function EmptyCartQuickActions({
  ? "Use the search bar or open the product grid."
  : "Select a customer above to add items.";
 
- const actionBtn =
- "inline-flex min-h-[40px] items-center justify-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold touch-manipulation transition-colors disabled:cursor-not-allowed disabled:opacity-50 @[640px]:min-h-[42px] @[640px]:text-sm";
-
  return (
- <div className="flex h-full min-h-[220px] flex-col">
- {!retailMode && (
- <div className="hidden border-b border-slate-100 bg-slate-50/80 px-3 py-2 @[640px]:grid @[640px]:grid-cols-[minmax(0,1fr)_3.5rem_5rem_5.5rem] @[640px]:gap-2">
-  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Item</span>
-  <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500">Qty</span>
-  <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500">Unit</span>
-  <span className="text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500">Amount</span>
+ <div className="rounded-xl border border-dashed border-gray-200/90 bg-white px-3 py-4 text-center">
+ <div className="flex items-center justify-center gap-2 flex-wrap">
+ <p className="text-sm font-semibold text-gray-800">No items yet</p>
+ <HelpTip ariaLabel="How to add items" contentClassName="text-left" iconClassName="h-4 w-4">
+  {hint}
+ </HelpTip>
  </div>
+ <div className="mx-auto mt-4 grid max-w-md grid-cols-2 gap-3 @[640px]:flex @[640px]:flex-wrap @[640px]:justify-center">
+ <button
+  type="button"
+  onClick={onAddManualItem}
+  disabled={!canAct}
+  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50/90 px-5 py-3 text-sm font-semibold text-neutral-900 hover:bg-neutral-100/90 disabled:cursor-not-allowed disabled:opacity-50"
+  aria-label="Add MISC item"
+ >
+  <Plus className="h-5 w-5 shrink-0" />
+  MISC Item
+ </button>
+ <button
+  type="button"
+  onClick={onFocusAddInput}
+  disabled={!canAct}
+  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+  title={canAct ? "Focus scan/search (Ctrl+K)" : undefined}
+  aria-label="Scan or search to add item"
+ >
+  <ScanLine className="h-5 w-5 shrink-0" />
+  Scan / search
+ </button>
+ {showProductGridAction && !retailMode && (
+  <button
+  type="button"
+  onClick={onShowProducts}
+  disabled={!canAct}
+  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+  aria-label="Show product grid"
+  >
+  <Package className="h-5 w-5 shrink-0" />
+  Products
+  </button>
  )}
-
- <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 py-8 text-center">
-  <div className="flex flex-col items-center gap-1.5">
-  <p className="text-sm font-semibold text-slate-800">No items yet</p>
-  <div className="flex items-center gap-1.5 text-xs text-slate-500">
-   <span>{hint}</span>
-   <HelpTip ariaLabel="How to add items" contentClassName="text-left" iconClassName="h-3.5 w-3.5">
-   {hint}
-   </HelpTip>
-  </div>
-  </div>
-
-  <div className="flex w-full max-w-lg flex-wrap items-center justify-center gap-2">
+ {!retailMode && (
+ <button
+  type="button"
+  onClick={onPasteImeis}
+  disabled={!canAct}
+  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+  title={canAct ? "Bulk IMEIs" : undefined}
+  aria-label="Bulk IMEIs"
+ >
+  <ClipboardList className="h-5 w-5 shrink-0" />
+  Bulk IMEIs
+ </button>
+ )}
+ {showDraftActions && hasDrafts && !retailMode && (
   <button
-   type="button"
-   onClick={onFocusAddInput}
-   disabled={!canAct}
-   className={`${actionBtn} border-blue-600 bg-blue-600 text-white hover:bg-blue-700`}
-   title={canAct ? "Focus scan/search (Ctrl+K)" : undefined}
-   aria-label="Scan or search to add item"
+  type="button"
+  onClick={onLoadDraft}
+  className="col-span-2 inline-flex min-h-[52px] items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50/80 px-5 py-3 text-sm font-semibold text-neutral-900 hover:bg-neutral-100 @[640px]:col-span-1"
+  aria-label="Load draft"
   >
-   <ScanLine className="h-4 w-4 shrink-0" />
-   Scan / search
+  <FileText className="h-5 w-5 shrink-0" />
+  Load draft
   </button>
-  <button
-   type="button"
-   onClick={onAddManualItem}
-   disabled={!canAct}
-   className={`${actionBtn} border-slate-200 bg-white text-slate-800 hover:bg-slate-50`}
-   aria-label="Add MISC item"
-  >
-   <Plus className="h-4 w-4 shrink-0" />
-   MISC item
-  </button>
-  {showProductGridAction && !retailMode && (
-   <button
-   type="button"
-   onClick={onShowProducts}
-   disabled={!canAct}
-   className={`${actionBtn} border-slate-200 bg-white text-slate-800 hover:bg-slate-50`}
-   aria-label="Show product grid"
-   >
-   <Package className="h-4 w-4 shrink-0" />
-   Products
-   </button>
-  )}
-  {!retailMode && (
-   <button
-   type="button"
-   onClick={onPasteImeis}
-   disabled={!canAct}
-   className={`${actionBtn} border-slate-200 bg-white text-slate-800 hover:bg-slate-50`}
-   title={canAct ? "Bulk IMEIs" : undefined}
-   aria-label="Bulk IMEIs"
-   >
-   <ClipboardList className="h-4 w-4 shrink-0" />
-   Bulk IMEIs
-   </button>
-  )}
-  {showDraftActions && hasDrafts && !retailMode && (
-   <button
-   type="button"
-   onClick={onLoadDraft}
-   className={`${actionBtn} border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100`}
-   aria-label="Load draft"
-   >
-   <FileText className="h-4 w-4 shrink-0" />
-   Load draft
-   </button>
-  )}
-  </div>
+ )}
  </div>
  </div>
  );

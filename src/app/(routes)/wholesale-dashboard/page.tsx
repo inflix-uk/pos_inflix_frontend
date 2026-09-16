@@ -1048,7 +1048,7 @@ const Page = () => {
 
  return (
  <CartTaxConfigProvider value={defaultCartTax}>
- <div className="h-full min-h-0 flex flex-col overflow-hidden bg-slate-50 @container">
+ <div className={`@container h-full min-h-0 flex flex-col overflow-hidden ${retailModeEnabled ? "bg-[#f1f1f9]" : "bg-gray-100"}`}>
  {message.text && (
  <div
   className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] px-4 py-3 rounded-lg shadow-lg text-xs @[640px]:text-sm font-medium max-w-[calc(100vw-1rem)] break-words text-center ${
@@ -1065,7 +1065,7 @@ const Page = () => {
  {/* Top customer-context toolbar removed — context info available inline in the toolbar and Complete Order modal. */}
 
  {/* ── Always-visible add bar: search + action buttons (pinned at top) ── */}
- <div className="flex-shrink-0 rounded-lg border border-slate-200 bg-white px-1.5 py-1 shadow-sm @[640px]:px-2 @[640px]:py-1.5">
+ <div className="flex-shrink-0 rounded-lg border border-gray-200 bg-white shadow-sm px-1.5 py-1 @[640px]:px-2 @[640px]:py-1.5">
   <div className="flex flex-wrap items-center gap-1 @[640px]:gap-1.5">
   <div className="flex-1 min-w-[120px] max-w-[40%]">
   <UnifiedAddInput
@@ -1290,7 +1290,7 @@ const Page = () => {
  <div className="flex-1 min-h-0 flex flex-col @[1024px]:flex-row gap-2 @[640px]:gap-3 overflow-hidden">
   {/* Left panel: Product grid — toggled by "Show/Hide products" */}
   {productPanelOpen && (
-  <div className={`flex-1 min-w-0 ${retailModeEnabled ? "@[1024px]:basis-[60%] @[1024px]:flex-[6]" : "@[1024px]:basis-0"} min-h-0 overflow-hidden flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm`}>
+  <div className={`flex-1 min-w-0 ${retailModeEnabled ? "@[1024px]:basis-[60%] @[1024px]:flex-[6]" : "@[1024px]:basis-0"} min-h-0 overflow-hidden flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm`}>
   <div className="min-h-0 flex-1 overflow-auto p-2 @[640px]:p-2.5 relative">
   {productsLoading && (
    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white rounded-xl">
@@ -1340,9 +1340,9 @@ const Page = () => {
   )}
 
   {/* Right panel: Cart / Current order */}
-  <div className={`flex min-h-0 min-w-0 flex-1 ${retailModeEnabled ? "@[1024px]:basis-[40%] @[1024px]:flex-[4]" : "@[1024px]:basis-0"} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm`}>
-  <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-slate-50/60">
-  <h2 className="text-xs @[640px]:text-sm font-semibold text-slate-900">
+  <div className={`flex min-h-0 min-w-0 flex-1 ${retailModeEnabled ? "@[1024px]:basis-[40%] @[1024px]:flex-[4]" : "@[1024px]:basis-0"} flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm`}>
+  <div className="flex-shrink-0 flex items-center justify-between px-2.5 py-1 border-b border-gray-100">
+  <h2 className="text-[11px] @[640px]:text-xs font-semibold text-gray-900">
   Current order{cartItemCount > 0 ? ` (${cartItemCount})` : ""}
   </h2>
   <button
@@ -1356,20 +1356,20 @@ const Page = () => {
   </button>
   </div>
   <div className={`flex-1 min-h-0 overflow-auto flex flex-col ${orderSummaryCollapsed ? "hidden @[1024px]:flex" : ""}`}>
-  <div className="px-2.5 pt-1.5 pb-1.5 border-b border-slate-100 flex items-stretch gap-1.5">
+  <div className="px-2.5 pt-1 pb-1 border-b border-gray-100 flex items-stretch gap-1.5">
   <textarea
    id="wholesale-sale-note"
    value={saleNote}
    onChange={(e) => setSaleNote(e.target.value.slice(0, 2000))}
    placeholder="Add a note (optional)"
    rows={1}
-   className="flex-1 min-w-0 text-[11px] @[640px]:text-xs text-slate-900 placeholder-slate-400 border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400 resize-y"
+   className="flex-1 min-w-0 text-[11px] @[640px]:text-xs text-gray-900 placeholder-gray-400 border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-blue-400 resize-y"
   />
   <button
    type="button"
    onClick={() => setManualItemModalOpen(true)}
    disabled={!selectedCustomer && !retailModeEnabled}
-   className="shrink-0 inline-flex items-center justify-center gap-1 h-8 rounded-md border border-slate-200 bg-white px-2.5 text-[11px] @[640px]:text-xs font-medium text-slate-800 whitespace-nowrap hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+   className="shrink-0 inline-flex items-center justify-center gap-1 h-7 @[640px]:h-8 rounded-md border border-neutral-200 bg-neutral-50/80 px-2 text-[11px] @[640px]:text-xs font-medium text-neutral-900 whitespace-nowrap hover:bg-neutral-100/80 disabled:cursor-not-allowed disabled:opacity-50"
    title={selectedCustomer || retailModeEnabled ? "Add MISC item" : "Select customer first."}
    aria-label="Add MISC item"
   >
@@ -1377,7 +1377,7 @@ const Page = () => {
   </button>
   </div>
   {cart.length === 0 ? (
-  <div className="flex-1 min-h-0 flex flex-col">
+  <div className="p-3">
    <EmptyCartQuickActions
    hasCustomer={!!selectedCustomer || retailModeEnabled}
    retailMode={retailModeEnabled}
