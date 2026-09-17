@@ -9,6 +9,7 @@ import type {
  CreateSaleResponse,
  SaleRecord,
 } from "../../sales-dashboard/service/salesApi";
+import type { WhatsappEnqueueResult } from "../../settings/whatsapp/service/whatsappApi";
 
 const API_BASE_URL =
  (typeof window !== "undefined" && (window as Window & { __API_BASE_URL__?: string }).__API_BASE_URL__) ||
@@ -173,6 +174,23 @@ export const invoicesApi = {
    throw new Error((data as { message?: string }).message || "Failed to send invoice email");
   }
   return data as { success: boolean; message?: string };
+ },
+
+ /** Queues the invoice PDF for delivery from the connected WhatsApp (paced by safety limits). */
+ sendInvoiceWhatsapp: async (
+  id: string,
+  payload: { phone: string; pdfBase64: string; filename: string; message?: string }
+ ): Promise<{ success: boolean; message?: string; data: WhatsappEnqueueResult }> => {
+  const response = await fetch(`${API_BASE_URL}/invoices/${id}/send-whatsapp`, {
+   method: "POST",
+   headers: getAuthHeaders(),
+   body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+   throw new Error((data as { message?: string }).message || "Failed to send invoice via WhatsApp");
+  }
+  return data as { success: boolean; message?: string; data: WhatsappEnqueueResult };
  },
 
  checkReference: async (

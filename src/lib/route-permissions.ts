@@ -155,6 +155,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   "/settings/about": ["settings.view", "settings.edit"],
   "/settings/notes-terms": ["settings.view", "settings.edit"],
   "/settings/email": ["settings.view", "settings.edit"],
+  "/settings/whatsapp": ["settings.view", "settings.edit"],
   "/settings/tax": ["settings.view", "settings.edit"],
   "/settings/icons": ["settings.view", "settings.edit"],
   "/settings/activity-log": ["audit.view"],

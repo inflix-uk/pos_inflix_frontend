@@ -22,8 +22,11 @@ import {
  MoreVertical,
  Mail,
  Send,
+ MessageCircle,
 } from "lucide-react";
 import { invoicesApi, invoiceDisplayDate, invoicePaymentTypeLabel, type InvoiceRecord } from "./service/invoicesApi";
+import SendInvoiceWhatsappModal, { defaultInvoiceWhatsappMessage } from "./components/SendInvoiceWhatsappModal";
+import { whatsappApi, describeQueuePosition, type WhatsappStatus } from "../settings/whatsapp/service/whatsappApi";
 import { formatDateLondon, formatOccurredAt } from "@/lib/dateUtils";
 import { downloadInvoiceA4, getInvoiceA4PdfBase64, printInvoiceA4, printReceipt80mm, type SaleForPrint } from "@/lib/invoicePrint";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -196,6 +199,12 @@ export default function InvoiceOnlineOrderPage() {
  const [emailTo, setEmailTo] = useState("");
  const [emailSending, setEmailSending] = useState(false);
  const [emailPrefillLoading, setEmailPrefillLoading] = useState(false);
+ const [whatsappTarget, setWhatsappTarget] = useState<InvoiceRecord | null>(null);
+ const [whatsappPhone, setWhatsappPhone] = useState("");
+ const [whatsappMessage, setWhatsappMessage] = useState("");
+ const [whatsappConnection, setWhatsappConnection] = useState<WhatsappStatus | null>(null);
+ const [whatsappSending, setWhatsappSending] = useState(false);
+ const [whatsappPrefillLoading, setWhatsappPrefillLoading] = useState(false);
  const [actionError, setActionError] = useState<string | null>(null);
  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
  const { can } = usePermissions();
@@ -303,6 +312,65 @@ export default function InvoiceOnlineOrderPage() {
    setEmailSending(false);
   }
  }, [emailTarget, emailTo]);
+
+ const openSendWhatsapp = useCallback(async (inv: InvoiceRecord) => {
+  setActionError(null);
+  setActionSuccess(null);
+  setWhatsappTarget(inv);
+  setWhatsappPhone("");
+  setWhatsappMessage(defaultInvoiceWhatsappMessage(inv));
+  setWhatsappConnection(null);
+  setWhatsappPrefillLoading(true);
+  const customerId =
+   typeof inv.customerId === "object" && inv.customerId
+    ? (inv.customerId as { _id?: string })._id
+    : typeof inv.customerId === "string"
+     ? inv.customerId
+     : null;
+  await Promise.all([
+   whatsappApi
+    .getStatus()
+    .then((s) => setWhatsappConnection(s.status))
+    .catch(() => setWhatsappConnection("disconnected")),
+   (async () => {
+    try {
+     if (customerId) {
+      const res = await customerApi.getById(customerId);
+      // Mobile is the likelier WhatsApp number; fall back to the main phone.
+      const number = res?.data?.mobile?.trim() || res?.data?.phone?.trim();
+      if (number) setWhatsappPhone(number);
+     }
+    } catch {
+     // optional prefill
+    } finally {
+     setWhatsappPrefillLoading(false);
+    }
+   })(),
+  ]);
+ }, []);
+
+ const handleSendInvoiceWhatsapp = useCallback(async () => {
+  if (!whatsappTarget) return;
+  const phone = whatsappPhone.trim();
+  if (!phone) return;
+  setWhatsappSending(true);
+  setActionError(null);
+  try {
+   const { base64, filename } = await getInvoiceA4PdfBase64(invoiceToPrintable(whatsappTarget));
+   const res = await invoicesApi.sendInvoiceWhatsapp(whatsappTarget._id, {
+    phone,
+    pdfBase64: base64,
+    filename,
+    message: whatsappMessage.trim() || undefined,
+   });
+   setWhatsappTarget(null);
+   setActionSuccess(`${res.message || "Invoice queued for WhatsApp"}. ${describeQueuePosition(res.data)}`);
+  } catch (e) {
+   setActionError(e instanceof Error ? e.message : "Failed to send invoice via WhatsApp");
+  } finally {
+   setWhatsappSending(false);
+  }
+ }, [whatsappTarget, whatsappPhone, whatsappMessage]);
 
  const handlePrintReceipt = useCallback(async (inv: InvoiceRecord) => {
   try {
@@ -479,6 +547,12 @@ export default function InvoiceOnlineOrderPage() {
                  icon: <Mail className="w-4 h-4" />,
                  onClick: () => openSendEmail(inv),
                 },
+                {
+                 key: "whatsapp",
+                 label: "Send via WhatsApp (PDF)",
+                 icon: <MessageCircle className="w-4 h-4" />,
+                 onClick: () => openSendWhatsapp(inv),
+                },
                 { key: "receipt", label: "Print receipt (80mm)", icon: <FileText className="w-4 h-4" />, onClick: () => handlePrintReceipt(inv) },
                 {
                  key: "void",
@@ -556,7 +630,7 @@ export default function InvoiceOnlineOrderPage() {
 
    {actionSuccess && (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm flex items-start gap-2 p-3 rounded-lg bg-green-600 text-white shadow-lg">
-     <Mail className="w-4 h-4 mt-0.5 shrink-0" />
+     <Send className="w-4 h-4 mt-0.5 shrink-0" />
      <span className="text-sm flex-1">{actionSuccess}</span>
      <button onClick={() => setActionSuccess(null)} className="p-0.5 hover:bg-green-700 rounded">
       <X className="w-3.5 h-3.5" />
@@ -595,6 +669,24 @@ export default function InvoiceOnlineOrderPage() {
       setEmailTo("");
      }}
      onSend={handleSendInvoiceEmail}
+    />
+   )}
+
+   {whatsappTarget && (
+    <SendInvoiceWhatsappModal
+     invoice={whatsappTarget}
+     phone={whatsappPhone}
+     onPhoneChange={setWhatsappPhone}
+     message={whatsappMessage}
+     onMessageChange={setWhatsappMessage}
+     connection={whatsappConnection}
+     loading={whatsappSending}
+     prefillLoading={whatsappPrefillLoading}
+     onCancel={() => {
+      if (whatsappSending) return;
+      setWhatsappTarget(null);
+     }}
+     onSend={handleSendInvoiceWhatsapp}
     />
    )}
   </div>

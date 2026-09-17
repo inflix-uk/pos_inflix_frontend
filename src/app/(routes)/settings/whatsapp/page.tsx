@@ -3,7 +3,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, MessageCircle, Loader2, QrCode, LogOut, CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
-import { whatsappApi, type WhatsappStatePayload } from "./service/whatsappApi";
+import { usePermissions } from "@/hooks/usePermissions";
+import { whatsappApi, describeQueuePosition, type WhatsappStatePayload } from "./service/whatsappApi";
+import SafetyLimitsCard from "./components/SafetyLimitsCard";
+import MessageQueueCard from "./components/MessageQueueCard";
 
 function normalizePhone(raw: string): string | null {
  const trimmed = (raw || "").trim();
@@ -28,7 +31,11 @@ export default function WhatsappSettingsPage() {
  const [sendMsg, setSendMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
  const [sending, setSending] = useState(false);
  const [waLinkMode, setWaLinkMode] = useState(false);
+ const [queueRefreshKey, setQueueRefreshKey] = useState(0);
  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+ const { can } = usePermissions();
+ const canEdit = can("settings.edit");
+ const canView = canEdit || can("settings.view");
 
  const refresh = useCallback(async () => {
   try {
@@ -92,7 +99,7 @@ export default function WhatsappSettingsPage() {
    setSendMsg({ type: "error", text: "Enter the full number with country code, e.g. +447700900000." });
    return;
   }
-  if (waLinkMode || state.status !== "connected") {
+  if (waLinkMode || state.status !== "connected" || !canEdit) {
    const url = `https://wa.me/${e164}?text=${encodeURIComponent("Test message from your POS.")}`;
    if (typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
    setSendMsg({ type: "success", text: "Opened WhatsApp Web in a new tab." });
@@ -101,7 +108,8 @@ export default function WhatsappSettingsPage() {
   setSending(true);
   try {
    const out = await whatsappApi.send(e164, "Test message from your POS — WhatsApp gateway is working.");
-   setSendMsg({ type: "success", text: `Sent to ${out.sentTo.split("@")[0]}.` });
+   setSendMsg({ type: "success", text: `Queued for +${out.message.recipientPhone}. ${describeQueuePosition(out)}` });
+   setQueueRefreshKey((k) => k + 1);
   } catch (e) {
    setSendMsg({ type: "error", text: e instanceof Error ? e.message : "Send failed" });
   } finally {
@@ -159,7 +167,8 @@ export default function WhatsappSettingsPage() {
     <div className="flex-1 min-w-0">
      <h1 className="text-xl @[768px]:text-2xl font-semibold text-gray-800">WhatsApp</h1>
      <p className="text-gray-500 text-xs @[768px]:text-sm mt-0.5">
-      Pair your WhatsApp account by scanning a QR code from your phone, then send a test message.
+      Pair your WhatsApp account by scanning a QR code from your phone, then send invoices to customers from the
+      Invoices list. Messages are queued and paced by the safety limits below.
      </p>
     </div>
    </header>
@@ -186,14 +195,16 @@ export default function WhatsappSettingsPage() {
         Connected as <span className="font-mono">{state.jid || "—"}</span>
        </div>
        <div className="flex gap-2">
-        <button
-         type="button"
-         onClick={handleLogout}
-         disabled={busy}
-         className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-        >
-         <LogOut className="h-4 w-4" /> Logout / Re-pair
-        </button>
+        {canEdit && (
+         <button
+          type="button"
+          onClick={handleLogout}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+         >
+          <LogOut className="h-4 w-4" /> Logout / Re-pair
+         </button>
+        )}
         <button
          type="button"
          onClick={refresh}
@@ -218,21 +229,23 @@ export default function WhatsappSettingsPage() {
         <li>Tap <span className="font-medium">Settings → Linked devices → Link a device</span>.</li>
         <li>Point your phone camera at this QR.</li>
        </ol>
-       <button
-        type="button"
-        onClick={handleLogout}
-        disabled={busy}
-        className="text-xs text-gray-500 hover:text-gray-700 underline"
-       >
-        Cancel pairing
-       </button>
+       {canEdit && (
+        <button
+         type="button"
+         onClick={handleLogout}
+         disabled={busy}
+         className="text-xs text-gray-500 hover:text-gray-700 underline"
+        >
+         Cancel pairing
+        </button>
+       )}
       </div>
      ) : state.status === "connecting" ? (
       <div className="flex flex-col items-center gap-3 py-8">
        <Loader2 className="h-8 w-8 text-green-600 animate-spin" />
        <p className="text-sm text-gray-600">Starting WhatsApp session…</p>
       </div>
-     ) : (
+     ) : canEdit ? (
       <div className="flex flex-col gap-3">
        <p className="text-sm text-gray-600">
         Click below to start a new session. A QR code will appear here for you to scan with your phone.
@@ -247,6 +260,10 @@ export default function WhatsappSettingsPage() {
         Generate QR code
        </button>
       </div>
+     ) : (
+      <p className="text-sm text-gray-600">
+       WhatsApp isn&apos;t connected. Ask an admin (Settings edit permission) to pair the business WhatsApp account.
+      </p>
      )}
     </section>
 
@@ -256,9 +273,11 @@ export default function WhatsappSettingsPage() {
       Send test message
      </h2>
      <p className="text-sm text-gray-500 mb-4">
-      {state.status === "connected"
-       ? "Sends from the connected WhatsApp account."
-       : "Not connected yet — falls back to opening wa.me in a new tab."}
+      {state.status === "connected" && canEdit
+       ? "Queued and sent from the connected WhatsApp account (counts towards the safety limits)."
+       : state.status === "connected"
+        ? "Opens wa.me in a new tab."
+        : "Not connected yet — falls back to opening wa.me in a new tab."}
      </p>
 
      <label htmlFor="wa-phone" className="block text-sm font-medium text-gray-800 mb-1.5">
@@ -304,7 +323,7 @@ export default function WhatsappSettingsPage() {
       Type the full international number (no spaces). Leading + is optional.
      </p>
 
-     {state.status === "connected" && (
+     {state.status === "connected" && canEdit && (
       <label className="mt-3 inline-flex items-center gap-2 text-xs text-gray-600 select-none">
        <input
         type="checkbox"
@@ -329,6 +348,13 @@ export default function WhatsappSettingsPage() {
      )}
     </section>
    </div>
+
+   {canView && (
+    <div className="mt-4 @[768px]:mt-6 flex flex-col gap-4 @[768px]:gap-6">
+     <SafetyLimitsCard canEdit={canEdit} refreshKey={queueRefreshKey} />
+     <MessageQueueCard canEdit={canEdit} refreshKey={queueRefreshKey} />
+    </div>
+   )}
   </div>
  );
 }
