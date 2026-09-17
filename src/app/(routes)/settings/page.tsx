@@ -108,10 +108,11 @@ const allSettingsItems: SettingsItem[] = [
  },
  {
  title: "WhatsApp",
- description: "Connect WhatsApp via QR and send a test message",
+ description: "Connect WhatsApp via QR, send invoices to customers and manage sending limits",
  icon: MessageCircle,
  path: "/settings/whatsapp",
  color: "bg-green-100 text-green-600",
+ permission: ["settings.view", "settings.edit"],
  },
  {
  title: "Activity Log",
