@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { StockViewRow } from "../types";
 import { stockViewApi } from "../services/stockViewApi";
-import { downloadProductsExcel, downloadProductsPdf } from "@/lib/productsExport";
+import { downloadProductsExcel, downloadProductsPdf, rowToRecord, summarizeExportRows } from "@/lib/productsExport";
 import { onInventoryEvent } from "@/lib/inventoryEvents";
 
 export function empty(v: string | number | undefined | null): string | number {
@@ -288,53 +288,57 @@ export function useStockView(options?: { enabled?: boolean }) {
      return `"${s.replace(/"/g, '""')}"`;
     return s;
    };
-   const formatPrice = (row: StockViewRow, value: number): string => {
-    if (value == null || Number.isNaN(value)) return "-";
-    const prefix = row.currency ? `${row.currency} ` : "";
-    return `${prefix}${value}`;
-   };
+   const records = rowsToExport.map((row) => rowToRecord(row, map));
    const headers = [
-    "Purchase ref",
-    "Purchase #",
-    "Date",
-    "Supplier",
-    "Status",
-    "Payment",
+    "Product",
+    "Category",
     "Brand",
     "Model",
     "Grade",
     "Capacity",
     "Colour",
     "IMEI",
+    "Qty",
     "Cost",
+    "Stock Value",
     "Sale Price",
-    "Sold To",
-   ];
+    "Purchase Ref",
+    "Date",
+    "Supplier",
+    "Status",
+   ] as const;
    const lines = [
     headers.join(","),
-    ...rowsToExport.map((row) => {
-     const soldInfo =
-      row.soldInfo ?? (row.imei ? map[(row.imei || "").trim()] : undefined);
-     const soldTo = soldInfo ? `Sold to ${soldInfo.customerName}` : "Available";
-     return [
-      escape(empty(row.purchaseNumber)),
-      escape(empty(row.parcelNumber)),
-      escape(empty(row.date)),
-      escape(empty(row.supplier)),
-      escape(empty(row.status)),
-      escape(empty(row.paymentStatus)),
-      escape(empty(row.brand)),
-      escape(empty(row.brandModel)),
-      escape(empty(row.grade)),
-      escape(empty(row.capacity)),
-      escape(empty(row.colour)),
-      escape(empty(row.imei)),
-      escape(formatPrice(row, row.purchasePrice)),
-      escape(formatPrice(row, row.salePrice)),
-      escape(soldTo),
-     ].join(",");
-    }),
+    ...records.map((rec) => headers.map((h) => escape(rec[h] ?? "")).join(",")),
    ];
+   if (records.length > 0) {
+    const summary = summarizeExportRows(rowsToExport);
+    lines.push(
+     [
+      escape("TOTAL"),
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      escape(summary.totalQty),
+      "",
+      escape(
+       `${summary.currency} ${summary.totalStockValue.toLocaleString("en-GB", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+       })}`
+      ),
+      "",
+      "",
+      "",
+      "",
+      "",
+     ].join(",")
+    );
+   }
    const csv = lines.join("\n");
    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
    const url = URL.createObjectURL(blob);

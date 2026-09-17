@@ -17,6 +17,38 @@ function formatPrice(row: StockViewRow, value: number): string {
   return `${prefix}${value}`;
 }
 
+function formatMoneyAmount(value: number, currency?: string): string {
+  if (!Number.isFinite(value)) return "-";
+  const rounded = Math.round(value * 100) / 100;
+  const prefix = currency ? `${currency} ` : "";
+  return `${prefix}${rounded.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Qty for export: 1 per serial/IMEI row; stored quantity for non-serial. */
+export function getExportQty(row: StockViewRow): number {
+  if (row.isSerialProduct) return 1;
+  const q = Number(row.quantity);
+  return Number.isFinite(q) ? q : 0;
+}
+
+/** Cost stock value (qty × purchase/cost price) — same as inventory total on the products page. */
+export function getExportStockValue(row: StockViewRow): number {
+  const cost = Number(row.purchasePrice) || 0;
+  return Math.round(getExportQty(row) * cost * 100) / 100;
+}
+
+function productLabel(row: StockViewRow): string {
+  if (!row.isSerialProduct) {
+    const name = (row.name || "").trim();
+    if (name) return name;
+  }
+  const parts = [row.brand, row.brandModel, row.capacity, row.colour]
+    .map((s) => (s || "").trim())
+    .filter(Boolean);
+  if (parts.length) return parts.join(" ");
+  return (row.category || row.name || "").trim() || "-";
+}
+
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -35,19 +67,16 @@ function datestamp(): string {
 
 type SoldInfoMap = Record<string, { customerName: string; saleReference: string; saleId?: string }>;
 
-/* ── row → flat object (shared by excel + pdf) ───── */
+/* ── row → flat object (shared by excel + pdf + csv) ───── */
 
-function rowToRecord(
-  row: StockViewRow,
-  soldInfoMap: SoldInfoMap,
-) {
-  const soldInfo = row.soldInfo ?? (row.imei ? soldInfoMap[(row.imei || "").trim()] : undefined);
+export function rowToRecord(row: StockViewRow, soldInfoMap: SoldInfoMap) {
+  const soldInfo =
+    row.soldInfo ?? (row.imei ? soldInfoMap[(row.imei || "").trim()] : undefined);
   const soldTo = soldInfo ? `Sold to ${soldInfo.customerName}` : "Available";
+  const qty = getExportQty(row);
+  const stockValue = getExportStockValue(row);
   return {
-    "Purchase Ref": empty(row.purchaseNumber),
-    "Purchase #": empty(row.parcelNumber),
-    Date: empty(row.date),
-    Supplier: empty(row.supplier),
+    Product: productLabel(row),
     Category: empty(row.category),
     Brand: empty(row.brand),
     Model: empty(row.brandModel),
@@ -55,9 +84,43 @@ function rowToRecord(
     Capacity: empty(row.capacity),
     Colour: empty(row.colour),
     IMEI: empty(row.imei),
+    Qty: String(qty),
     Cost: formatPrice(row, row.purchasePrice),
+    "Stock Value": formatMoneyAmount(stockValue, row.currency),
     "Sale Price": formatPrice(row, row.salePrice),
+    "Purchase Ref": empty(row.purchaseNumber),
+    Date: empty(row.date),
+    Supplier: empty(row.supplier),
     Status: soldTo,
+  };
+}
+
+export function summarizeExportRows(rows: StockViewRow[]): {
+  totalQty: number;
+  totalStockValue: number;
+  currency: string;
+} {
+  let totalQty = 0;
+  let totalStockValue = 0;
+  const currencyCounts: Record<string, number> = {};
+  for (const row of rows) {
+    totalQty += getExportQty(row);
+    totalStockValue += getExportStockValue(row);
+    const cur = (row.currency || "").trim();
+    if (cur) currencyCounts[cur] = (currencyCounts[cur] || 0) + 1;
+  }
+  let currency = "GBP";
+  let top = -1;
+  for (const cur of Object.keys(currencyCounts)) {
+    if (currencyCounts[cur] > top) {
+      top = currencyCounts[cur];
+      currency = cur;
+    }
+  }
+  return {
+    totalQty,
+    totalStockValue: Math.round(totalStockValue * 100) / 100,
+    currency,
   };
 }
 
@@ -66,12 +129,32 @@ function rowToRecord(
 export function downloadProductsExcel(
   rows: StockViewRow[],
   soldInfoMap: SoldInfoMap,
-  filenamePrefix = "products-export",
+  filenamePrefix = "products-export"
 ) {
   const data = rows.map((r) => rowToRecord(r, soldInfoMap));
+  const summary = summarizeExportRows(rows);
+  if (data.length > 0) {
+    data.push({
+      Product: "TOTAL",
+      Category: "",
+      Brand: "",
+      Model: "",
+      Grade: "",
+      Capacity: "",
+      Colour: "",
+      IMEI: "",
+      Qty: String(summary.totalQty),
+      Cost: "",
+      "Stock Value": formatMoneyAmount(summary.totalStockValue, summary.currency),
+      "Sale Price": "",
+      "Purchase Ref": "",
+      Date: "",
+      Supplier: "",
+      Status: "",
+    });
+  }
   const ws = XLSX.utils.json_to_sheet(data);
 
-  /* auto-size columns */
   const headers = Object.keys(data[0] ?? {});
   ws["!cols"] = headers.map((h) => {
     let max = h.length;
@@ -85,7 +168,9 @@ export function downloadProductsExcel(
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Products");
   const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-  const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const blob = new Blob([buf], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
   triggerDownload(blob, `${filenamePrefix}-${datestamp()}.xlsx`);
 }
 
@@ -94,35 +179,39 @@ export function downloadProductsExcel(
 export function downloadProductsPdf(
   rows: StockViewRow[],
   soldInfoMap: SoldInfoMap,
-  filenamePrefix = "products-export",
+  filenamePrefix = "products-export"
 ) {
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const margin = 10;
+  const margin = 8;
   let y = 14;
+  const summary = summarizeExportRows(rows);
 
-  /* title */
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.text("Products Export", margin, y);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.text(`Generated: ${datestamp()}  |  ${rows.length} items`, pageW - margin, y, { align: "right" });
+  doc.text(
+    `Generated: ${datestamp()}  |  ${rows.length} items  |  Qty ${summary.totalQty}  |  Stock value ${formatMoneyAmount(summary.totalStockValue, summary.currency)}`,
+    pageW - margin,
+    y,
+    { align: "right" }
+  );
   y += 8;
 
-  /* columns for landscape A4 */
   const cols = [
-    { header: "Category", key: "Category", w: 28 },
-    { header: "Brand", key: "Brand", w: 24 },
-    { header: "Model", key: "Model", w: 28 },
-    { header: "Grade", key: "Grade", w: 16 },
-    { header: "Capacity", key: "Capacity", w: 20 },
-    { header: "Colour", key: "Colour", w: 20 },
-    { header: "IMEI", key: "IMEI", w: 40 },
-    { header: "Cost", key: "Cost", w: 24 },
-    { header: "Sale Price", key: "Sale Price", w: 24 },
-    { header: "Status", key: "Status", w: 36 },
+    { header: "Product", key: "Product", w: 42 },
+    { header: "Category", key: "Category", w: 24 },
+    { header: "Brand", key: "Brand", w: 20 },
+    { header: "Model", key: "Model", w: 22 },
+    { header: "IMEI", key: "IMEI", w: 32 },
+    { header: "Qty", key: "Qty", w: 12 },
+    { header: "Cost", key: "Cost", w: 20 },
+    { header: "Stock Value", key: "Stock Value", w: 26 },
+    { header: "Sale Price", key: "Sale Price", w: 22 },
+    { header: "Status", key: "Status", w: 28 },
   ];
 
   const records = rows.map((r) => rowToRecord(r, soldInfoMap));
@@ -130,7 +219,7 @@ export function downloadProductsPdf(
   const drawTableHeader = () => {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
-    doc.setFillColor(249, 115, 22); // orange-500
+    doc.setFillColor(249, 115, 22);
     doc.setTextColor(255, 255, 255);
     let x = margin;
     for (const col of cols) {
@@ -161,9 +250,8 @@ export function downloadProductsPdf(
     const rec = records[i];
     let x = margin;
 
-    /* alternating row bg */
     if (i % 2 === 0) {
-      doc.setFillColor(255, 247, 237); // orange-50
+      doc.setFillColor(255, 247, 237);
       doc.rect(x, y - 0.5, cols.reduce((s, c) => s + c.w, 0), rowHeight, "F");
     }
 
@@ -180,6 +268,16 @@ export function downloadProductsPdf(
     doc.setFont("helvetica", "italic");
     doc.setTextColor(120, 120, 120);
     doc.text("No items to export.", margin, y + 6);
+  } else {
+    newPageIfNeeded(10);
+    y += 4;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text(
+      `TOTAL  Qty: ${summary.totalQty}   Stock value: ${formatMoneyAmount(summary.totalStockValue, summary.currency)}`,
+      margin,
+      y
+    );
   }
 
   doc.save(`${filenamePrefix}-${datestamp()}.pdf`);
@@ -226,7 +324,9 @@ export function downloadRateListExcel(items: RateListExportItem[], filenamePrefi
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Rate List");
   const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-  const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const blob = new Blob([buf], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
   triggerDownload(blob, `${filenamePrefix}-${datestamp()}.xlsx`);
 }
 
