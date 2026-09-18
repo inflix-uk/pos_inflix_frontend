@@ -9,44 +9,48 @@ function getAuthHeaders(): HeadersInit {
  };
 }
 
-export interface CustomerStatementLine {
+/** One ledger entry on a statement, oldest first. `balance` is the running balance after this line. */
+export interface StatementLine {
  _id: string;
  type: string;
+ /** Signed ledger amount: + raises the balance owed, − lowers it. */
  amount: number;
- referenceLabel: string;
- date: string;
- paymentMethod?: string;
- note?: string;
- isEdited?: boolean;
-}
-
-export interface CustomerStatement {
- customer: { _id: string; name: string };
+ debit: number;
+ credit: number;
  balance: number;
- lines: CustomerStatementLine[];
-}
-
-export interface SupplierStatementLine {
- _id: string;
- type: string;
- amount: number;
  referenceLabel: string;
  referenceId?: string;
  date: string;
  paymentMethod?: string;
  note?: string;
- isEdited?: boolean;
 }
 
-export interface SupplierStatement {
+/** Customer: debit = invoice, credit = payment, balance = owed to us (negative = store credit).
+ *  Supplier: credit = purchase, debit = payment to them, balance = owed by us. */
+interface StatementTotals {
+ /** Closing balance (same as closingBalance). */
+ balance: number;
+ /** Balance brought forward from before the period (0 for full history). */
+ openingBalance: number;
+ closingBalance: number;
+ totals: { debit: number; credit: number };
+ lines: StatementLine[];
+}
+
+export type CustomerStatementLine = StatementLine;
+export type SupplierStatementLine = StatementLine;
+
+export interface CustomerStatement extends StatementTotals {
+ customer: { _id: string; name: string };
+}
+
+export interface SupplierStatement extends StatementTotals {
  supplier: {
   _id: string;
   name: string;
   contactPerson?: string;
   displayLabel?: string;
  };
- balance: number;
- lines: SupplierStatementLine[];
 }
 
 export interface BalanceSheetData {

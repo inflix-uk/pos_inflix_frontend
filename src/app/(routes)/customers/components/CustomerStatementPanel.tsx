@@ -18,6 +18,7 @@ import {
  downloadAccountStatementPdf,
 } from "@/lib/accountStatementExport";
 import { usePermissionsContext } from "@/contexts/PermissionsContext";
+import { AccountLedgerTable } from "@/components/accounts/AccountLedgerTable";
 
 const formatMoney = (n: number) =>
  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
@@ -110,11 +111,25 @@ export function CustomerStatementPanel({
  const isStoreCredit = balance < 0;
  const balanceLabel = isStoreCredit ? "Store credit" : "Amount receivable";
  const balanceDisplay = isStoreCredit ? Math.abs(balance) : balance;
- const displayAmount = (amount: number) => -amount;
  const statementLines = statement?.lines ?? [];
  const periodDescription =
   filterFrom || filterTo ? `${filterFrom || "…"} → ${filterTo || "…"}` : "Full history";
  const exportBalanceText = `${formatMoney(balanceDisplay)}${isStoreCredit ? " (credit)" : ""}`;
+ const exportParams = statement
+  ? {
+    accountTypeLabel: "Customer" as const,
+    accountName: name,
+    balanceLabel,
+    balanceFormatted: exportBalanceText,
+    periodDescription,
+    openingBalance: statement.openingBalance,
+    closingBalance: statement.closingBalance,
+    totals: statement.totals,
+    lines: statementLines,
+    formatDate,
+    formatMoney,
+   }
+  : null;
 
  const handleRecordPayment = async (e: React.FormEvent) => {
   e.preventDefault();
@@ -241,33 +256,11 @@ export function CustomerStatementPanel({
  };
 
  const handleExportCsv = () => {
-  if (!statement) return;
-  downloadAccountStatementCsv({
-   accountTypeLabel: "Customer",
-   accountName: name,
-   balanceLabel,
-   balanceFormatted: exportBalanceText,
-   periodDescription,
-   lines: statementLines,
-   formatDate,
-   displayAmount,
-   formatMoney,
-  });
+  if (exportParams) downloadAccountStatementCsv(exportParams);
  };
 
  const handleExportPdf = () => {
-  if (!statement) return;
-  downloadAccountStatementPdf({
-   accountTypeLabel: "Customer",
-   accountName: name,
-   balanceLabel,
-   balanceFormatted: exportBalanceText,
-   periodDescription,
-   lines: statementLines,
-   formatDate,
-   displayAmount,
-   formatMoney,
-  });
+  if (exportParams) downloadAccountStatementPdf(exportParams);
  };
 
  return (
@@ -385,81 +378,46 @@ export function CustomerStatementPanel({
       </div>
      </div>
      <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-       <thead>
-        <tr className="border-b border-gray-200 bg-gray-50">
-         <th className="text-left py-2.5 px-3 font-medium text-gray-700">Date</th>
-         <th className="text-left py-2.5 px-3 font-medium text-gray-700">Type</th>
-         <th className="text-left py-2.5 px-3 font-medium text-gray-700">Reference</th>
-         <th className="text-left py-2.5 px-3 font-medium text-gray-700">Notes</th>
-         <th className="text-right py-2.5 px-3 font-medium text-gray-700">Amount</th>
-         {canManageAccounts && (
-          <th className="text-right py-2.5 px-3 font-medium text-gray-700 w-20">Actions</th>
-         )}
-        </tr>
-       </thead>
-       <tbody>
-        {statementLines.length === 0 ? (
-         <tr>
-          <td colSpan={canManageAccounts ? 6 : 5} className="py-8 text-center text-gray-500">
-           No ledger entries for this period.
-          </td>
-         </tr>
-        ) : (
-         statementLines.map((line) => {
-          const amt = displayAmount(line.amount);
-          return (
-           <tr key={line._id} className="border-b border-gray-100">
-            <td className="py-2.5 px-3 text-gray-600">{formatDate(line.date)}</td>
-            <td className="py-2.5 px-3 capitalize">
-             {line.type.replace("_", " ")}
-             {line.paymentMethod && (
-              <span className="ml-1 text-gray-500 text-xs">({line.paymentMethod})</span>
-             )}
-            </td>
-            <td className="py-2.5 px-3 text-gray-700">{line.referenceLabel || "—"}</td>
-            <td className="py-2.5 px-3 text-gray-600 max-w-xs truncate">{line.note?.trim() || "—"}</td>
-            <td className="py-2.5 px-3 text-right font-medium">
-             <span className={amt >= 0 ? "text-emerald-600" : "text-gray-600"}>
-              {amt >= 0 ? "+" : ""}
-              {formatMoney(amt)}
-             </span>
-            </td>
-            {canManageAccounts && (
-             <td className="py-2.5 px-3 text-right">
-              {EDITABLE_TYPES.has(line.type) ? (
-               <div className="inline-flex gap-1">
-                <button
-                 type="button"
-                 onClick={() => openEditEntry(line)}
-                 className="p-1 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50"
-                >
-                 <Pencil className="h-3.5 w-3.5" />
-                </button>
-                <button
-                 type="button"
-                 onClick={() => handleDeleteEntry(line._id)}
-                 disabled={deletingEntryId === line._id}
-                 className="p-1 rounded text-gray-500 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
-                >
-                 {deletingEntryId === line._id ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                 ) : (
-                  <Trash2 className="h-3.5 w-3.5" />
-                 )}
-                </button>
-               </div>
-              ) : (
-               <span className="text-gray-400">—</span>
-              )}
-             </td>
-            )}
-           </tr>
-          );
-         })
-        )}
-       </tbody>
-      </table>
+      <AccountLedgerTable
+       accountType="Customer"
+       openingBalance={statement.openingBalance}
+       closingBalance={statement.closingBalance}
+       totals={statement.totals}
+       lines={statementLines}
+       formatDate={formatDate}
+       formatMoney={formatMoney}
+       compact
+       renderActions={
+        canManageAccounts
+         ? (line) =>
+            EDITABLE_TYPES.has(line.type) ? (
+             <div className="inline-flex gap-1">
+              <button
+               type="button"
+               onClick={() => openEditEntry(line)}
+               className="p-1 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+              >
+               <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+               type="button"
+               onClick={() => handleDeleteEntry(line._id)}
+               disabled={deletingEntryId === line._id}
+               className="p-1 rounded text-gray-500 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+               {deletingEntryId === line._id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+               ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+               )}
+              </button>
+             </div>
+            ) : (
+             <span className="text-gray-400">—</span>
+            )
+         : undefined
+       }
+      />
      </div>
     </div>
    ) : null}

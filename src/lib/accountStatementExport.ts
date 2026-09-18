@@ -1,7 +1,8 @@
 import { jsPDF } from "jspdf";
-import type { CustomerStatementLine, SupplierStatementLine } from "@/app/(routes)/accounts/service/accountsApi";
+import type { StatementLine } from "@/app/(routes)/accounts/service/accountsApi";
 
-export type AccountStatementLine = CustomerStatementLine | SupplierStatementLine;
+export type AccountStatementLine = StatementLine;
+export type StatementAccountType = "Customer" | "Supplier";
 
 function slugifyFilenamePart(s: string): string {
   return (s || "account")
@@ -17,12 +18,49 @@ function csvEscape(cell: string): string {
   return needsQuote ? `"${escaped}"` : escaped;
 }
 
-function lineTypeLabel(line: AccountStatementLine): string {
-  const base = line.type.replace(/_/g, " ");
-  let out = base.charAt(0).toUpperCase() + base.slice(1);
-  if (line.type === "sale" && line.isEdited) out += " (Edited)";
-  if (line.paymentMethod) out += ` (${line.paymentMethod})`;
-  return out;
+const MANUAL_PAYMENT_LABEL = /^Payment (cash|card|bank)$/i;
+
+/** What a ledger line was, e.g. "Invoice INV-000002" or "Payment received (cash) · INV-000002". */
+export function describeStatementLine(line: AccountStatementLine): string {
+  const label = (line.referenceLabel || "").trim();
+  const method = line.paymentMethod ? ` (${line.paymentMethod})` : "";
+  switch (line.type) {
+    case "sale":
+      // Plain invoice number → "Invoice INV-…"; adjustments already describe themselves.
+      return !label ? "Invoice" : /\s/.test(label) ? label : `Invoice ${label}`;
+    case "purchase":
+      return label ? `Purchase ${label}` : "Purchase";
+    case "payment_in": {
+      const onInvoice = label.match(/^(.*) payment$/);
+      if (onInvoice) return `Payment received${method} · ${onInvoice[1]}`;
+      if (!label || MANUAL_PAYMENT_LABEL.test(label)) return `Payment received${method}`;
+      return label;
+    }
+    case "payment_out":
+      if (!label || MANUAL_PAYMENT_LABEL.test(label)) return `Payment made${method}`;
+      return `Payment made${method} · ${label}`;
+    case "refund":
+      return `Refund paid${method}`;
+    case "opening_balance":
+      return label || "Opening balance";
+    default:
+      return label || line.type.replace(/_/g, " ");
+  }
+}
+
+/** Running-balance cell. Customers in credit / suppliers owing us are shown with a CR / DR suffix. */
+export function formatStatementBalance(
+  n: number,
+  accountType: StatementAccountType,
+  formatMoney: (n: number) => string
+): string {
+  if (Math.abs(n) < 0.005) return formatMoney(0);
+  if (n > 0) return formatMoney(n);
+  return `${formatMoney(-n)} ${accountType === "Customer" ? "CR" : "DR"}`;
+}
+
+function formatColumnAmount(n: number, formatMoney: (n: number) => string): string {
+  return n > 0.004 ? formatMoney(n) : "";
 }
 
 function triggerDownload(blob: Blob, filename: string) {
@@ -37,17 +75,23 @@ function triggerDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function downloadAccountStatementCsv(params: {
-  accountTypeLabel: "Customer" | "Supplier";
+export type AccountStatementPdfParams = {
+  accountTypeLabel: StatementAccountType;
   accountName: string;
   balanceLabel: string;
   balanceFormatted: string;
   periodDescription: string;
+  openingBalance: number;
+  closingBalance: number;
+  totals: { debit: number; credit: number };
   lines: AccountStatementLine[];
   formatDate: (d: string) => string;
-  displayAmount: (amount: number) => number;
   formatMoney: (n: number) => string;
-}) {
+};
+
+export function downloadAccountStatementCsv(params: AccountStatementPdfParams) {
+  const bal = (n: number) => formatStatementBalance(n, params.accountTypeLabel, params.formatMoney);
+  const amt = (n: number) => formatColumnAmount(n, params.formatMoney);
   const rows: string[][] = [
     ["Account statement"],
     ["Type", params.accountTypeLabel],
@@ -55,37 +99,33 @@ export function downloadAccountStatementCsv(params: {
     [params.balanceLabel, params.balanceFormatted],
     ["Period", params.periodDescription],
     [],
-    ["Date", "Type", "Reference", "Amount", "Note"],
+    ["Date", "Description", "Notes", "Debit", "Credit", "Balance"],
+    ["", "Opening balance", "", "", "", bal(params.openingBalance)],
   ];
   for (const line of params.lines) {
-    const amt = params.displayAmount(line.amount);
-    const amtStr = `${amt >= 0 ? "+" : ""}${params.formatMoney(amt)}`;
     rows.push([
       params.formatDate(line.date),
-      lineTypeLabel(line),
-      line.referenceLabel || "—",
-      amtStr,
+      describeStatementLine(line),
       line.note?.trim() || "",
+      amt(line.debit),
+      amt(line.credit),
+      bal(line.balance),
     ]);
   }
+  rows.push([
+    "",
+    "Total",
+    "",
+    params.formatMoney(params.totals.debit),
+    params.formatMoney(params.totals.credit),
+    bal(params.closingBalance),
+  ]);
   const csv = rows.map((r) => r.map((c) => csvEscape(String(c))).join(",")).join("\r\n");
-  const bom = "\uFEFF";
+  const bom = "﻿";
   const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
   const stamp = new Date().toISOString().slice(0, 10);
   triggerDownload(blob, `account-statement-${slugifyFilenamePart(params.accountName)}-${stamp}.csv`);
 }
-
-export type AccountStatementPdfParams = {
-  accountTypeLabel: "Customer" | "Supplier";
-  accountName: string;
-  balanceLabel: string;
-  balanceFormatted: string;
-  periodDescription: string;
-  lines: AccountStatementLine[];
-  formatDate: (d: string) => string;
-  displayAmount: (amount: number) => number;
-  formatMoney: (n: number) => string;
-};
 
 /** Build the same PDF used for download / email (caller may save, blob output, etc.). */
 export function buildAccountStatementPdfDoc(params: AccountStatementPdfParams): jsPDF {
@@ -94,12 +134,46 @@ export function buildAccountStatementPdfDoc(params: AccountStatementPdfParams): 
   const margin = 14;
   let y = 16;
 
+  const bal = (n: number) => formatStatementBalance(n, params.accountTypeLabel, params.formatMoney);
+  const amt = (n: number) => formatColumnAmount(n, params.formatMoney);
+
+  const colDate = margin;
+  const colDesc = margin + 32;
+  const colBalance = pageW - margin;
+  const colCredit = colBalance - 30;
+  const colDebit = colCredit - 26;
+  const descMaxW = colDebit - 24 - colDesc;
+  const lineHeight = 4;
+
+  const drawTableHeader = () => {
+    doc.setFillColor(35, 35, 35);
+    doc.rect(margin, y - 4.5, pageW - margin * 2, 7, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.text("Date", colDate + 1.5, y);
+    doc.text("Description", colDesc, y);
+    doc.text("Debit", colDebit, y, { align: "right" });
+    doc.text("Credit", colCredit, y, { align: "right" });
+    doc.text("Balance", colBalance - 1.5, y, { align: "right" });
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "normal");
+    y += 7;
+  };
+
   const newPageIfNeeded = (needed: number) => {
     const h = doc.internal.pageSize.getHeight();
     if (y + needed > h - 12) {
       doc.addPage();
       y = 16;
+      drawTableHeader();
     }
+  };
+
+  const rule = () => {
+    doc.setDrawColor(225, 225, 225);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y - 3, pageW - margin, y - 3);
   };
 
   doc.setFont("helvetica", "bold");
@@ -119,53 +193,57 @@ export function buildAccountStatementPdfDoc(params: AccountStatementPdfParams): 
   doc.setTextColor(0, 0, 0);
   y += 10;
 
-  const colDate = margin;
-  const colType = margin + 34;
-  const colRef = margin + 72;
-  const colAmt = pageW - margin;
+  drawTableHeader();
 
+  doc.setFontSize(8.5);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  newPageIfNeeded(8);
-  doc.text("Date", colDate, y);
-  doc.text("Type", colType, y);
-  doc.text("Reference", colRef, y);
-  doc.text("Amount", colAmt, y, { align: "right" });
-  y += 2;
-  doc.setLineWidth(0.2);
-  doc.line(margin, y, pageW - margin, y);
-  y += 5;
-
+  doc.text("Opening balance", colDesc, y);
+  doc.text(bal(params.openingBalance), colBalance - 1.5, y, { align: "right" });
   doc.setFont("helvetica", "normal");
-  const refMaxW = colAmt - colRef - 22;
-  const lineHeight = 4.0;
+  y += lineHeight + 2;
 
   for (const line of params.lines) {
-    const amt = params.displayAmount(line.amount);
-    const amtStr = `${amt >= 0 ? "+" : ""}${params.formatMoney(amt)}`;
-    const dateStr = params.formatDate(line.date);
-    const typeStr = lineTypeLabel(line);
-    const refRaw = line.referenceLabel || "—";
-    const refLines = doc.splitTextToSize(refRaw, refMaxW);
-    const typeLines = doc.splitTextToSize(typeStr, 32);
-    const n = Math.max(typeLines.length, refLines.length, 1);
+    const descLines: string[] = doc.splitTextToSize(describeStatementLine(line), descMaxW);
+    const note = line.note?.trim();
+    const noteLines: string[] = note ? doc.splitTextToSize(note, descMaxW) : [];
+    const rowH = (descLines.length + noteLines.length) * lineHeight + 2;
+    newPageIfNeeded(rowH + 2);
+    rule();
 
-    newPageIfNeeded(n * lineHeight + 8);
-
-    doc.text(dateStr, colDate, y);
-    doc.text(amtStr, colAmt, y, { align: "right" });
-    typeLines.forEach((t: string, i: number) => doc.text(t, colType, y + i * lineHeight));
-    refLines.forEach((t: string, i: number) => doc.text(t, colRef, y + i * lineHeight));
-    y += n * lineHeight + 1.5;
+    doc.text(params.formatDate(line.date), colDate + 1.5, y);
+    descLines.forEach((t, i) => doc.text(t, colDesc, y + i * lineHeight));
+    if (noteLines.length) {
+      doc.setTextColor(110, 110, 110);
+      noteLines.forEach((t, i) => doc.text(t, colDesc, y + (descLines.length + i) * lineHeight));
+      doc.setTextColor(0, 0, 0);
+    }
+    doc.text(amt(line.debit), colDebit, y, { align: "right" });
+    doc.text(amt(line.credit), colCredit, y, { align: "right" });
+    doc.text(bal(line.balance), colBalance - 1.5, y, { align: "right" });
+    y += rowH;
   }
 
   if (params.lines.length === 0) {
-    newPageIfNeeded(6);
+    newPageIfNeeded(8);
     doc.setFont("helvetica", "italic");
     doc.setTextColor(120, 120, 120);
-    doc.text("No ledger entries.", margin, y);
+    doc.text("No entries in this period.", colDesc, y);
     doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "normal");
+    y += lineHeight + 2;
   }
+
+  newPageIfNeeded(10);
+  doc.setDrawColor(35, 35, 35);
+  doc.setLineWidth(0.4);
+  doc.line(margin, y - 3, pageW - margin, y - 3);
+  y += 1;
+  doc.setFont("helvetica", "bold");
+  doc.text("Total", colDesc, y);
+  doc.text(params.formatMoney(params.totals.debit), colDebit, y, { align: "right" });
+  doc.text(params.formatMoney(params.totals.credit), colCredit, y, { align: "right" });
+  doc.text(bal(params.closingBalance), colBalance - 1.5, y, { align: "right" });
+  doc.setFont("helvetica", "normal");
 
   return doc;
 }

@@ -25,6 +25,7 @@ import { supplierApi } from "../peoples/suppliers/service";
 import type { Customer } from "../peoples/customers/types";
 import type { Supplier } from "../peoples/suppliers/types";
 import { formatSupplierDisplay } from "@/lib/formatSupplierDisplay";
+import { AccountLedgerTable } from "@/components/accounts/AccountLedgerTable";
 
 const formatMoney = (n: number) =>
  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
@@ -337,8 +338,6 @@ export default function AccountStatementPage() {
  ? supplierStatement.supplier.displayLabel?.trim() || formatSupplierDisplay(supplierStatement.supplier)
  : "");
 
- // Business view: Sale/Purchase = out (-), Payment in/out = in (+). Flip ledger amount for display.
- const displayAmount = (amount: number) => -amount;
  const isStoreCredit = accountType === "customer" && balance < 0;
  const balanceLabel =
  accountType === "customer"
@@ -357,51 +356,35 @@ export default function AccountStatementPage() {
 
  const exportBalanceText = `${formatMoney(balanceDisplay)}${isStoreCredit ? " (credit)" : ""}`;
 
+ const statementAccountLabel = (accountType === "customer" ? "Customer" : "Supplier") as "Customer" | "Supplier";
+
+ const statementPdfParams = statement
+  ? {
+    accountTypeLabel: statementAccountLabel,
+    accountName: name,
+    balanceLabel,
+    balanceFormatted: exportBalanceText,
+    periodDescription,
+    openingBalance: statement.openingBalance,
+    closingBalance: statement.closingBalance,
+    totals: statement.totals,
+    lines: statementLines,
+    formatDate,
+    formatMoney,
+   }
+  : null;
+
  const handleExportCsv = () => {
- if (!statement) return;
- downloadAccountStatementCsv({
- accountTypeLabel: accountType === "customer" ? "Customer" : "Supplier",
- accountName: name,
- balanceLabel,
- balanceFormatted: exportBalanceText,
- periodDescription,
- lines: statementLines,
- formatDate,
- displayAmount,
- formatMoney,
- });
+ if (statementPdfParams) downloadAccountStatementCsv(statementPdfParams);
  };
 
  const handleExportPdf = () => {
- if (!statement) return;
- downloadAccountStatementPdf({
- accountTypeLabel: accountType === "customer" ? "Customer" : "Supplier",
- accountName: name,
- balanceLabel,
- balanceFormatted: exportBalanceText,
- periodDescription,
- lines: statementLines,
- formatDate,
- displayAmount,
- formatMoney,
- });
- };
-
- const statementPdfParams = {
- accountTypeLabel: (accountType === "customer" ? "Customer" : "Supplier") as "Customer" | "Supplier",
- accountName: name,
- balanceLabel,
- balanceFormatted: exportBalanceText,
- periodDescription,
- lines: statementLines,
- formatDate,
- displayAmount,
- formatMoney,
+ if (statementPdfParams) downloadAccountStatementPdf(statementPdfParams);
  };
 
  const handleSendStatementPdfEmail = async (e: React.FormEvent) => {
  e.preventDefault();
- if (!statement) return;
+ if (!statementPdfParams) return;
  const to = emailPdfTo.trim();
  if (!to) return;
  setEmailPdfSending(true);
@@ -659,10 +642,11 @@ export default function AccountStatementPage() {
   <thead>
   <tr className="border-b border-gray-200 bg-gray-50">
    <th className="text-left py-3 px-4 font-medium text-gray-700">Date</th>
-   <th className="text-left py-3 px-4 font-medium text-gray-700">Type</th>
-   <th className="text-left py-3 px-4 font-medium text-gray-700">Reference</th>
+   <th className="text-left py-3 px-4 font-medium text-gray-700">Description</th>
    <th className="text-left py-3 px-4 font-medium text-gray-700 min-w-[8rem]">Notes</th>
-   <th className="text-right py-3 px-4 font-medium text-gray-700">Amount</th>
+   <th className="text-right py-3 px-4 font-medium text-gray-700">Debit</th>
+   <th className="text-right py-3 px-4 font-medium text-gray-700">Credit</th>
+   <th className="text-right py-3 px-4 font-medium text-gray-700">Balance</th>
    <th className="text-right py-3 px-4 font-medium text-gray-700 w-24">Actions</th>
   </tr>
   </thead>
@@ -670,9 +654,10 @@ export default function AccountStatementPage() {
   {[1, 2, 3, 4, 5].map((i) => (
    <tr key={i} className="border-b border-gray-100">
    <td className="py-3 px-4"><div className="animate-pulse bg-gray-200 rounded h-4 w-32" /></td>
-   <td className="py-3 px-4"><div className="animate-pulse bg-gray-200 rounded h-4 w-20" /></td>
+   <td className="py-3 px-4"><div className="animate-pulse bg-gray-200 rounded h-4 w-40" /></td>
    <td className="py-3 px-4"><div className="animate-pulse bg-gray-200 rounded h-4 w-24" /></td>
-   <td className="py-3 px-4"><div className="animate-pulse bg-gray-200 rounded h-4 w-28" /></td>
+   <td className="py-3 px-4 text-right"><div className="animate-pulse bg-gray-200 rounded h-4 w-16 ml-auto" /></td>
+   <td className="py-3 px-4 text-right"><div className="animate-pulse bg-gray-200 rounded h-4 w-16 ml-auto" /></td>
    <td className="py-3 px-4 text-right"><div className="animate-pulse bg-gray-200 rounded h-4 w-16 ml-auto" /></td>
    <td className="py-3 px-4 text-right"><div className="animate-pulse bg-gray-200 rounded h-4 w-12 ml-auto" /></td>
    </tr>
@@ -786,51 +771,21 @@ export default function AccountStatementPage() {
   </div>
   <div className="overflow-x-auto">
   <p className="text-xs text-gray-500 px-4 py-2 border-b border-gray-100">
-  Business view: + = money in (payments received), − = money out (sales/credit extended). Newest first. Balance is for {filterFrom || filterTo ? "filtered period" : "full history"}.
+  {accountType === "customer"
+   ? "Debit = invoices (customer owes more), Credit = payments and returns (customer owes less)."
+   : "Credit = purchases (we owe more), Debit = payments to the supplier (we owe less)."}{" "}
+  Oldest first; Balance is the running total after each line{filterFrom ? ", starting from the balance brought forward" : ""}.
   </p>
-  <table className="w-full text-sm">
-  <thead>
-   <tr className="border-b border-gray-200 bg-gray-50">
-   <th className="text-left py-3 px-4 font-medium text-gray-700">Date</th>
-   <th className="text-left py-3 px-4 font-medium text-gray-700">Type</th>
-   <th className="text-left py-3 px-4 font-medium text-gray-700">Reference</th>
-   <th className="text-left py-3 px-4 font-medium text-gray-700 min-w-[8rem]">Notes</th>
-   <th className="text-right py-3 px-4 font-medium text-gray-700">Amount</th>
-   <th className="text-right py-3 px-4 font-medium text-gray-700 w-24">Actions</th>
-   </tr>
-  </thead>
-  <tbody>
-   {(customerStatement?.lines ?? supplierStatement?.lines ?? []).map((line) => {
-   const amt = displayAmount(line.amount);
-   return (
-   <tr key={line._id} className="border-b border-gray-100">
-   <td className="py-3 px-4 text-gray-600">{formatDate(line.date)}</td>
-   <td className="py-3 px-4">
-    <span className="capitalize">{line.type.replace("_", " ")}</span>
-    {line.type === "sale" && line.isEdited && (
-    <span className="ml-1 text-gray-500">(Edited)</span>
-    )}
-    {line.paymentMethod && (
-    <span className="ml-1 text-gray-500">({line.paymentMethod})</span>
-    )}
-   </td>
-   <td className="py-3 px-4 text-gray-700">{line.referenceLabel || "—"}</td>
-   <td className="py-3 px-4 text-gray-600 max-w-xs">
-    {line.note?.trim() ? (
-     <span className="whitespace-pre-wrap break-words" title={line.note.trim()}>
-      {line.note.trim()}
-     </span>
-    ) : (
-     <span className="text-gray-400">—</span>
-    )}
-   </td>
-   <td className="py-3 px-4 text-right font-medium">
-    <span className={amt >= 0 ? "text-emerald-600" : "text-neutral-600"}>
-    {amt >= 0 ? "+" : ""}{formatMoney(amt)}
-    </span>
-   </td>
-   <td className="py-3 px-4 text-right">
-    {EDITABLE_TYPES.has(line.type) ? (
+  <AccountLedgerTable
+   accountType={statementAccountLabel}
+   openingBalance={statement.openingBalance}
+   closingBalance={statement.closingBalance}
+   totals={statement.totals}
+   lines={statementLines}
+   formatDate={formatDate}
+   formatMoney={formatMoney}
+   renderActions={(line) => (
+    EDITABLE_TYPES.has(line.type) ? (
     <div className="inline-flex items-center gap-1">
     <button
     type="button"
@@ -856,17 +811,10 @@ export default function AccountStatementPage() {
     </div>
     ) : (
     <span className="text-xs text-gray-400">—</span>
-    )}
-   </td>
-   </tr>
-   );
-   })}
-  </tbody>
-  </table>
+    )
+   )}
+  />
   </div>
-  {(customerStatement?.lines?.length ?? supplierStatement?.lines?.length ?? 0) === 0 && (
-  <div className="p-8 text-center text-gray-500">No ledger entries yet.</div>
-  )}
   </div>
  ) : (
   <div className="bg-white rounded-lg border border-gray-200/80 shadow-sm p-12 text-center">

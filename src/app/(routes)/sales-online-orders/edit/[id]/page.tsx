@@ -219,7 +219,9 @@ export default function EditSalePage() {
  const originalTax = sale?.tax ?? 0;
  const discount = originalDiscount;
  const tax = originalTax;
- const total = Math.max(0, subtotal - discount + tax);
+ // Sale `total` is before discount everywhere (backend ledger, payment modal, invoice print all
+ // subtract `discount` themselves); taking it off here too deducted the discount twice.
+ const total = Math.max(0, subtotal + tax);
 
  const addToCart = useCallback((product: POSProduct, qty = 1) => {
  const price = parsePrice(product.price);
