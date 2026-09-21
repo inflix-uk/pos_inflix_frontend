@@ -6,6 +6,7 @@ import { ParcelData, QuantityData, ItemData, ItemEntry, Currency, ItemMode, Othe
 import { categoryApi } from "@/app/(routes)/inventory/category/service/categoryApi";
 import { parseMultiIMEIs } from "@/app/(routes)/purchases/add/utils/parseMultiIMEIs";
 import { formatSupplierDisplay } from "@/lib/formatSupplierDisplay";
+import { formatProductName } from "@/lib/formatProductName";
 
 import { API_BASE_URL as API_URL } from "@/lib/apiBase";
 
@@ -1359,6 +1360,7 @@ export const useEditPurchase = () => {
    if (colourVal) variantValuesArr.push({ slug: "color", value: toUpper(colourVal) });
   }
   return {
+   name: d.name?.trim() ? formatProductName(d.name) : undefined,
    sendTo: d.sendTo || undefined,
    tax: d.taxCategory || undefined,
    category: d.type || undefined,

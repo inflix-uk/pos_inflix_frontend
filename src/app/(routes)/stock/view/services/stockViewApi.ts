@@ -256,6 +256,28 @@ export const stockViewApi = {
   }
  },
 
+ /** Rename a non-serial item */
+ updateItemName: async (
+  purchaseId: string,
+  itemId: string,
+  name: string
+ ): Promise<ApiResponse<PurchaseRaw>> => {
+  try {
+   const response = await fetch(
+    `${API_BASE_URL}/purchases/${purchaseId}/items/${itemId}`,
+    {
+     method: "PATCH",
+     headers: getAuthHeaders(),
+     body: JSON.stringify({ name }),
+    }
+   );
+   return await response.json();
+  } catch (error) {
+   console.error("Error updating item name:", error);
+   return { success: false, message: "Failed to update name" };
+  }
+ },
+
  /** Update cost (purchase) price for any purchase item (serial or non-serial) */
  updateItemPurchasePrice: async (
   purchaseId: string,

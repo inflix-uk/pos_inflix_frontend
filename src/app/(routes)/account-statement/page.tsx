@@ -774,7 +774,7 @@ export default function AccountStatementPage() {
   {accountType === "customer"
    ? "Debit = invoices (customer owes more), Credit = payments and returns (customer owes less)."
    : "Credit = purchases (we owe more), Debit = payments to the supplier (we owe less)."}{" "}
-  Oldest first; Balance is the running total after each line{filterFrom ? ", starting from the balance brought forward" : ""}.
+  Newest first; Balance is the running total after each line{filterFrom ? ", starting from the balance brought forward at the bottom" : ""}.
   </p>
   <AccountLedgerTable
    accountType={statementAccountLabel}

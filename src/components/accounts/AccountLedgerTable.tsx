@@ -22,7 +22,11 @@ interface AccountLedgerTableProps {
  compact?: boolean;
 }
 
-/** Ledger in Date / Description / Debit / Credit / Balance form, oldest first, with opening and total rows. */
+/**
+ * Ledger in Date / Description / Debit / Credit / Balance form, newest first, with opening and total rows.
+ * `lines` arrive oldest first (the order the running balance is built in), so they are reversed for display
+ * and the opening balance sits at the bottom, just before the oldest line.
+ */
 export function AccountLedgerTable({
  accountType,
  openingBalance,
@@ -37,6 +41,7 @@ export function AccountLedgerTable({
  const cell = compact ? "py-2 px-3" : "py-3 px-4";
  const num = `${cell} text-right tabular-nums whitespace-nowrap`;
  const showActions = !!renderActions;
+ const newestFirst = [...lines].reverse();
  // The column that holds money received from / paid to the account.
  const paymentColumn = accountType === "Customer" ? "credit" : "debit";
  const balanceCell = (n: number) => (
@@ -63,23 +68,14 @@ export function AccountLedgerTable({
     </tr>
    </thead>
    <tbody>
-    <tr className="border-b border-gray-100 bg-gray-50/60">
-     <td className={cell} />
-     <td className={`${cell} font-medium text-gray-700`}>Opening balance</td>
-     <td className={cell} />
-     <td className={num} />
-     <td className={num} />
-     <td className={`${num} font-medium`}>{balanceCell(openingBalance)}</td>
-     {showActions && <td className={cell} />}
-    </tr>
-    {lines.length === 0 ? (
+    {newestFirst.length === 0 ? (
      <tr>
       <td colSpan={showActions ? 7 : 6} className="py-8 text-center text-gray-500">
        No entries in this period.
       </td>
      </tr>
     ) : (
-     lines.map((line) => (
+     newestFirst.map((line) => (
       <tr key={line._id} className="border-b border-gray-100">
        <td className={`${cell} text-gray-600 whitespace-nowrap`}>{formatDate(line.date)}</td>
        <td className={`${cell} text-gray-900`}>{describeStatementLine(line)}</td>
@@ -99,6 +95,15 @@ export function AccountLedgerTable({
       </tr>
      ))
     )}
+    <tr className="border-b border-gray-100 bg-gray-50/60">
+     <td className={cell} />
+     <td className={`${cell} font-medium text-gray-700`}>Opening balance</td>
+     <td className={cell} />
+     <td className={num} />
+     <td className={num} />
+     <td className={`${num} font-medium`}>{balanceCell(openingBalance)}</td>
+     {showActions && <td className={cell} />}
+    </tr>
    </tbody>
    <tfoot>
     <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">

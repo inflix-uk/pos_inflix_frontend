@@ -212,6 +212,12 @@ function drawSectionRule(doc: jsPDF, left: number, right: number, y: number) {
   doc.line(left, y, right, y);
 }
 
+/** "IMEI: a, b, c" for a serial line's sold IMEIs; null when the line has none. */
+function invoiceItemImeiText(item: SaleForPrint["items"][number]): string | null {
+  const serials = (item.serialNumbers || []).map((s) => String(s).trim()).filter(Boolean);
+  return serials.length > 0 ? `IMEI: ${serials.join(", ")}` : null;
+}
+
 function ensureSpace(
   doc: jsPDF,
   currentY: number,
@@ -501,97 +507,125 @@ export async function buildBusinessInvoicePdf(
       y += 5;
     }
 
+    type ItemRowLine = { text: string; imei: boolean };
     type ItemRowLayout = {
-      descLines: string[];
-      rowH: number;
+      lines: ItemRowLine[];
       qty: string;
       unit: string;
       amount: string;
     };
 
+    const rowHeight = (lineCount: number) => Math.max(lineCount * lineStep, 5) + rowPadY * 2;
+
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(io.fontBodyPt);
     const rowLayouts: ItemRowLayout[] = sale.items.map((item) => {
       const desc = invoiceItemDescriptionForPrint(item, variantAttributeSlugsOrderBySku);
-      const descLines = doc.splitTextToSize(desc, descMaxW);
-      const textBlockH = Math.max(descLines.length * lineStep, 5);
-      const rowH = textBlockH + rowPadY * 2;
+      doc.setFontSize(io.fontBodyPt);
+      const descLines: string[] = doc.splitTextToSize(desc, descMaxW);
+      const imeiText = invoiceItemImeiText(item);
+      doc.setFontSize(io.fontTablePt);
+      const imeiLines: string[] = imeiText ? doc.splitTextToSize(imeiText, descMaxW) : [];
       return {
-        descLines,
-        rowH,
+        lines: [
+          ...descLines.map((text) => ({ text, imei: false })),
+          ...imeiLines.map((text) => ({ text, imei: true })),
+        ],
         qty: String(item.quantity),
         unit: formatMoney(item.price),
         amount: formatMoney(item.price * item.quantity),
       };
     });
 
-    const tableTop = y;
-    doc.setFillColor(SLATE.r, SLATE.g, SLATE.b);
-    doc.rect(tableLeft, tableTop, tableW, headerH, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(io.fontTablePt);
-    doc.setTextColor(255, 255, 255);
-    const headerBaseline = tableTop + 5.5;
-    doc.text("Description", colDesc, headerBaseline);
-    doc.text("Qty", colQty, headerBaseline, { align: "right" });
-    doc.text("Unit price", colUnit, headerBaseline, { align: "right" });
-    doc.text("Amount", colAmt, headerBaseline, { align: "right" });
-    doc.setTextColor(0, 0, 0);
+    /** Header band; returns the top of the first row under it. */
+    const drawTableHeader = (top: number) => {
+      doc.setFillColor(SLATE.r, SLATE.g, SLATE.b);
+      doc.rect(tableLeft, top, tableW, headerH, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(io.fontTablePt);
+      doc.setTextColor(255, 255, 255);
+      const headerBaseline = top + 5.5;
+      doc.text("Description", colDesc, headerBaseline);
+      doc.text("Qty", colQty, headerBaseline, { align: "right" });
+      doc.text("Unit price", colUnit, headerBaseline, { align: "right" });
+      doc.text("Amount", colAmt, headerBaseline, { align: "right" });
+      doc.setTextColor(0, 0, 0);
 
-    doc.setDrawColor(BORDER.r, BORDER.g, BORDER.b);
-    doc.setLineWidth(0.15);
-    doc.line(tableLeft, tableTop + headerH, tableLeft + tableW, tableTop + headerH);
+      doc.setDrawColor(BORDER.r, BORDER.g, BORDER.b);
+      doc.setLineWidth(0.15);
+      doc.line(tableLeft, top + headerH, tableLeft + tableW, top + headerH);
 
-    let rowTop = tableTop + headerH;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(io.fontBodyPt);
+      return top + headerH;
+    };
+
+    // Rows (with their IMEI lines) can outgrow a page, so the table continues on a new page with the header repeated.
+    const tableBottomLimit = 268;
+    const continuationTop = io.marginMm + 8;
+    let segmentTop = y;
+    let rowTop = drawTableHeader(segmentTop);
+
+    const closeTableSegment = () => {
+      doc.setLineWidth(0.25);
+      doc.rect(tableLeft, segmentTop, tableW, rowTop - segmentTop, "S");
+    };
+    const continueTableOnNewPage = () => {
+      closeTableSegment();
+      doc.addPage();
+      segmentTop = continuationTop;
+      rowTop = drawTableHeader(segmentTop);
+    };
+
     rowLayouts.forEach((layout, idx) => {
-      if (idx % 2 === 1) {
-        doc.setFillColor(PANEL_BG.r, PANEL_BG.g, PANEL_BG.b);
-        doc.rect(tableLeft, rowTop, tableW, layout.rowH, "F");
+      const fullRowH = rowHeight(layout.lines.length);
+      const pageHasRows = rowTop > segmentTop + headerH;
+      const fitsHere = rowTop + fullRowH <= tableBottomLimit;
+      const fitsOnFreshPage = fullRowH <= tableBottomLimit - continuationTop - headerH;
+      if (!fitsHere && pageHasRows && (fitsOnFreshPage || rowTop + rowHeight(1) > tableBottomLimit)) {
+        continueTableOnNewPage();
       }
-      rowTop += layout.rowH;
+
+      let start = 0;
+      while (start < layout.lines.length) {
+        const room = Math.floor((tableBottomLimit - rowTop - rowPadY * 2) / lineStep);
+        const chunk = layout.lines.slice(start, start + Math.max(1, room));
+        const chunkH = rowHeight(chunk.length);
+
+        if (idx % 2 === 1) {
+          doc.setFillColor(PANEL_BG.r, PANEL_BG.g, PANEL_BG.b);
+          doc.rect(tableLeft, rowTop, tableW, chunkH, "F");
+          // The fill paints over half of the rule above it; redraw that rule on top.
+          doc.line(tableLeft, rowTop, tableLeft + tableW, rowTop);
+        }
+
+        const textY = rowTop + rowPadY + 4.2;
+        chunk.forEach(({ text, imei }, i) => {
+          if (imei) {
+            doc.setFontSize(io.fontTablePt);
+            doc.setTextColor(MUTED.r, MUTED.g, MUTED.b);
+          }
+          doc.text(text, colDesc, textY + i * lineStep);
+          if (imei) {
+            doc.setFontSize(io.fontBodyPt);
+            doc.setTextColor(0, 0, 0);
+          }
+        });
+
+        if (start === 0) {
+          doc.text(layout.qty, colQty, textY, { align: "right" });
+          doc.text(layout.unit, colUnit, textY, { align: "right" });
+          doc.text(layout.amount, colAmt, textY, { align: "right" });
+        }
+
+        rowTop += chunkH;
+        doc.line(tableLeft, rowTop, tableLeft + tableW, rowTop);
+
+        start += chunk.length;
+        if (start < layout.lines.length) continueTableOnNewPage();
+      }
     });
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(io.fontBodyPt);
-    rowTop = tableTop + headerH;
-
-    rowLayouts.forEach((layout) => {
-    
-      // FIXED TEXT POSITION
-      const textY = rowTop + rowPadY + 4.2;
-    
-      layout.descLines.forEach((line: string, i: number) => {
-        doc.text(
-          line,
-          colDesc,
-          textY + i * lineStep
-        );
-      });
-    
-      doc.text(layout.qty, colQty, textY, {
-        align: "right",
-      });
-    
-      doc.text(layout.unit, colUnit, textY, {
-        align: "right",
-      });
-    
-      doc.text(layout.amount, colAmt, textY, {
-        align: "right",
-      });
-    
-      rowTop += layout.rowH;
-    
-      doc.line(
-        tableLeft,
-        rowTop,
-        tableLeft + tableW,
-        rowTop
-      );
-    });
-
-    doc.setLineWidth(0.25);
-    doc.rect(tableLeft, tableTop, tableW, rowTop - tableTop, "S");
+    closeTableSegment();
     y = rowTop + 8;
   }
 

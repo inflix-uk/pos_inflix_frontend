@@ -6,6 +6,7 @@ import { Eye, Trash2 } from "lucide-react";
 import type { StockViewRow } from "../../../stock/view/types";
 import { empty } from "../../../stock/view/hooks/useStockView";
 import { formatDateTimeLondon } from "@/lib/dateUtils";
+import { formatProductName, formatProductNameInput } from "@/lib/formatProductName";
 
 export type SoldInfoMap = Record<string, { customerName: string; saleReference?: string; saleId?: string }>;
 
@@ -19,6 +20,8 @@ interface ProductsStockTableProps {
  isLoading?: boolean;
  /** When provided, non-serial rows show editable quantity; call to persist */
  onQuantityChange?: (purchaseId: string, itemId: string, quantity: number) => Promise<void>;
+ /** When provided, non-serial rows show an editable product name; call to persist */
+ onNameChange?: (purchaseId: string, itemId: string, name: string) => Promise<void>;
  /** When provided, non-serial rows show editable cost price; call to persist */
  onPurchasePriceChange?: (purchaseId: string, itemId: string, purchasePrice: number) => Promise<void>;
  /** When provided, non-serial rows show editable sale price; call to persist */
@@ -174,6 +177,7 @@ export function ProductsStockTable({
  soldInfoMap = {},
  isLoading,
  onQuantityChange,
+ onNameChange,
  onPurchasePriceChange,
  onSalePriceChange,
  variant,
@@ -253,6 +257,7 @@ export function ProductsStockTable({
   row={row}
   soldInfoMap={soldInfoMap}
   onQuantityChange={onQuantityChange}
+  onNameChange={onNameChange}
   onPurchasePriceChange={onPurchasePriceChange}
   onSalePriceChange={onSalePriceChange}
   showQtyColumn={showQtyColumn}
@@ -288,6 +293,7 @@ function ProductsStockTableRow({
  row,
  soldInfoMap,
  onQuantityChange,
+ onNameChange,
  onPurchasePriceChange,
  onSalePriceChange,
  showQtyColumn,
@@ -304,6 +310,7 @@ function ProductsStockTableRow({
  row: StockViewRow;
  soldInfoMap: SoldInfoMap;
  onQuantityChange?: (purchaseId: string, itemId: string, quantity: number) => Promise<void>;
+ onNameChange?: (purchaseId: string, itemId: string, name: string) => Promise<void>;
  onPurchasePriceChange?: (purchaseId: string, itemId: string, purchasePrice: number) => Promise<void>;
  onSalePriceChange?: (purchaseId: string, itemId: string, salePrice: number) => Promise<void>;
  showQtyColumn: boolean;
@@ -318,6 +325,8 @@ function ProductsStockTableRow({
  showViewColumn?: boolean;
 }) {
  const [editingQty, setEditingQty] = useState<number | null>(null);
+ const [editingName, setEditingName] = useState<string | null>(null);
+ const [savingName, setSavingName] = useState(false);
  const [editingCost, setEditingCost] = useState<string | null>(null);
  const [editingSale, setEditingSale] = useState<string | null>(null);
  const [saving, setSaving] = useState(false);
@@ -358,6 +367,26 @@ function ProductsStockTableRow({
  },
  []
  );
+
+ const canEditName = isNonSerial && row.purchaseId && row.itemId && onNameChange;
+
+ const handleNameBlur = useCallback(async () => {
+ if (editingName === null || !onNameChange || !row.purchaseId || !row.itemId) return;
+ const next = formatProductName(editingName);
+ if (!next || next === (row.name || "").trim()) {
+ setEditingName(null);
+ return;
+ }
+ setSavingName(true);
+ try {
+ await onNameChange(row.purchaseId, row.itemId, next);
+ setEditingName(null);
+ } catch {
+ setEditingName(null);
+ } finally {
+ setSavingName(false);
+ }
+ }, [editingName, onNameChange, row.purchaseId, row.itemId, row.name]);
 
  const canEditCost = isNonSerial && row.purchaseId && row.itemId && onPurchasePriceChange;
  const canEditSale = isNonSerial && row.purchaseId && row.itemId && onSalePriceChange;
@@ -449,7 +478,25 @@ function ProductsStockTableRow({
  {showSidColumn && (
  <td className={`${tdClass} font-mono text-xs`}>{empty(row.serialItemIdNumber)}</td>
  )}
- {showNameColumn && <td className={tdClass}>{displayName}</td>}
+ {showNameColumn && (
+ <td className={tdClass}>
+  {canEditName ? (
+  <input
+  type="text"
+  value={editingName !== null ? editingName : (row.name || "")}
+  placeholder={displayName}
+  title={displayName}
+  onChange={(e) => setEditingName(formatProductNameInput(e.target.value))}
+  onBlur={handleNameBlur}
+  onKeyDown={handleQtyKeyDown}
+  disabled={savingName}
+  className="w-44 px-2 py-1 text-sm border border-gray-200 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-60"
+  />
+  ) : (
+  displayName
+  )}
+ </td>
+ )}
  {showQtyColumn && (
  <td className={tdClass}>
   {canEditQty ? (
