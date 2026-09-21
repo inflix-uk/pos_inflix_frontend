@@ -23,6 +23,7 @@ export const expenseApi = {
   if (filters.categoryId) params.set("categoryId", filters.categoryId);
   if (filters.status) params.set("status", filters.status);
   if (filters.paymentMethod) params.set("paymentMethod", filters.paymentMethod);
+  if (filters.locationId) params.set("locationId", filters.locationId);
   if (filters.search) params.set("search", filters.search);
   if (filters.page != null) params.set("page", String(filters.page));
   if (filters.limit != null) params.set("limit", String(filters.limit));

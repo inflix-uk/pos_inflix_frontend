@@ -25,6 +25,8 @@ export interface Expense {
  vatRate?: number;
  paymentMethod: PaymentMethod;
  paymentReference?: string;
+ /** Shop this expense belongs to. null/absent = company-wide overhead. */
+ locationId?: string | null | { _id: string; name: string };
  status: ExpenseStatus;
  createdByUserId?: string | { _id: string; name: string };
  approvedByUserId?: string | null | { _id: string; name: string };
@@ -47,6 +49,8 @@ export interface ExpenseFormData {
  vatRate?: number;
  paymentMethod: PaymentMethod;
  paymentReference?: string;
+ /** Empty string = company-wide overhead (no shop). */
+ locationId?: string | null;
 }
 
 export interface ExpenseFilters {
@@ -55,6 +59,8 @@ export interface ExpenseFilters {
  categoryId?: string;
  status?: string;
  paymentMethod?: string;
+ /** "all" or omitted = every shop plus company-wide. */
+ locationId?: string;
  search?: string;
  page?: number;
  limit?: number;

@@ -6,13 +6,14 @@ import { expenseCategoryApi } from "../../expense-category/service/expenseCatego
 import type { Expense, ExpenseFilters } from "../types";
 import type { ExpenseCategory } from "../../expense-category/types";
 
-export function useExpensesList() {
+/** `initialFilters` seeds the first load only (e.g. the Takings drilldown's locationId + dates). */
+export function useExpensesList(initialFilters?: ExpenseFilters) {
  const [expenses, setExpenses] = useState<Expense[]>([]);
  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
  const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, pages: 0 });
  const [loading, setLoading] = useState(true);
  const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
- const [filters, setFilters] = useState<ExpenseFilters>({ page: 1, limit: 25 });
+ const [filters, setFilters] = useState<ExpenseFilters>(() => ({ page: 1, limit: 25, ...initialFilters }));
  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
  const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
  const [deleteLoading, setDeleteLoading] = useState(false);

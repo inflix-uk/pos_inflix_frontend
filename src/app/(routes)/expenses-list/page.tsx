@@ -2,7 +2,9 @@
 
 import React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useExpensesList } from "./hooks/useExpensesList";
+import { locationApi } from "@/app/(routes)/peoples/locations/service/locationApi";
 import { usePermissions } from "@/hooks/usePermissions";
 import { formatDateTimeLondon } from "@/lib/dateUtils";
 import { Plus, Eye, Pencil, Paperclip, Trash2 } from "lucide-react";
@@ -29,8 +31,48 @@ function approvedByName(exp: Expense): string {
  return typeof u === "object" && u && "name" in u ? u.name : "—";
 }
 
+function locationName(exp: Expense): string {
+ const l = exp.locationId;
+ if (typeof l === "object" && l && "name" in l) return l.name;
+ return "Company-wide";
+}
+
+/** London day (YYYY-MM-DD) from the Takings drilldown → inclusive UTC instants. */
+function dayToUtc(day: string, endOfDay: boolean): string | undefined {
+ if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return undefined;
+ return new Date(`${day}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`).toISOString();
+}
+
 export default function ExpensesListPage() {
  const { can } = usePermissions();
+ const searchParams = useSearchParams();
+ // Read once: the Takings "View Expenses" button arrives with from/to/locationId already chosen.
+ const [initialFilters] = React.useState(() => {
+ const locationId = searchParams.get("locationId") || undefined;
+ const from = searchParams.get("from") || "";
+ const to = searchParams.get("to") || "";
+ return {
+  locationId: locationId && locationId !== "all" ? locationId : undefined,
+  fromUtc: dayToUtc(from, false),
+  toUtc: dayToUtc(to, true),
+ };
+ });
+ const [locations, setLocations] = React.useState<Array<{ _id: string; name: string }>>([]);
+
+ React.useEffect(() => {
+ let cancelled = false;
+ locationApi
+  .getLocations({ isActive: true, limit: 500 })
+  .then((res) => {
+  if (cancelled || !res.success || !Array.isArray(res.data)) return;
+  setLocations((res.data as Array<{ _id: string; name: string }>).map((l) => ({ _id: l._id, name: l.name })));
+  })
+  .catch(() => {});
+ return () => {
+  cancelled = true;
+ };
+ }, []);
+
  const canView = can("expense.view");
  const canCreate = can("expense.create");
  const canEditDraft = can("expense.edit_draft");
@@ -57,7 +99,7 @@ export default function ExpensesListPage() {
  closeDeleteModal,
  deleteExpense,
  deleteLoading,
- } = useExpensesList();
+ } = useExpensesList(initialFilters);
 
  if (!canView) {
  return (
@@ -118,6 +160,16 @@ export default function ExpensesListPage() {
   ))}
  </select>
  <select
+  value={filters.locationId ?? ""}
+  onChange={(e) => setFilter("locationId", e.target.value || undefined)}
+  className="rounded-lg border border-gray-300 px-2.5 @[640px]:px-3 py-1 @[640px]:py-1.5 text-xs @[640px]:text-sm"
+ >
+  <option value="">All shops</option>
+  {locations.map((l) => (
+  <option key={l._id} value={l._id}>{l.name}</option>
+  ))}
+ </select>
+ <select
   value={filters.status ?? ""}
   onChange={(e) => setFilter("status", e.target.value || undefined)}
   className="rounded-lg border border-gray-300 px-2.5 @[640px]:px-3 py-1 @[640px]:py-1.5 text-xs @[640px]:text-sm"
@@ -157,6 +209,7 @@ export default function ExpensesListPage() {
   <th className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3 text-left text-[10px] @[640px]:text-xs font-medium text-gray-500 uppercase">Date/Time</th>
   <th className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3 text-left text-[10px] @[640px]:text-xs font-medium text-gray-500 uppercase">Category</th>
   <th className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3 text-left text-[10px] @[640px]:text-xs font-medium text-gray-500 uppercase">Vendor</th>
+  <th className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3 text-left text-[10px] @[640px]:text-xs font-medium text-gray-500 uppercase">Shop</th>
   <th className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3 text-right text-[10px] @[640px]:text-xs font-medium text-gray-500 uppercase">Gross</th>
   <th className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3 text-left text-[10px] @[640px]:text-xs font-medium text-gray-500 uppercase">Payment</th>
   <th className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3 text-left text-[10px] @[640px]:text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -169,13 +222,14 @@ export default function ExpensesListPage() {
   </thead>
   <tbody className="divide-y divide-gray-200">
   {loading ? (
-  <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-500 text-xs @[640px]:text-sm">Loading…</td></tr>
+  <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-500 text-xs @[640px]:text-sm">Loading…</td></tr>
   ) : (
   expenses.map((exp) => (
    <tr key={exp._id} className="hover:bg-gray-50">
    <td className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3 text-xs @[640px]:text-sm text-gray-900 whitespace-nowrap">{formatDateTimeLondon(exp.occurredAtUtc)}</td>
    <td className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3 text-xs @[640px]:text-sm text-gray-700">{categoryName(exp)}</td>
    <td className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3 text-xs @[640px]:text-sm text-gray-600">{exp.vendorName || "—"}</td>
+   <td className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3 text-xs @[640px]:text-sm text-gray-600">{locationName(exp)}</td>
    <td className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3 text-xs @[640px]:text-sm text-right font-medium">{formatCurrency(exp.amountGross)}</td>
    <td className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3 text-xs @[640px]:text-sm text-gray-600">{exp.paymentMethod}</td>
    <td className="px-3 @[640px]:px-4 py-2.5 @[640px]:py-3">

@@ -3,14 +3,21 @@
 import React from "react";
 import Link from "next/link";
 import { AlertTriangle, Loader2, MessageCircle, Phone, Send, X } from "lucide-react";
-import type { InvoiceRecord } from "../service/invoicesApi";
-import type { WhatsappStatus } from "../../settings/whatsapp/service/whatsappApi";
+import type { WhatsappStatus } from "@/app/(routes)/settings/whatsapp/service/whatsappApi";
+
+/** Anything printable as an invoice — an Invoice record or a Sale row. */
+export interface SendableInvoice {
+ _id: string;
+ reference: string;
+ customerName?: string;
+ total: number;
+}
 
 const formatMoney = (n: number) =>
  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2 }).format(n);
 
 /** Default caption — matches the backend default when no message is supplied. */
-export function defaultInvoiceWhatsappMessage(invoice: InvoiceRecord): string {
+export function defaultInvoiceWhatsappMessage(invoice: SendableInvoice): string {
  return `Invoice ${invoice.reference} for ${invoice.customerName || "Customer"}. Total: ${formatMoney(Number(invoice.total) || 0)}.`;
 }
 
@@ -26,7 +33,7 @@ export default function SendInvoiceWhatsappModal({
  onCancel,
  onSend,
 }: {
- invoice: InvoiceRecord;
+ invoice: SendableInvoice;
  phone: string;
  onPhoneChange: (v: string) => void;
  message: string;

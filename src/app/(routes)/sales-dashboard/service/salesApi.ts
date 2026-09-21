@@ -1,3 +1,5 @@
+import type { WhatsappEnqueueResult } from "../../settings/whatsapp/service/whatsappApi";
+
 /** Line item for a saved sale */
 export interface SaleItemPayload {
  sku: string;
@@ -370,6 +372,40 @@ export const salesApi = {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error((data as { message?: string }).message || "Failed to record payment");
   return data;
+ },
+
+ /** Emails this sale's invoice PDF (rendered by the caller) to the customer. */
+ sendSaleEmail: async (
+  id: string,
+  payload: { to: string; pdfBase64: string; filename: string }
+ ): Promise<{ success: boolean; message?: string }> => {
+  const response = await fetch(`${API_BASE_URL}/sales/${id}/send-email`, {
+   method: "POST",
+   headers: getAuthHeaders(),
+   body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+   throw new Error((data as { message?: string }).message || "Failed to send invoice email");
+  }
+  return data as { success: boolean; message?: string };
+ },
+
+ /** Queues this sale's invoice PDF for the connected WhatsApp (paced by the safety limits). */
+ sendSaleWhatsapp: async (
+  id: string,
+  payload: { phone: string; pdfBase64: string; filename: string; message?: string }
+ ): Promise<{ success: boolean; message?: string; data: WhatsappEnqueueResult }> => {
+  const response = await fetch(`${API_BASE_URL}/sales/${id}/send-whatsapp`, {
+   method: "POST",
+   headers: getAuthHeaders(),
+   body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+   throw new Error((data as { message?: string }).message || "Failed to send invoice via WhatsApp");
+  }
+  return data as { success: boolean; message?: string; data: WhatsappEnqueueResult };
  },
 
  deleteSale: async (id: string, voidReason?: string): Promise<{ success: boolean; message: string; data: { _id: string; reference: string } }> => {

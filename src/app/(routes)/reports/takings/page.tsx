@@ -251,7 +251,7 @@ export default function TakingsDashboardPage() {
   View Returns
   </Link>
   <Link
-  href={`/expenses?${drilldownParams}`}
+  href={`/expenses-list?${drilldownParams}`}
   className="rounded-lg border border-gray-200 bg-white px-2 @[640px]:px-2.5 @[768px]:px-3 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium text-gray-700 hover:bg-gray-50"
   >
   View Expenses

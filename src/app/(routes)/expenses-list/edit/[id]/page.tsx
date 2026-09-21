@@ -9,6 +9,7 @@ import type { Expense, ExpenseFormData, ExpenseStatus, PaymentMethod } from "../
 import type { ExpenseCategory } from "../../../expense-category/types";
 import { PAYMENT_METHODS, STATUSES } from "../../types";
 import { usePermissions } from "@/hooks/usePermissions";
+import { locationApi } from "@/app/(routes)/peoples/locations/service/locationApi";
 import { formatDateTimeLondon } from "@/lib/dateUtils";
 import { ArrowLeft, Send, Check, X, Banknote, Trash2, Pencil } from "lucide-react";
 
@@ -32,6 +33,7 @@ export default function EditExpensePage() {
  const { can } = usePermissions();
  const [expense, setExpense] = useState<Expense | null>(null);
  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+ const [locations, setLocations] = useState<Array<{ _id: string; name: string }>>([]);
  const [loading, setLoading] = useState(true);
  const [saving, setSaving] = useState(false);
  const [error, setError] = useState<string | null>(null);
@@ -71,6 +73,10 @@ export default function EditExpensePage() {
  vatRate: exp.vatRate ?? 20,
  paymentMethod: exp.paymentMethod,
  paymentReference: exp.paymentReference ?? "",
+ locationId:
+  typeof exp.locationId === "object" && exp.locationId
+  ? (exp.locationId as { _id: string })._id
+  : (exp.locationId ?? ""),
  });
  } catch (e) {
  setError(e instanceof Error ? e.message : "Failed to load");
@@ -82,6 +88,20 @@ export default function EditExpensePage() {
  useEffect(() => {
  load();
  }, [id]);
+
+ useEffect(() => {
+ let cancelled = false;
+ locationApi
+ .getLocations({ isActive: true, limit: 500 })
+ .then((res) => {
+  if (cancelled || !res.success || !Array.isArray(res.data)) return;
+  setLocations((res.data as Array<{ _id: string; name: string }>).map((l) => ({ _id: l._id, name: l.name })));
+ })
+ .catch(() => {});
+ return () => {
+ cancelled = true;
+ };
+ }, []);
 
  const recalcFromNetAndRate = (net: number, rate: number) => {
  if (!form) return;
@@ -108,6 +128,8 @@ export default function EditExpensePage() {
  vatAmount: vat,
  amountGross: gross,
  occurredAtUtc: new Date(form.occurredAtUtc).toISOString(),
+ // "" would fail to cast to an ObjectId; null is the company-wide value.
+ locationId: form.locationId || null,
  });
  setExpense(updated);
  setEditing(false);
@@ -260,6 +282,19 @@ export default function EditExpensePage() {
   >
    {categories.filter((c) => c.isActive).map((c) => (
    <option key={c._id} value={c._id}>{c.name}</option>
+   ))}
+  </select>
+  </div>
+  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">Shop</label>
+  <select
+   value={form.locationId ?? ""}
+   onChange={(e) => setForm((f) => f ? { ...f, locationId: e.target.value } : null)}
+   className="w-full rounded-lg border border-gray-300 px-3 py-2"
+  >
+   <option value="">Company-wide (all shops)</option>
+   {locations.map((l) => (
+   <option key={l._id} value={l._id}>{l.name}</option>
    ))}
   </select>
   </div>

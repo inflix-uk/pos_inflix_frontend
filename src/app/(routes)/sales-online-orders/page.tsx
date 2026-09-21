@@ -23,6 +23,8 @@ import {
  CreditCard,
  Wallet,
  Landmark,
+ Mail,
+ MessageCircle,
 } from "lucide-react";
 import {
  salesApi,
@@ -814,6 +816,17 @@ const Page = () => {
  const [previewSale, setPreviewSale] = useState<SaleRecord | null>(null);
  const [previewLoading, setPreviewLoading] = useState(false);
  const [takePaymentSale, setTakePaymentSale] = useState<SaleRecord | null>(null);
+ const [actionMessage, setActionMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+ const [emailTarget, setEmailTarget] = useState<SaleRecord | null>(null);
+ const [emailTo, setEmailTo] = useState("");
+ const [emailSending, setEmailSending] = useState(false);
+ const [emailPrefillLoading, setEmailPrefillLoading] = useState(false);
+ const [whatsappTarget, setWhatsappTarget] = useState<SaleRecord | null>(null);
+ const [whatsappPhone, setWhatsappPhone] = useState("");
+ const [whatsappMessage, setWhatsappMessage] = useState("");
+ const [whatsappConnection, setWhatsappConnection] = useState<WhatsappStatus | null>(null);
+ const [whatsappSending, setWhatsappSending] = useState(false);
+ const [whatsappPrefillLoading, setWhatsappPrefillLoading] = useState(false);
 
  const openPreview = useCallback(async (sale: SaleRecord) => {
  // If items already loaded (from search results or expanded row), show directly
@@ -884,6 +897,109 @@ const Page = () => {
  } finally {
  setPrintLoading(null);
  }
+ };
+
+ /** Customer id on a sale row, whether populated or a plain id. */
+ const saleCustomerId = (s: SaleRecord): string | null => {
+  const c = s.customerId;
+  if (!c) return null;
+  return typeof c === "object" ? (c as { _id?: string })._id ?? null : c;
+ };
+
+ const openSendEmail = async (sale: SaleRecord) => {
+  setActionMessage(null);
+  setEmailTarget(sale);
+  setEmailTo("");
+  setEmailPrefillLoading(true);
+  try {
+   const customerId = saleCustomerId(sale);
+   if (customerId) {
+    const res = await customerApi.getById(customerId);
+    const email = res?.data?.email?.trim();
+    if (email) setEmailTo(email);
+   }
+  } catch {
+   // optional prefill
+  } finally {
+   setEmailPrefillLoading(false);
+  }
+ };
+
+ const handleSendEmail = async () => {
+  if (!emailTarget) return;
+  const to = emailTo.trim();
+  if (!to) return;
+  setEmailSending(true);
+  setActionMessage(null);
+  try {
+   const full = await ensureSaleWithItems(emailTarget);
+   const { base64, filename } = await getInvoiceA4PdfBase64(saleForPrint(full));
+   const res = await salesApi.sendSaleEmail(emailTarget._id, { to, pdfBase64: base64, filename });
+   setEmailTarget(null);
+   setEmailTo("");
+   setActionMessage({ type: "success", text: res.message || `Invoice emailed to ${to}` });
+  } catch (e) {
+   setActionMessage({ type: "error", text: e instanceof Error ? e.message : "Failed to send invoice email" });
+  } finally {
+   setEmailSending(false);
+  }
+ };
+
+ const openSendWhatsapp = async (sale: SaleRecord) => {
+  setActionMessage(null);
+  setWhatsappTarget(sale);
+  setWhatsappPhone("");
+  setWhatsappMessage(defaultInvoiceWhatsappMessage(sale));
+  setWhatsappConnection(null);
+  setWhatsappPrefillLoading(true);
+  const customerId = saleCustomerId(sale);
+  await Promise.all([
+   whatsappApi
+    .getStatus()
+    .then((s) => setWhatsappConnection(s.status))
+    .catch(() => setWhatsappConnection("disconnected")),
+   (async () => {
+    try {
+     if (customerId) {
+      const res = await customerApi.getById(customerId);
+      // Mobile is the likelier WhatsApp number; fall back to the main phone.
+      const number = res?.data?.mobile?.trim() || res?.data?.phone?.trim();
+      if (number) setWhatsappPhone(number);
+     }
+    } catch {
+     // optional prefill
+    } finally {
+     setWhatsappPrefillLoading(false);
+    }
+   })(),
+  ]);
+ };
+
+ const handleSendWhatsapp = async () => {
+  if (!whatsappTarget) return;
+  const phone = whatsappPhone.trim();
+  if (!phone) return;
+  setWhatsappSending(true);
+  setActionMessage(null);
+  try {
+   const full = await ensureSaleWithItems(whatsappTarget);
+   const { base64, filename } = await getInvoiceA4PdfBase64(saleForPrint(full));
+   const res = await salesApi.sendSaleWhatsapp(whatsappTarget._id, {
+    phone,
+    pdfBase64: base64,
+    filename,
+    message: whatsappMessage.trim() || undefined,
+   });
+   setWhatsappTarget(null);
+   setActionMessage({
+    type: "success",
+    text: `${res.message || "Invoice queued for WhatsApp"}. ${describeQueuePosition(res.data)}`,
+   });
+  } catch (e) {
+   setActionMessage({ type: "error", text: e instanceof Error ? e.message : "Failed to send invoice via WhatsApp" });
+  } finally {
+   setWhatsappSending(false);
+  }
  };
 
  const handlePrintReceipt = async (sale: SaleRecord) => {
@@ -1333,6 +1449,25 @@ const Page = () => {
   <span className="text-sm font-medium">{error}</span>
   <button onClick={fetchSales} className="text-sm font-semibold text-red-600 hover:underline shrink-0">
   Retry
+  </button>
+  </div>
+  )}
+
+  {actionMessage && (
+  <div
+   className={`mx-5 mt-4 p-4 rounded-xl border flex items-start justify-between gap-3 ${
+   actionMessage.type === "success"
+    ? "bg-emerald-50 text-emerald-800 border-emerald-100"
+    : "bg-red-50 text-red-700 border-red-100"
+   }`}
+  >
+  <span className="text-sm font-medium">{actionMessage.text}</span>
+  <button
+   type="button"
+   onClick={() => setActionMessage(null)}
+   className="shrink-0 text-sm font-semibold hover:underline"
+  >
+   Dismiss
   </button>
   </div>
   )}
@@ -1903,6 +2038,40 @@ const Page = () => {
   onDownloadInvoice={() => handleDownloadInvoice(previewSale)}
   onPrintReceipt={() => handlePrintReceipt(previewSale)}
   printing={printLoading === previewSale._id || downloadInvoiceLoadingId === previewSale._id}
+ />
+ )}
+
+ {emailTarget && (
+ <SendInvoiceEmailModal
+  invoice={emailTarget}
+  email={emailTo}
+  onEmailChange={setEmailTo}
+  loading={emailSending}
+  prefillLoading={emailPrefillLoading}
+  onCancel={() => {
+   if (emailSending) return;
+   setEmailTarget(null);
+   setEmailTo("");
+  }}
+  onSend={handleSendEmail}
+ />
+ )}
+
+ {whatsappTarget && (
+ <SendInvoiceWhatsappModal
+  invoice={whatsappTarget}
+  phone={whatsappPhone}
+  onPhoneChange={setWhatsappPhone}
+  message={whatsappMessage}
+  onMessageChange={setWhatsappMessage}
+  connection={whatsappConnection}
+  loading={whatsappSending}
+  prefillLoading={whatsappPrefillLoading}
+  onCancel={() => {
+   if (whatsappSending) return;
+   setWhatsappTarget(null);
+  }}
+  onSend={handleSendWhatsapp}
  />
  )}
 
