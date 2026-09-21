@@ -49,6 +49,9 @@ const EditPurchasePage = () => {
  loadError,
  isSubmitting,
  submitMessage,
+ missingModelsCount,
+ isRestoringModels,
+ handleRestoreBrandModels,
  handleParcelChange,
  handleQuantityChange,
  handleItemChange,
@@ -118,6 +121,28 @@ const EditPurchasePage = () => {
   }`}
  >
   {submitMessage.text}
+ </div>
+ )}
+
+ {missingModelsCount > 0 && (
+ <div className="mb-3 px-3 py-2 rounded-lg text-sm bg-amber-50 text-amber-900 border border-amber-200 flex flex-wrap items-center justify-between gap-2">
+  <span>
+   {missingModelsCount} item group{missingModelsCount === 1 ? "" : "s"} missing a model
+   {isRestoringModels ? " — restoring from history…" : "."}
+  </span>
+  <button
+   type="button"
+   onClick={() => handleRestoreBrandModels()}
+   disabled={isRestoringModels}
+   className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg bg-amber-800 text-white hover:bg-amber-900 disabled:opacity-60"
+  >
+   {isRestoringModels ? (
+    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+   ) : (
+    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+   )}
+   Restore missing models
+  </button>
  </div>
  )}
 

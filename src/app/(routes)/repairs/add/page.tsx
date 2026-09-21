@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, X, ArrowLeft, Plus, Trash2, MapPin, ChevronDown, RotateCcw } from "lucide-react";
 import { repairApi } from "../service/repairApi";
+import { repairProblemTypeApi, type RepairProblemType } from "../service/repairProblemTypeApi";
 import { customerApi } from "../../peoples/customers/service/customerApi";
 import { locationApi } from "../../peoples/locations/service/locationApi";
 import { AddCustomerModal } from "../../peoples/customers/components/AddCustomerModal";
@@ -13,7 +14,7 @@ import type { Customer } from "../../peoples/customers/types";
 import type { CustomerFormData } from "../../peoples/customers/types";
 import type { RepairFormData } from "../types";
 
-const DEFAULT_PROBLEMS = [
+const FALLBACK_PROBLEMS = [
  "Cracked screen",
  "Won't turn on",
  "Battery issue",
@@ -79,7 +80,12 @@ export default function AddRepairTicketPage() {
   .join(", ");
  const [devices, setDevices] = useState<DeviceEntry[]>([]);
  const [newDeviceModalOpen, setNewDeviceModalOpen] = useState(false);
- const [problemOptions, setProblemOptions] = useState<string[]>(DEFAULT_PROBLEMS);
+ const [problemOptions, setProblemOptions] = useState<RepairProblemType[]>(
+  FALLBACK_PROBLEMS.map((name, i) => ({ _id: `local-${i}`, name }))
+ );
+ const [problemOptionsLoading, setProblemOptionsLoading] = useState(true);
+ const [savingProblemType, setSavingProblemType] = useState(false);
+ const [deletingProblemId, setDeletingProblemId] = useState<string | null>(null);
  const [newProblemModalOpen, setNewProblemModalOpen] = useState(false);
  const [newProblemInput, setNewProblemInput] = useState("");
  const [problemTargetDeviceId, setProblemTargetDeviceId] = useState<string | null>(null);
@@ -159,20 +165,113 @@ export default function AddRepairTicketPage() {
  return () => { cancelled = true; };
  }, [customerOpen, customerSearch]);
 
- const addNewProblemFromModal = () => {
- const v = newProblemInput.trim();
- if (!v) return;
- if (!problemOptions.includes(v)) setProblemOptions((prev) => [...prev, v]);
- if (problemTargetDeviceId) {
- setDevices((prev) => prev.map((d) => {
- if (d.id !== problemTargetDeviceId) return d;
- if (d.problemTypes.includes(v)) return d;
- return { ...d, problemTypes: [...d.problemTypes, v] };
- }));
- }
- setNewProblemInput("");
- setNewProblemModalOpen(false);
- setProblemTargetDeviceId(null);
+ // Load saved problem types (auto-seeded on backend)
+ useEffect(() => {
+ let cancelled = false;
+ setProblemOptionsLoading(true);
+ repairProblemTypeApi
+  .list()
+  .then((res) => {
+   if (cancelled) return;
+   if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+    setProblemOptions(res.data);
+   }
+  })
+  .catch(() => {
+   /* keep fallback chips */
+  })
+  .finally(() => {
+   if (!cancelled) setProblemOptionsLoading(false);
+  });
+ return () => {
+  cancelled = true;
+ };
+ }, []);
+
+ const selectProblemOnDevice = (deviceId: string | null, label: string) => {
+  if (!deviceId) return;
+  setDevices((prev) =>
+   prev.map((d) => {
+    if (d.id !== deviceId) return d;
+    if (d.problemTypes.includes(label)) return d;
+    return {
+     ...d,
+     problemTypes: [...d.problemTypes, label],
+     problemPrices: { ...d.problemPrices, [label]: d.problemPrices[label] ?? "" },
+    };
+   })
+  );
+ };
+
+ const addNewProblemFromModal = async () => {
+  const v = newProblemInput.trim();
+  if (!v || savingProblemType) return;
+  setSavingProblemType(true);
+  try {
+   const res = await repairProblemTypeApi.create(v);
+   if (!res.success || !res.data) {
+    setMessage({ type: "error", text: res.message || "Failed to save problem type" });
+    return;
+   }
+   setProblemOptions((prev) => {
+    if (prev.some((p) => p._id === res.data!._id || p.name.toLowerCase() === res.data!.name.toLowerCase())) {
+     return prev.map((p) =>
+      p.name.toLowerCase() === res.data!.name.toLowerCase() ? res.data! : p
+     );
+    }
+    return [...prev, res.data!];
+   });
+   selectProblemOnDevice(problemTargetDeviceId, res.data.name);
+   setNewProblemInput("");
+   setNewProblemModalOpen(false);
+   setProblemTargetDeviceId(null);
+   setMessage({ type: "success", text: res.existed ? "Problem type already saved" : "Problem type saved" });
+  } catch (e) {
+   setMessage({ type: "error", text: e instanceof Error ? e.message : "Failed to save problem type" });
+  } finally {
+   setSavingProblemType(false);
+  }
+ };
+
+ const deleteProblemType = async (pt: RepairProblemType, e: React.MouseEvent) => {
+  e.stopPropagation();
+  e.preventDefault();
+  if (deletingProblemId || pt._id.startsWith("local-")) {
+   // Fallback/local only — drop from UI
+   setProblemOptions((prev) => prev.filter((p) => p._id !== pt._id));
+   setDevices((prev) =>
+    prev.map((d) => {
+     if (!d.problemTypes.includes(pt.name)) return d;
+     const { [pt.name]: _removed, ...restPrices } = d.problemPrices;
+     return {
+      ...d,
+      problemTypes: d.problemTypes.filter((x) => x !== pt.name),
+      problemPrices: restPrices,
+     };
+    })
+   );
+   return;
+  }
+  setDeletingProblemId(pt._id);
+  try {
+   await repairProblemTypeApi.remove(pt._id);
+   setProblemOptions((prev) => prev.filter((p) => p._id !== pt._id));
+   setDevices((prev) =>
+    prev.map((d) => {
+     if (!d.problemTypes.includes(pt.name)) return d;
+     const { [pt.name]: _removed, ...restPrices } = d.problemPrices;
+     return {
+      ...d,
+      problemTypes: d.problemTypes.filter((x) => x !== pt.name),
+      problemPrices: restPrices,
+     };
+    })
+   );
+  } catch (err) {
+   setMessage({ type: "error", text: err instanceof Error ? err.message : "Failed to delete problem type" });
+  } finally {
+   setDeletingProblemId(null);
+  }
  };
 
  const handleCreateRepair = async () => {
@@ -429,17 +528,34 @@ export default function AddRepairTicketPage() {
     </div>
    )}
    <div className="flex flex-wrap gap-1.5 mb-2">
-    {problemOptions.map((p) => {
-    const selected = d.problemTypes.includes(p);
+    {problemOptionsLoading && problemOptions.length === 0 ? (
+    <span className="text-xs text-gray-400">Loading problem types…</span>
+    ) : null}
+    {problemOptions.map((pt) => {
+    const selected = d.problemTypes.includes(pt.name);
     return (
-    <button
-    key={p}
-    type="button"
-    onClick={() => toggleProblem(d.id, p)}
-    className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${selected ? "bg-orange-500 border-orange-500 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+    <span
+    key={pt._id}
+    className={`inline-flex items-center gap-0.5 rounded-full border text-xs font-medium transition ${selected ? "bg-orange-500 border-orange-500 text-white" : "bg-white border-gray-200 text-gray-700"}`}
     >
-    {selected ? "✓ " : "+ "}{p}
+    <button
+    type="button"
+    onClick={() => toggleProblem(d.id, pt.name)}
+    className={`rounded-full pl-2.5 py-1 ${selected ? "pr-1" : "pr-1.5"} hover:opacity-90`}
+    >
+    {selected ? "✓ " : "+ "}{pt.name}
     </button>
+    <button
+    type="button"
+    title="Delete problem type"
+    aria-label={`Delete ${pt.name}`}
+    disabled={deletingProblemId === pt._id}
+    onClick={(e) => deleteProblemType(pt, e)}
+    className={`rounded-full p-1 mr-0.5 disabled:opacity-50 ${selected ? "text-white/80 hover:bg-orange-600 hover:text-white" : "text-gray-400 hover:bg-red-50 hover:text-red-600"}`}
+    >
+    <X className="h-3 w-3" />
+    </button>
+    </span>
     );
     })}
     <button type="button" onClick={() => { setProblemTargetDeviceId(d.id); setNewProblemModalOpen(true); }} className="rounded-full border border-dashed border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50">
@@ -520,13 +636,23 @@ export default function AddRepairTicketPage() {
 
  {newProblemModalOpen && (
  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-  <div className="absolute inset-0 bg-black/30" onClick={() => { setNewProblemModalOpen(false); setProblemTargetDeviceId(null); setNewProblemInput(""); }} />
+  <div className="absolute inset-0 bg-black/30" onClick={() => { if (!savingProblemType) { setNewProblemModalOpen(false); setProblemTargetDeviceId(null); setNewProblemInput(""); } }} />
   <div className="relative w-full max-w-sm rounded-lg border border-gray-200 bg-white p-4 shadow-xl">
   <h3 className="text-sm font-bold text-gray-900 mb-3">Add problem type</h3>
-  <input type="text" value={newProblemInput} onChange={(e) => setNewProblemInput(e.target.value)} placeholder="e.g. Cracked screen" className={`${inputCls} mb-3`} />
+  <p className="text-xs text-gray-500 mb-2">Saved for all future repair tickets.</p>
+  <input
+   type="text"
+   value={newProblemInput}
+   onChange={(e) => setNewProblemInput(e.target.value)}
+   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNewProblemFromModal(); } }}
+   placeholder="e.g. Cracked screen"
+   className={`${inputCls} mb-3`}
+   autoFocus
+   disabled={savingProblemType}
+  />
   <div className="flex justify-end gap-2">
-  <button type="button" onClick={() => { setNewProblemModalOpen(false); setProblemTargetDeviceId(null); setNewProblemInput(""); }} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-  <button type="button" onClick={addNewProblemFromModal} className="rounded-lg bg-orange-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-600">Add</button>
+  <button type="button" disabled={savingProblemType} onClick={() => { setNewProblemModalOpen(false); setProblemTargetDeviceId(null); setNewProblemInput(""); }} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+  <button type="button" disabled={savingProblemType || !newProblemInput.trim()} onClick={addNewProblemFromModal} className="rounded-lg bg-orange-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50">{savingProblemType ? "Saving…" : "Add"}</button>
   </div>
   </div>
  </div>

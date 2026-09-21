@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+body {
+  text-transform: uppercase;
+}
+
+button,
+select {
+  text-transform: inherit;
+}
+
+input,
+textarea {
+  text-transform: none;
+}
+
 :root {
   /* Floating UI layers: dropdowns above tables/modals */
   --z-dropdown-overlay: 9990;

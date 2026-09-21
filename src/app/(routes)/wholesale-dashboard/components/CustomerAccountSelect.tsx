@@ -158,12 +158,15 @@ const CustomerAccountSelectComponent: React.ForwardRefRenderFunction<
   )}
  </div>
  )}
+ <div className={compact ? "flex items-center gap-1.5" : undefined}>
  <button
  ref={triggerRef}
  type="button"
  onClick={handleOpenDropdown}
- className={`w-full flex items-center gap-2 border text-left bg-white touch-manipulation transition-colors ${
-  compact ? "px-2.5 h-8 @[420px]:h-9 @[420px]:px-3 @[768px]:h-10 rounded-lg text-xs @[420px]:text-sm" : "px-4 py-3 min-h-[44px] rounded-xl"
+ className={`flex items-center gap-1.5 border text-left bg-white touch-manipulation transition-colors ${
+  compact
+  ? "h-7 @[640px]:h-8 min-w-[7.5rem] w-[9.5rem] @[640px]:w-[11rem] @[768px]:w-[12.5rem] px-2 @[640px]:px-2.5 rounded-md text-[11px] @[640px]:text-xs shrink-0"
+  : "w-full px-4 py-3 min-h-[44px] rounded-xl gap-2"
  } ${
   value
   ? "border-gray-300 text-gray-900 hover:border-gray-400"
@@ -174,11 +177,11 @@ const CustomerAccountSelectComponent: React.ForwardRefRenderFunction<
  aria-label={value ? `Customer: ${value.name}` : placeholder}
  >
  {loading ? (
-  <Loader2 className={`${compact ? "h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4" : "h-5 w-5"} animate-spin text-gray-400 flex-shrink-0`} />
+  <Loader2 className={`${compact ? "h-3.5 w-3.5" : "h-5 w-5"} animate-spin text-gray-400 flex-shrink-0`} />
  ) : (
-  <User className={`${compact ? "h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4" : "h-5 w-5"} text-gray-500 flex-shrink-0`} />
+  <User className={`${compact ? "h-3.5 w-3.5" : "h-5 w-5"} text-gray-500 flex-shrink-0`} />
  )}
- <span className="flex-1 truncate">
+ <span className="flex-1 truncate min-w-0">
   {value
   ? (() => {
    const contact = getContactName(value);
@@ -189,9 +192,24 @@ const CustomerAccountSelectComponent: React.ForwardRefRenderFunction<
   : placeholder}
  </span>
  <ChevronDown
-  className={`${compact ? "h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4" : "h-5 w-5"} text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+  className={`${compact ? "h-3.5 w-3.5" : "h-5 w-5"} text-gray-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
  />
  </button>
+ {compact && onAddCustomerClick && (
+ <button
+  type="button"
+  onClick={() => {
+  setOpen(false);
+  onAddCustomerClick();
+  }}
+  className="inline-flex items-center justify-center shrink-0 h-7 w-7 @[640px]:h-8 @[640px]:w-8 rounded-md border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 touch-manipulation relative z-10"
+  title="Add new customer"
+  aria-label="Add new customer"
+ >
+  <UserPlus className="h-3.5 w-3.5" />
+ </button>
+ )}
+ </div>
 
  {error && (
  <div className="mt-1 flex items-center gap-2 flex-wrap">
@@ -268,6 +286,22 @@ const CustomerAccountSelectComponent: React.ForwardRefRenderFunction<
   ))
   )}
   </ul>
+  {onAddCustomerClick && (
+  <div className="border-t border-gray-100 p-1.5">
+   <button
+   type="button"
+   onClick={() => {
+   setOpen(false);
+   setSearch("");
+   onAddCustomerClick();
+   }}
+   className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 touch-manipulation min-h-[44px]"
+   >
+   <UserPlus className="h-4 w-4 shrink-0" />
+   Add new customer
+   </button>
+  </div>
+  )}
   </div>
  </>,
  document.body

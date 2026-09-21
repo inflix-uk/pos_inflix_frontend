@@ -19,6 +19,7 @@ import { salesApi } from "../../../sales-dashboard/service/salesApi";
 import type { SaleRecord } from "../../../sales-dashboard/service/salesApi";
 import { salesReturnApi } from "../../service";
 import { getPaymentAccounts } from "../../../money-transfer/service/paymentAccountApi";
+import { emitInventoryEvent } from "@/lib/inventoryEvents";
 
 const formatMoney = (n: number) =>
  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2 }).format(n);
@@ -53,6 +54,41 @@ type BasketItem = {
  serials?: string[];
  returnDestination: ReturnDestination;
 };
+
+function BasketUnitPriceInput({
+ price,
+ name,
+ lineIndex,
+ onCommit,
+}: {
+ price: number;
+ name: string;
+ lineIndex: number;
+ onCommit: (lineIndex: number, raw: string) => void;
+}) {
+ const [value, setValue] = useState(Number.isFinite(price) ? String(price) : "0");
+ useEffect(() => {
+ setValue(Number.isFinite(price) ? String(price) : "0");
+ }, [price]);
+ return (
+ <span className="inline-flex items-center gap-0.5 rounded-lg border border-gray-200 bg-white px-1.5 py-0.5">
+  <span className="text-xs text-gray-500 select-none">£</span>
+  <input
+  id={`return-price-${lineIndex}`}
+  type="text"
+  inputMode="decimal"
+  value={value}
+  onChange={(e) => setValue(e.target.value.replace(/[^0-9.]/g, ""))}
+  onBlur={() => onCommit(lineIndex, value)}
+  onKeyDown={(e) => {
+   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+  }}
+  className="w-16 min-w-0 border-0 bg-transparent p-0 text-sm font-medium text-gray-900 tabular-nums text-right focus:outline-none focus:ring-0"
+  aria-label={`Amend return price for ${name}`}
+  />
+ </span>
+ );
+}
 
 export default function StartReturnPage() {
  const params = useParams();
@@ -132,27 +168,55 @@ export default function StartReturnPage() {
  setRefundAccountId("");
  return;
  }
+ if (refundMethod === "cash") {
+ setRefundAccountId("");
+ return;
+ }
+ // Card/bank: keep selection if still valid; do not force-select — pot is optional.
  const options = paymentAccounts.filter((a) => a.type === refundMethodToAccountType[refundMethod]);
  setRefundAccountId((prev) => {
- if (options.length === 0) return prev;
+ if (!prev) return "";
  if (options.some((a) => a._id === prev)) return prev;
- return options[0]._id;
+ return "";
  });
  }, [returnType, refundMethod, paymentAccounts]);
 
- const addToBasketFromSelect = (line: ReturnLine, qty: number) => {
+ const addToBasketFromSelect = (line: ReturnLine, qty: number, preferredSerials?: string[]) => {
  if (qty < 1 || qty > line.qtyReturnable) return;
- const serials = line.returnableSerials.length > 0 ? line.returnableSerials.slice(0, qty) : undefined;
+ const pickSerials = (count: number, already: string[] = []) => {
+  if (line.returnableSerials.length === 0 || count <= 0) return undefined as string[] | undefined;
+  const available = line.returnableSerials.filter((s) => !already.includes(s));
+  if (available.length === 0) return already.length ? already : undefined;
+  const preferred = (preferredSerials || []).filter((s) => available.includes(s));
+  const rest = available.filter((s) => !preferred.includes(s));
+  return [...already, ...preferred, ...rest].slice(0, already.length + count);
+ };
  setBasket((prev) => {
- const existing = prev.find((b) => b.lineIndex === line.lineIndex);
- if (existing) {
- const newQty = Math.min(line.qtyReturnable, existing.qtyToReturn + qty);
- const newSerials = line.returnableSerials.length > 0 ? line.returnableSerials.slice(0, newQty) : undefined;
- return prev.map((b) =>
-  b.lineIndex === line.lineIndex ? { ...b, qtyToReturn: newQty, serials: newSerials } : b
- );
- }
- return [...prev, { lineIndex: line.lineIndex, sku: line.sku, name: line.name, price: line.price, qtyToReturn: qty, serials, returnDestination: "restock" as ReturnDestination }];
+  const existing = prev.find((b) => b.lineIndex === line.lineIndex);
+  if (existing) {
+   const newQty = Math.min(line.qtyReturnable, existing.qtyToReturn + qty);
+   const need = newQty - (existing.serials?.length ?? 0);
+   const newSerials =
+    line.returnableSerials.length > 0
+     ? pickSerials(need, existing.serials ?? [])
+     : existing.serials;
+   return prev.map((b) =>
+    b.lineIndex === line.lineIndex ? { ...b, qtyToReturn: newQty, serials: newSerials } : b
+   );
+  }
+  const serials = pickSerials(qty);
+  return [
+   ...prev,
+   {
+    lineIndex: line.lineIndex,
+    sku: line.sku,
+    name: line.name,
+    price: line.price,
+    qtyToReturn: qty,
+    serials,
+    returnDestination: "restock" as ReturnDestination,
+   },
+  ];
  });
  };
 
@@ -161,7 +225,8 @@ export default function StartReturnPage() {
  const serial = scanValue.trim();
  if (!serial) return;
  setScanError(null);
- const alreadyInBasket = basket.some((b) => b.serials?.includes(serial));
+ const serialKey = (s: string) => s.trim().toUpperCase();
+ const alreadyInBasket = basket.some((b) => b.serials?.some((s) => serialKey(s) === serialKey(serial)));
  if (alreadyInBasket) {
  setScanError("This serial is already in the return basket.");
  return;
@@ -184,7 +249,12 @@ export default function StartReturnPage() {
  serialNumbers: line.serialNumbers ?? [],
  returnableSerials: [foundSerial],
  };
- addToBasketFromSelect(rl, 1);
+ // Prefer the exact scanned serial (multi-IMEI lines used to pick the first returnable instead).
+ if (rl.returnableSerials.length > 0 && !rl.returnableSerials.some((s) => serialKey(s) === serialKey(foundSerial))) {
+  setScanError("This serial is not returnable on this invoice (already returned or not on the sale).");
+  return;
+ }
+ addToBasketFromSelect(rl, 1, [foundSerial]);
  setScanValue("");
  } catch {
  const bySku = returnLines.find((l) => l.sku === serial || l.sku.toUpperCase() === serial.toUpperCase());
@@ -203,6 +273,13 @@ export default function StartReturnPage() {
 
  const setBasketDestination = (lineIndex: number, returnDestination: ReturnDestination) => {
  setBasket((prev) => prev.map((b) => (b.lineIndex === lineIndex ? { ...b, returnDestination } : b)));
+ };
+
+ const setBasketPrice = (lineIndex: number, raw: string) => {
+ const cleaned = raw.replace(/[^0-9.]/g, "");
+ const num = parseFloat(cleaned);
+ const price = Number.isFinite(num) && num >= 0 ? Math.round(num * 100) / 100 : 0;
+ setBasket((prev) => prev.map((b) => (b.lineIndex === lineIndex ? { ...b, price } : b)));
  };
 
  const basketSubtotal = basket.reduce((sum, b) => sum + b.price * b.qtyToReturn, 0);
@@ -240,18 +317,19 @@ export default function StartReturnPage() {
  returnType,
  customerId,
  refundMethod: returnType === "refund" ? refundMethod : undefined,
- refundAccountId: returnType === "refund" ? refundAccountId || undefined : undefined,
+ refundAccountId:
+  returnType === "refund" && refundMethod !== "cash" && refundAccountId
+   ? refundAccountId
+   : undefined,
  adminOtpCode,
  });
+ emitInventoryEvent({ type: "sale-return" });
+ salesApi.clearSerialCache();
  };
 
  const handleCreateReturn = async () => {
  if (basket.length === 0) {
  setMessage({ type: "error", text: "Add at least one item to the return basket." });
- return;
- }
- if (returnType === "refund" && !refundAccountId) {
- setMessage({ type: "error", text: "Please select the account (pot) to refund from." });
  return;
  }
  setSubmitting(true);
@@ -488,8 +566,13 @@ export default function StartReturnPage() {
     <p className="font-medium text-gray-900 truncate">{b.name}</p>
     <p className="text-gray-500">Qty: {b.qtyToReturn} × {formatMoney(b.price)}</p>
     </div>
-    <div className="shrink-0 flex items-center gap-1">
-    <span className="font-medium text-gray-900">{formatMoney(b.price * b.qtyToReturn)}</span>
+    <div className="shrink-0 flex items-center gap-1.5">
+    <BasketUnitPriceInput
+     price={b.price}
+     name={b.name}
+     lineIndex={b.lineIndex}
+     onCommit={setBasketPrice}
+    />
     <button
     type="button"
     onClick={() => removeFromBasket(b.lineIndex)}
@@ -558,7 +641,11 @@ export default function StartReturnPage() {
     <label className="block text-xs font-medium text-gray-500 mb-1">Refund method</label>
     <select
     value={refundMethod}
-    onChange={(e) => setRefundMethod(e.target.value as "cash" | "card" | "bank")}
+    onChange={(e) => {
+     const next = e.target.value as "cash" | "card" | "bank";
+     setRefundMethod(next);
+     if (next === "cash") setRefundAccountId("");
+    }}
     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
     >
     <option value="cash">Cash</option>
@@ -566,8 +653,11 @@ export default function StartReturnPage() {
     <option value="bank">Bank transfer</option>
     </select>
    </div>
+   {refundMethod !== "cash" && (
    <div>
-    <label className="block text-xs font-medium text-gray-500 mb-1">Refund from account (pot)</label>
+    <label className="block text-xs font-medium text-gray-500 mb-1">
+     Refund from account (pot) <span className="font-normal text-gray-400">(optional)</span>
+    </label>
     <select
     value={refundAccountId}
     onChange={(e) => setRefundAccountId(e.target.value)}
@@ -584,6 +674,7 @@ export default function StartReturnPage() {
     <p className="text-xs text-neutral-600 mt-0.5">No {refundMethod} account. Add one in settings or choose another method.</p>
     )}
    </div>
+   )}
    </div>
    )}
    </div>

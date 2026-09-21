@@ -27,6 +27,7 @@ import { SearchableSelect } from "./SearchableSelect";
 import { CreatableSearchableSelect } from "./CreatableSearchableSelect";
 import { parseMultiIMEIs } from "../utils/parseMultiIMEIs";
 import { HelpTip } from "@/components/HelpTip";
+import { formatProductNameInput } from "@/lib/formatProductName";
 
 interface NonSerialNameSearchProps {
  value: string;
@@ -81,7 +82,7 @@ const NonSerialNameSearch: React.FC<NonSerialNameSearchProps> = ({ value, onChan
  }, [onSearch]);
 
  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const next = e.target.value;
+  const next = formatProductNameInput(e.target.value);
   onChange(next);
   setOpen(true);
   if (debounceRef.current) clearTimeout(debounceRef.current);

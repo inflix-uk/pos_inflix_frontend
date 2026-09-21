@@ -195,6 +195,7 @@ export function ProductsStockTable({
  const dynamicVariantSlugs = useMemo(() => orderedVariantSlugsForRows(rows), [rows]);
 
  const showViewColumn = Boolean(onViewHistory) || Boolean(isNonSerial && onDeleteNonSerialItem);
+ const showInventoryTotalColumn = isNonSerial;
  const colCount =
  (showNameColumn ? 1 : 0) +
  (isSerial ? 1 : 0) + /* SID */
@@ -202,6 +203,7 @@ export function ProductsStockTable({
  dynamicVariantSlugs.length +
  (showImeiColumn ? 1 : 0) +
  5 + /* Date, Cost, Sale price, Note, Status */
+ (showInventoryTotalColumn ? 1 : 0) +
  (showViewColumn ? 1 : 0);
 
  const tableContent = (
@@ -222,6 +224,7 @@ export function ProductsStockTable({
   {showImeiColumn && <th className={thClass}>IMEI</th>}
   <th className={thClass}>Date</th>
   <th className={thClass}>Cost</th>
+  {showInventoryTotalColumn && <th className={thClass}>Inventory total</th>}
   <th className={thClass}>Sale price</th>
   <th className={thClass}>Note</th>
   <th className={thClass}>Status</th>
@@ -257,6 +260,7 @@ export function ProductsStockTable({
   showNameColumn={showNameColumn}
   showSidColumn={isSerial}
   isNonSerial={isNonSerial}
+  showInventoryTotalColumn={showInventoryTotalColumn}
   dynamicVariantSlugs={dynamicVariantSlugs}
   onViewHistory={onViewHistory}
   onDeleteNonSerialItem={onDeleteNonSerialItem}
@@ -290,6 +294,7 @@ function ProductsStockTableRow({
  showImeiColumn = true,
  showNameColumn = false,
  isNonSerial = false,
+ showInventoryTotalColumn = false,
  dynamicVariantSlugs = [],
  onViewHistory,
  onDeleteNonSerialItem,
@@ -306,6 +311,7 @@ function ProductsStockTableRow({
  showNameColumn?: boolean;
  showSidColumn?: boolean;
  isNonSerial?: boolean;
+ showInventoryTotalColumn?: boolean;
  dynamicVariantSlugs?: string[];
  onViewHistory?: (serial: string) => void;
  onDeleteNonSerialItem?: (purchaseId: string, itemId: string) => Promise<void>;
@@ -412,6 +418,13 @@ function ProductsStockTableRow({
  );
 
  const displayCost = editingCost !== null ? editingCost : String(row.purchasePrice ?? "");
+ const qtyForTotal = Number(displayQty);
+ const costForTotal =
+  editingCost !== null ? Number(editingCost) : Number(row.purchasePrice ?? 0);
+ const inventoryTotal =
+  Number.isFinite(qtyForTotal) && Number.isFinite(costForTotal)
+   ? Math.round(qtyForTotal * costForTotal * 100) / 100
+   : null;
  const displaySale = editingSale !== null ? editingSale : String(row.salePrice ?? "");
 
  const canDelete = !row.isSerialProduct && row.purchaseId && row.itemId && onDeleteNonSerialItem;
@@ -496,6 +509,16 @@ function ProductsStockTableRow({
   `${row.currency ? `${row.currency} ` : ""}${row.purchasePrice}`
  )}
  </td>
+ {showInventoryTotalColumn && (
+ <td className={`${tdClass} font-medium tabular-nums`}>
+  {inventoryTotal == null
+   ? "—"
+   : `${row.currency ? `${row.currency} ` : ""}${inventoryTotal.toLocaleString("en-GB", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+   })}`}
+ </td>
+ )}
  <td className={tdClass}>
  {canEditSale ? (
   <div className="flex items-center gap-1">

@@ -105,6 +105,8 @@ export interface ProfitAndLossProductRow {
 export interface ProfitAndLossData {
  from: string;
  to: string;
+ timezone?: string;
+ location?: { locationId: string; name: string };
  revenue: number;
  salesRevenue?: number;
  returnRevenue?: number;
@@ -297,10 +299,12 @@ export const accountsApi = {
  getProfitAndLoss: async (params?: {
   from?: string;
   to?: string;
+  locationId?: string;
  }): Promise<{ success: boolean; data: ProfitAndLossData }> => {
   const q = new URLSearchParams();
   if (params?.from) q.set("from", params.from);
   if (params?.to) q.set("to", params.to);
+  if (params?.locationId) q.set("locationId", params.locationId);
   const res = await fetch(`${API_BASE}/api/accounts/profit-and-loss?${q}`, {
    headers: getAuthHeaders(),
   });

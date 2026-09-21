@@ -18,7 +18,7 @@ import {
  QuickUnitFormData,
  QuickBrandFormData,
 } from "../components/QuickAddModals";
-import { formatProductName } from "@/lib/formatProductName";
+import { formatProductName, formatProductNameInput } from "@/lib/formatProductName";
 
 // Default values
 const defaultFormData: ProductFormData = {
@@ -350,7 +350,7 @@ export const useCreateProductForm = () => {
 
  // Auto-generate slug from product name
  const generateSlug = useCallback((name: string) => {
-  const formatted = formatProductName(name);
+  const formatted = formatProductNameInput(name);
   const slug = formatted
    .toLowerCase()
    .replace(/[^a-z0-9]+/g, "-")
@@ -419,7 +419,7 @@ export const useCreateProductForm = () => {
 
    const payload: CreateProductPayload = {
     // Basic info
-    name: formData.productName,
+    name: formatProductName(formData.productName),
     slug: formData.slug || undefined,
     sku: formData.sku,
     barcode: formData.itemBarcode || undefined,

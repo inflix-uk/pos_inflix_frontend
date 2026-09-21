@@ -434,7 +434,8 @@ export const salesApi = {
   return data;
  },
 
- getSales: async (params?: {
+ getSales: async (
+  params?: {
   page?: number;
   limit?: number;
   type?: string;
@@ -449,7 +450,9 @@ export const salesApi = {
   order?: "asc" | "desc";
   includeItems?: boolean;
   customerId?: string;
- }): Promise<GetSalesResponse> => {
+ },
+  signal?: AbortSignal
+ ): Promise<GetSalesResponse> => {
   const searchParams = new URLSearchParams();
   if (params?.page != null) searchParams.set("page", String(params.page));
   if (params?.limit != null) searchParams.set("limit", String(params.limit));
@@ -476,6 +479,7 @@ export const salesApi = {
   const response = await fetch(`${API_BASE_URL}/sales?${searchParams}`, {
    method: "GET",
    headers: getAuthHeaders(),
+   signal,
   });
   if (!response.ok) {
    const err = await response.json().catch(() => ({}));
@@ -622,10 +626,23 @@ export const salesApi = {
   }
   const url = new URL(`${API_BASE_URL}/purchases/find-in-stock-serial/${encodeURIComponent(serial)}`);
   if (pricingGroupId) url.searchParams.set("pricingGroupId", pricingGroupId);
-  const response = await fetch(
-   url.toString(),
-   { method: "GET", headers: getAuthHeaders() }
-  );
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  let response: Response;
+  try {
+   response = await fetch(url.toString(), {
+    method: "GET",
+    headers: getAuthHeaders(),
+    signal: controller.signal,
+   });
+  } catch (err) {
+   if (err instanceof DOMException && err.name === "AbortError") {
+    throw new Error("Serial lookup timed out — try again");
+   }
+   throw err;
+  } finally {
+   clearTimeout(timeoutId);
+  }
   if (!response.ok) {
    const err = await response.json().catch(() => ({}));
    const e = new Error(err.message || "Serial not found in inventory") as Error & {
@@ -679,11 +696,24 @@ export const salesApi = {
  }> => {
   const body: { serials: string[]; pricingGroupId?: string } = { serials };
   if (pricingGroupId) body.pricingGroupId = pricingGroupId;
-  const response = await fetch(`${API_BASE_URL}/purchases/find-in-stock-serials`, {
-   method: "POST",
-   headers: getAuthHeaders(),
-   body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  let response: Response;
+  try {
+   response = await fetch(`${API_BASE_URL}/purchases/find-in-stock-serials`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(body),
+    signal: controller.signal,
+   });
+  } catch (err) {
+   if (err instanceof DOMException && err.name === "AbortError") {
+    throw new Error("Batch serial lookup timed out — try again");
+   }
+   throw err;
+  } finally {
+   clearTimeout(timeoutId);
+  }
   if (!response.ok) {
    const err = await response.json().catch(() => ({}));
    throw new Error(err.message || "Batch lookup failed");

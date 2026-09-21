@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Roboto } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 
-const inter = Inter({ subsets: ["latin"], preload: false });
+const roboto = Roboto({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  preload: false,
+});
 
 export const metadata: Metadata = {
   title: "POS Inflix - Point of Sale System",
@@ -31,7 +35,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={inter.className} suppressHydrationWarning>
+      <body className={`${roboto.className} font-medium`} suppressHydrationWarning>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

@@ -222,6 +222,8 @@ const Page = () => {
  const [refStatus, setRefStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
  const refCheckSeqRef = useRef(0);
  const customerSelectRef = useRef<CustomerAccountSelectRef>(null);
+ /** Prevent double Enter / scanner double-fire from adding the same IMEI twice and toasting "already in order". */
+ const inFlightSerialAddsRef = useRef<Set<string>>(new Set());
 
  // Live invoice-number availability check (debounced). Empty input → idle (server will auto-generate).
  useEffect(() => {
@@ -854,11 +856,23 @@ const Page = () => {
  setSerialLookupLoading(true);
  try {
  if (looksLikeSerial(t)) {
+ // Duplicate scan (scanner often sends Enter twice) or serial already on this order:
+ // no-op silently — do not replace a success toast with a red error.
+ const alreadyOnOrder = cartRef.current.some((line) =>
+  (line.serialNumbers ?? []).some((s) => s.trim() === t)
+ );
+ if (alreadyOnOrder) return true;
+ if (inFlightSerialAddsRef.current.has(t)) return true;
+ inFlightSerialAddsRef.current.add(t);
  // Always use API for serial add so price is from backend (Rate List updates SerialIndex; grid can be stale).
  // In-stock first: one round trip for the common case (serial in stock)
  try {
   const res = await salesApi.getFindInStockSerial(t, customerPricingGroupId);
   const d = res.data;
+  const apiSerial = String(d.serial ?? t).trim();
+  if (cartRef.current.some((line) => (line.serialNumbers ?? []).some((s) => s.trim() === apiSerial))) {
+   return true;
+  }
   const product = {
   sku: d.sku,
   name: d.name,
@@ -868,7 +882,7 @@ const Page = () => {
   unit: "piece" as const,
   qty: 1,
   iconColor: "text-orange-600",
-  serialNumber: d.serial,
+  serialNumber: apiSerial,
   grade: (d as { grade?: string }).grade,
   colour: (d as { colour?: string }).colour,
   brandModel: (d as { brandModel?: string }).brandModel,
@@ -877,8 +891,10 @@ const Page = () => {
   categoryId: (d as { categoryId?: string }).categoryId,
   variantValues: (d as { variantValues?: { slug?: string; value?: string }[] }).variantValues,
   };
-  addToCart(product, 1);
-  showMessage("success", `Added ${d.name} (serial)`);
+  // skipSoldCheck: find-in-stock already confirmed availability; soldInfoMap can be stale after returns.
+  const added = addToCart(product, 1, { skipSoldCheck: true });
+  if (added) showMessage("success", `Added ${d.name} (serial)`);
+  // If not added, another in-flight scan won the race — stay silent (item is on the order).
   return true;
  } catch (err) {
   const e = err as Error & { status?: string; soldInfo?: { reference?: string; customerName?: string } | null };
@@ -910,6 +926,8 @@ const Page = () => {
   setNotFoundModal({ open: true, term: t, message: "Serial not found or returned to supplier." });
   }
   return true;
+ } finally {
+  inFlightSerialAddsRef.current.delete(t);
  }
  }
  const ok = await addBySku(t);
@@ -935,16 +953,16 @@ const Page = () => {
   categoryId: (d as { categoryId?: string }).categoryId,
   variantValues: (d as { variantValues?: { slug?: string; value?: string }[] }).variantValues,
  };
- addToCart(product, 1);
- showMessage("success", `Added ${d.name} (serial)`);
+ const added = addToCart(product, 1, { skipSoldCheck: true });
+ if (added) showMessage("success", `Added ${d.name} (serial)`);
  return true;
  } catch {
  const soldRes = await salesApi.getFindBySerial(t).catch(() => null);
  if (soldRes?.data) {
-  const { reference, customerName } = soldRes.data;
-  setAlreadySoldModal({ open: true, term: t, reference: reference || "", customerName: customerName || "" });
+ const { reference, customerName } = soldRes.data;
+ setAlreadySoldModal({ open: true, term: t, reference: reference || "", customerName: customerName || "" });
  } else {
-  setNotFoundModal({ open: true, term: t, message: "Product or serial not found" });
+ setNotFoundModal({ open: true, term: t, message: "Product or serial not found" });
  }
  }
  return true;
@@ -1125,15 +1143,15 @@ const Page = () => {
    placeholder={retailModeEnabled ? "Walk-in Customer" : "Customer *"}
    onAddCustomerClick={() => setAddCustomerModalOpen(true)}
    compact
-   className={retailModeEnabled ? "ml-auto min-w-[160px] @[640px]:min-w-[180px] max-w-[220px] @[768px]:max-w-[240px]" : "min-w-[90px] @[640px]:min-w-[110px] max-w-[140px] @[768px]:max-w-[160px]"}
+   className={retailModeEnabled ? "ml-auto shrink-0" : "shrink-0"}
   />
   {locations.length > 0 && (
-   <div className="relative shrink-0 h-7 @[640px]:h-8">
+   <div className="relative shrink-0 h-7 @[640px]:h-8 z-0">
    <MapPin className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-500" />
    <select
     value={selectedLocationId ?? ""}
     onChange={(e) => handleLocationChange(e.target.value)}
-    className={`h-full appearance-none rounded-md border border-gray-300 bg-white pl-6 pr-5 text-[11px] @[640px]:text-xs font-medium text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 ${retailModeEnabled ? "min-w-[120px] @[640px]:min-w-[140px]" : ""}`}
+    className={`h-full appearance-none rounded-md border border-gray-300 bg-white pl-6 pr-5 text-[11px] @[640px]:text-xs font-medium text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-[9rem] @[640px]:max-w-[11rem] truncate ${retailModeEnabled ? "min-w-[7.5rem]" : "min-w-[6.5rem]"}`}
     aria-label="Sale location"
    >
     {locations.map((loc) => (

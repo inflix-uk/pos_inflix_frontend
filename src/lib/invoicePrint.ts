@@ -303,6 +303,8 @@ export async function getSalePrintContext(saleId: string): Promise<{
   fallbackLabel: string | null;
   /** SKU → variant slugs in category display order (from Product → Category). */
   variantAttributeSlugsOrderBySku: Record<string, string[]>;
+  /** SKU → inventory category name (receipt line items). */
+  categoryNameBySku: Record<string, string>;
 }> {
   const res = await fetch(`${API_BASE}/api/print/sale-print-context/${encodeURIComponent(saleId)}`, {
     headers: getAuthHeaders(),
@@ -318,6 +320,7 @@ export async function getSalePrintContext(saleId: string): Promise<{
     location: data.location ?? null,
     fallbackLabel: data.fallbackLabel ?? null,
     variantAttributeSlugsOrderBySku: data.variantAttributeSlugsOrderBySku ?? {},
+    categoryNameBySku: data.categoryNameBySku ?? {},
   };
 }
 
@@ -427,8 +430,11 @@ function summaryItemName(item: { name?: string; colour?: string }): string {
 }
 
 /** PDF Items Summary: single description line — name + optional grade (no separate Condition column). */
-function itemsSummaryLineWithGrade(item: { name?: string; colour?: string; grade?: string }): string {
-  const base = summaryItemName(item);
+function itemsSummaryLineWithGrade(
+  item: { name?: string; colour?: string; grade?: string },
+  baseOverride?: string
+): string {
+  const base = (baseOverride != null ? baseOverride.trim() : summaryItemName(item)) || "—";
   const g = (item.grade ?? "").trim();
   if (!g) return base || "—";
   const upper = base.toUpperCase();
@@ -507,6 +513,28 @@ function invoiceItemsSummaryLine(item: SaleItemPrint, slugOrder: string[] | unde
   if (!slugOrder?.length) return itemsSummaryLineWithGrade(item);
   const out = appendOrderedAttributes(nm, slugOrder, (slug) => saleItemValueForSlug(item, slug));
   if (out === nm) return itemsSummaryLineWithGrade(item);
+  return out;
+}
+
+function withCategorySuffix(base: string, category?: string | null): string {
+  const b = base.trim() || "—";
+  const cat = (category ?? "").trim();
+  if (!cat) return b;
+  if (b.toUpperCase().includes(cat.toUpperCase())) return b;
+  return `${b} (${cat})`;
+}
+
+/** Receipt line item: name + optional category + variant values (80mm PDF / thermal parity). */
+function receiptItemDescriptionLine(
+  item: SaleItemPrint,
+  slugOrder: string[] | undefined,
+  categoryName?: string | null
+): string {
+  const rawName = summaryItemName(item).trim() || (item.name || "").trim() || "—";
+  const nm = withCategorySuffix(rawName, categoryName);
+  if (!slugOrder?.length) return itemsSummaryLineWithGrade(item, nm);
+  const out = appendOrderedAttributes(nm, slugOrder, (slug) => saleItemValueForSlug(item, slug));
+  if (out === nm) return itemsSummaryLineWithGrade(item, nm);
   return out;
 }
 
@@ -995,7 +1023,8 @@ export async function buildReceipt80mmPdf(
   sale: SaleForPrint,
   settings: InvoiceSettings,
   location?: LocationForHeader | null,
-  variantAttributeSlugsOrderBySku: Record<string, string[]> = {}
+  variantAttributeSlugsOrderBySku: Record<string, string[]> = {},
+  categoryNameBySku: Record<string, string> = {}
 ): Promise<string> {
   const ro = mergeReceiptPrinterSalesPrintOptions(settings.notesTerms.receiptPrinterSalesPrint);
   const width = ro.paperWidthMm;
@@ -1193,7 +1222,8 @@ export async function buildReceipt80mmPdf(
         sale.items.forEach((item) => {
           ensurePage();
           const slugOrder = item.sku ? variantAttributeSlugsOrderBySku[item.sku] : undefined;
-          const desc = invoiceItemsSummaryLine(item, slugOrder);
+          const categoryName = item.sku ? categoryNameBySku[item.sku] : undefined;
+          const desc = receiptItemDescriptionLine(item, slugOrder, categoryName);
           doc.setFontSize(sfp("items"));
           doc.splitTextToSize(desc, width - 2 * pad).forEach((ln: string) => {
             ensurePage();
@@ -2071,6 +2101,7 @@ export async function printInvoiceA4(sale: SaleForPrint): Promise<void> {
       location: null,
       fallbackLabel: null,
       variantAttributeSlugsOrderBySku: {},
+      categoryNameBySku: {},
     })),
   ]);
   const saleForPdf = mergeSaleTaxSnapshot(sale, context.sale);
@@ -2135,6 +2166,7 @@ export async function getInvoiceA4PdfBase64(
       location: null,
       fallbackLabel: null,
       variantAttributeSlugsOrderBySku: {},
+      categoryNameBySku: {},
     })),
   ]);
   const saleForPdf = mergeSaleTaxSnapshot(sale, context.sale);
@@ -2167,6 +2199,7 @@ export async function downloadInvoiceA4(sale: SaleForPrint): Promise<void> {
       location: null,
       fallbackLabel: null,
       variantAttributeSlugsOrderBySku: {},
+      categoryNameBySku: {},
     })),
   ]);
   const saleForPdf = mergeSaleTaxSnapshot(sale, context.sale);
@@ -2195,13 +2228,15 @@ export async function printReceipt80mm(sale: SaleForPrint): Promise<void> {
       location: null,
       fallbackLabel: null,
       variantAttributeSlugsOrderBySku: {},
+      categoryNameBySku: {},
     })),
   ]);
   const url = await buildReceipt80mmPdf(
     sale,
     settings,
     context.location,
-    context.variantAttributeSlugsOrderBySku ?? {}
+    context.variantAttributeSlugsOrderBySku ?? {},
+    context.categoryNameBySku ?? {}
   );
   const w = window.open(url, "_blank");
   if (w) {

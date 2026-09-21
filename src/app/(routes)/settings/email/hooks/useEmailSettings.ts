@@ -61,12 +61,13 @@ export const useEmailSettings = () => {
   fetchSettings();
  }, [fetchSettings]);
 
- // Clear message after 5 seconds
+ // Clear message after delay (longer for errors so SMTP details can be read)
  useEffect(() => {
   if (message.text) {
+   const delay = message.type === "error" ? 20000 : 5000;
    const timer = setTimeout(() => {
     setMessage({ type: "", text: "" });
-   }, 5000);
+   }, delay);
    return () => clearTimeout(timer);
   }
  }, [message]);
@@ -74,7 +75,15 @@ export const useEmailSettings = () => {
  // Handle input changes
  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
   const { name, value } = e.target;
-  setFormData((prev) => ({ ...prev, [name]: value }));
+  setFormData((prev) => {
+   const next = { ...prev, [name]: value };
+   if (name === "smtpPort") {
+    const port = parseInt(value, 10);
+    if (port === 465) next.smtpSecure = "ssl";
+    else if (port === 587 || port === 2525) next.smtpSecure = "tls";
+   }
+   return next;
+  });
  };
 
  // Handle checkbox changes
@@ -177,19 +186,46 @@ export const useEmailSettings = () => {
   }
  };
 
- // Test email settings
- const testEmail = async (testEmailAddress: string) => {
+ // Test email settings — returns true when sent successfully.
+ const testEmail = async (testEmailAddress: string): Promise<boolean> => {
   setIsTesting(true);
+  setMessage({ type: "", text: "" });
+
+  const port = parseInt(formData.smtpPort, 10);
+  if (port === 587 && formData.smtpSecure === "ssl") {
+   setMessage({
+    type: "error",
+    text: "Port 587 requires TLS encryption (not SSL). Encryption has been corrected — try Test Email again.",
+   });
+   setFormData((prev) => ({ ...prev, smtpSecure: "tls" }));
+   setIsTesting(false);
+   return false;
+  }
+  if (port === 465 && formData.smtpSecure === "tls") {
+   setMessage({
+    type: "error",
+    text: "Port 465 requires SSL encryption (not TLS). Encryption has been corrected — try Test Email again.",
+   });
+   setFormData((prev) => ({ ...prev, smtpSecure: "ssl" }));
+   setIsTesting(false);
+   return false;
+  }
+
   try {
-   const response = await emailSettingsApi.testEmail(testEmailAddress);
+   const response = await emailSettingsApi.testEmail(testEmailAddress, formData);
 
    if (response.success) {
     setMessage({ type: "success", text: response.message || "Test email sent successfully" });
-   } else {
-    setMessage({ type: "error", text: response.message || "Failed to send test email" });
+    return true;
    }
-  } catch {
-   setMessage({ type: "error", text: "Failed to send test email" });
+   setMessage({ type: "error", text: response.message || "Failed to send test email" });
+   return false;
+  } catch (e) {
+   setMessage({
+    type: "error",
+    text: e instanceof Error ? e.message : "Failed to send test email",
+   });
+   return false;
   } finally {
    setIsTesting(false);
   }

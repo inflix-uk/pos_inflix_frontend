@@ -106,6 +106,29 @@ export const purchaseApi = {
   }
  },
 
+ /** Restore missing brandModel on items from audit / serial / sale snapshots. */
+ restoreBrandModels: async (
+  id: string
+ ): Promise<
+  ApiResponse<{
+   purchase: Purchase | null;
+   restored: { itemId: string; restoredBrandModel: string; source: string }[];
+   skipped: { itemId: string; reason: string }[];
+  }>
+ > => {
+  try {
+   const response = await fetch(`${API_BASE_URL}/purchases/${id}/restore-brand-models`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+   });
+   const data = await response.json();
+   return data;
+  } catch (error) {
+   console.error("Error restoring brand models:", error);
+   return { success: false, message: "Failed to restore brand models" };
+  }
+ },
+
  deletePurchase: async (id: string): Promise<ApiResponse<null>> => {
   try {
    const response = await fetch(`${API_BASE_URL}/purchases/${id}`, {

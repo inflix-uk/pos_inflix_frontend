@@ -268,13 +268,16 @@ export async function buildBusinessInvoicePdf(
   // —— Header: company (left) + invoice meta box (right) ——
   const metaBoxW = 62;
   const metaBoxX = right - metaBoxW;
+  // —— Header: company block (left) ——
+  const leftColMaxW = metaBoxX - left - 10;
   let headerLeftY = y;
+  let logoRendered = false;
 
   if (io.showLogo && settings.about.logo) {
     try {
       const format = (settings.about.logo as string).startsWith("data:image/jpeg") ? "JPEG" : "PNG";
-      const maxLogoW = io.logoWidthMm;
-      const maxLogoH = io.logoHeightMm;
+      const maxLogoW = Math.min(io.logoWidthMm + 4, 42);
+      const maxLogoH = Math.min(io.logoHeightMm + 2, 18);
       const { width: natW, height: natH } = await loadImageDimensions(settings.about.logo as string);
       const aspect = natW > 0 && natH > 0 ? natW / natH : maxLogoW / maxLogoH;
       let logoW = maxLogoW;
@@ -284,34 +287,64 @@ export async function buildBusinessInvoicePdf(
         logoW = logoH * aspect;
       }
       doc.addImage(settings.about.logo, format, left, y, logoW, logoH);
-      headerLeftY = y + logoH + 4;
+      headerLeftY = y + logoH + 7;
+      logoRendered = true;
     } catch {
       /* ignore */
     }
   }
 
-  const nameBaselineY = headerLeftY > y + 2 ? headerLeftY : y + 6;
-  let addrY = nameBaselineY;
-  if (io.showCompanyName) {
+  let addrY = headerLeftY;
+  if (!logoRendered && io.showCompanyName) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(io.fontCompanyNamePt);
     doc.setTextColor(SLATE.r, SLATE.g, SLATE.b);
-    doc.text(tradingName, left, nameBaselineY);
-    addrY = nameBaselineY + 7;
+    doc.text(tradingName, left, addrY);
+    addrY += 7;
   }
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(Math.max(io.fontBodyPt - 1, 8));
-  doc.setTextColor(MUTED.r, MUTED.g, MUTED.b);
+
+  const addressLines: string[] = [];
+  const contactLines: string[] = [];
   headerAddressLines.forEach((line) => {
-    doc.text(line.trim(), left, addrY);
-    addrY += 4.2;
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    if (/^tel:/i.test(trimmed) || /@/.test(trimmed)) {
+      contactLines.push(trimmed);
+    } else {
+      addressLines.push(trimmed);
+    }
   });
-  legalLines.forEach((line) => {
-    doc.setFont("helvetica", "bold");
-    doc.text(line, left, addrY);
-    addrY += 4.2;
-    doc.setFont("helvetica", "normal");
+
+  const headerInk = { r: 71, g: 85, b: 105 };
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(io.fontBodyPt);
+  doc.setTextColor(headerInk.r, headerInk.g, headerInk.b);
+
+  addressLines.forEach((line) => {
+    const wrapped = doc.splitTextToSize(line, leftColMaxW);
+    wrapped.forEach((wrappedLine: string) => {
+      doc.text(wrappedLine, left, addrY);
+      addrY += 4.8;
+    });
   });
+
+  if (contactLines.length > 0) {
+    if (addressLines.length > 0) addrY += 2.5;
+    contactLines.forEach((line) => {
+      doc.text(line, left, addrY);
+      addrY += 4.6;
+    });
+  }
+
+  if (legalLines.length > 0) {
+    if (addressLines.length > 0 || contactLines.length > 0) addrY += 3;
+    doc.setFontSize(Math.max(io.fontTablePt, 8.5));
+    legalLines.forEach((line) => {
+      doc.text(line, left, addrY);
+      addrY += 4.6;
+    });
+  }
+
   doc.setTextColor(0, 0, 0);
 
   const metaBoxY = y;

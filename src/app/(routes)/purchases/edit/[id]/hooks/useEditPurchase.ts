@@ -555,6 +555,152 @@ export const useEditPurchase = () => {
   });
  }, [categoryVariantAttributesOther]);
 
+ const [isRestoringModels, setIsRestoringModels] = useState(false);
+ const [missingModelsCount, setMissingModelsCount] = useState(0);
+ const autoRestoreAttemptedRef = useRef(false);
+
+ type ApiPurchaseItem = {
+  sendTo?: { _id: string } | string;
+  tax?: { _id: string } | string;
+  category?: { _id: string } | string;
+  subCategory?: { _id: string } | string;
+  grade?: string;
+  brand?: string;
+  brandModel?: string;
+  capacity?: string;
+  colour?: string;
+  purchasePrice?: number;
+  salePrice?: number;
+  imeis?: string[];
+  quantity?: number;
+  name?: string;
+  barcode?: string;
+  variantValues?: { slug: string; value: string }[];
+  isOtherItem?: boolean;
+ };
+
+ const toId = (v: { _id?: string } | string | null | undefined): string =>
+  v && typeof v === "object" && v._id != null ? String(v._id) : v != null ? String(v) : "";
+
+ const mapApiItemsToEntries = useCallback((items: ApiPurchaseItem[]) => {
+  const imeiItems = items.filter((item) => !item.isOtherItem);
+  const otherItems = items.filter((item) => !!item.isOtherItem);
+  const entries: ItemEntry[] = imeiItems.map((item, idx) => {
+   const imeis = item.imeis || [];
+   const summaryParts = [item.brand, item.brandModel, item.capacity].filter(Boolean);
+   const rawVariantValues =
+    Array.isArray(item.variantValues) && item.variantValues.length > 0 ? item.variantValues : undefined;
+   return {
+    id: `loaded-imei-${idx}`,
+    data: {
+     sendTo: toId(item.sendTo),
+     taxCategory: toId(item.tax),
+     type: toId(item.category),
+     make: toId(item.subCategory),
+     grade: item.grade != null ? String(item.grade).trim() : "",
+     brand: item.brand != null ? String(item.brand).trim() : "",
+     brandModel: item.brandModel != null ? String(item.brandModel).trim() : "",
+     capacity: item.capacity != null ? String(item.capacity).trim() : "",
+     colour: item.colour != null ? String(item.colour).trim() : "",
+     purchasePrice: item.purchasePrice != null ? String(item.purchasePrice) : "",
+     salePrice: item.salePrice != null ? String(item.salePrice) : "",
+     multiIMEIs: imeis.join("\n"),
+     variantValues: {},
+     rawVariantValues,
+    },
+    imeiCount: imeis.length,
+    specsSummary: summaryParts.length > 0 ? summaryParts.join(" / ") : `Item ${idx + 1}`,
+   } as ItemEntry;
+  });
+  const otherEntries: OtherItemEntry[] = otherItems.map((item, idx) => {
+   const qty = item.quantity ?? 1;
+   const summaryParts = [item.brand, item.brandModel, item.capacity].filter(Boolean);
+   const rawVariantValues =
+    Array.isArray(item.variantValues) && item.variantValues.length > 0 ? item.variantValues : undefined;
+   return {
+    id: `loaded-other-${idx}`,
+    data: {
+     sendTo: toId(item.sendTo),
+     taxCategory: toId(item.tax),
+     type: toId(item.category),
+     make: toId(item.subCategory),
+     grade: item.grade != null ? String(item.grade).trim() : "",
+     brand: item.brand != null ? String(item.brand).trim() : "",
+     brandModel: item.brandModel != null ? String(item.brandModel).trim() : "",
+     capacity: item.capacity != null ? String(item.capacity).trim() : "",
+     colour: item.colour != null ? String(item.colour).trim() : "",
+     purchasePrice: item.purchasePrice != null ? String(item.purchasePrice) : "",
+     salePrice: item.salePrice != null ? String(item.salePrice) : "",
+     quantity: String(qty),
+     name: item.name != null ? String(item.name) : "",
+     barcode: item.barcode != null ? String(item.barcode) : "",
+     variantValues: {},
+     rawVariantValues,
+    },
+    quantity: qty,
+    specsSummary: summaryParts.length > 0 ? summaryParts.join(" / ") : `Other ${idx + 1}`,
+   } as OtherItemEntry;
+  });
+  return { entries, otherEntries };
+ }, []);
+
+ const countMissingModels = (entries: ItemEntry[]) =>
+  entries.filter((e) => e.imeiCount > 0 && !(e.data.brandModel || "").trim()).length;
+
+ const applyPurchaseItems = useCallback(
+  (items: ApiPurchaseItem[]) => {
+   const { entries, otherEntries } = mapApiItemsToEntries(items);
+   setSavedItems(entries);
+   setSavedOtherItems(otherEntries);
+   setMissingModelsCount(countMissingModels(entries));
+  },
+  [mapApiItemsToEntries]
+ );
+
+ const handleRestoreBrandModels = useCallback(async () => {
+  if (!purchaseId || isRestoringModels) return;
+  setIsRestoringModels(true);
+  setSubmitMessage({ type: "", text: "" });
+  try {
+   const response = await fetch(`${API_URL}/api/purchases/${purchaseId}/restore-brand-models`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+   });
+   const result = await response.json();
+   if (result.success) {
+    const restored = result.data?.restored?.length || 0;
+    const skipped = result.data?.skipped?.length || 0;
+    if (result.data?.purchase?.items) {
+     applyPurchaseItems(result.data.purchase.items);
+     const firstCat = result.data.purchase.items[0]?.category;
+     const firstCatId = firstCat && typeof firstCat === "object" ? firstCat._id : firstCat || "";
+     if (firstCatId) fetchSubCategories(firstCatId);
+    }
+    if (restored > 0) {
+     setSubmitMessage({
+      type: "success",
+      text: `Restored model on ${restored} group(s)${skipped ? `; ${skipped} still need a manual model` : ""}.`,
+     });
+    } else if (skipped > 0) {
+     setSubmitMessage({
+      type: "error",
+      text: `Could not recover model for ${skipped} group(s). Set the model manually, then save.`,
+     });
+     setMissingModelsCount(skipped);
+    } else {
+     setSubmitMessage({ type: "success", text: result.message || "No missing models" });
+     setMissingModelsCount(0);
+    }
+   } else {
+    setSubmitMessage({ type: "error", text: result.message || "Failed to restore models" });
+   }
+  } catch {
+   setSubmitMessage({ type: "error", text: "Failed to restore models" });
+  } finally {
+   setIsRestoringModels(false);
+  }
+ }, [purchaseId, isRestoringModels, applyPurchaseItems]);
+
  // Fetch existing purchase data
  useEffect(() => {
   const fetchPurchase = async () => {
@@ -587,98 +733,12 @@ export const useEditPurchase = () => {
      setDetailsSaved(true);
 
      if (p.items && p.items.length > 0) {
-      const toId = (v: { _id?: string } | string | null | undefined): string =>
-       v && typeof v === "object" && v._id != null ? String(v._id) : v != null ? String(v) : "";
-      // Load all items into savedItems list so user can edit any variant and re-save
-      type ApiItem = {
-       sendTo?: { _id: string } | string;
-       tax?: { _id: string } | string;
-       category?: { _id: string } | string;
-       subCategory?: { _id: string } | string;
-       grade?: string;
-       brand?: string;
-       brandModel?: string;
-       capacity?: string;
-       colour?: string;
-       purchasePrice?: number;
-       salePrice?: number;
-       imeis?: string[];
-       quantity?: number;
-       name?: string;
-       barcode?: string;
-       variantValues?: { slug: string; value: string }[];
-       isOtherItem?: boolean;
-      };
-      const imeiItems = p.items.filter((item: ApiItem) => !item.isOtherItem);
-      const otherItems = p.items.filter((item: ApiItem) => !!item.isOtherItem);
-      const entries: ItemEntry[] = imeiItems.map((item: ApiItem, idx: number) => {
-       const imeis = item.imeis || [];
-       const summaryParts = [item.brand, item.brandModel, item.capacity].filter(Boolean);
-       const rawVariantValues =
-        Array.isArray(item.variantValues) && item.variantValues.length > 0 ? item.variantValues : undefined;
-       return {
-        id: `loaded-imei-${idx}`,
-        data: {
-         sendTo: toId(item.sendTo),
-         taxCategory: toId(item.tax),
-         type: toId(item.category),
-         make: toId(item.subCategory),
-         grade: item.grade != null ? String(item.grade).trim() : "",
-         brand: item.brand != null ? String(item.brand).trim() : "",
-         brandModel: item.brandModel != null ? String(item.brandModel).trim() : "",
-         capacity: item.capacity != null ? String(item.capacity).trim() : "",
-         colour: item.colour != null ? String(item.colour).trim() : "",
-         purchasePrice: item.purchasePrice != null ? String(item.purchasePrice) : "",
-         salePrice: item.salePrice != null ? String(item.salePrice) : "",
-         multiIMEIs: imeis.join("\n"),
-         variantValues: {},
-         rawVariantValues,
-        },
-        imeiCount: imeis.length,
-        specsSummary: summaryParts.length > 0 ? summaryParts.join(" / ") : `Item ${idx + 1}`,
-       } as ItemEntry;
-      });
-      const otherEntries: OtherItemEntry[] = otherItems.map((item: ApiItem, idx: number) => {
-       const qty = item.quantity ?? 1;
-       const summaryParts = [item.brand, item.brandModel, item.capacity].filter(Boolean);
-       const rawVariantValues =
-        Array.isArray(item.variantValues) && item.variantValues.length > 0 ? item.variantValues : undefined;
-       return {
-        id: `loaded-other-${idx}`,
-        data: {
-         sendTo: toId(item.sendTo),
-         taxCategory: toId(item.tax),
-         type: toId(item.category),
-         make: toId(item.subCategory),
-         grade: item.grade != null ? String(item.grade).trim() : "",
-         brand: item.brand != null ? String(item.brand).trim() : "",
-         brandModel: item.brandModel != null ? String(item.brandModel).trim() : "",
-         capacity: item.capacity != null ? String(item.capacity).trim() : "",
-         colour: item.colour != null ? String(item.colour).trim() : "",
-         purchasePrice: item.purchasePrice != null ? String(item.purchasePrice) : "",
-         salePrice: item.salePrice != null ? String(item.salePrice) : "",
-         quantity: String(qty),
-         name: item.name != null ? String(item.name) : "",
-         barcode: item.barcode != null ? String(item.barcode) : "",
-         variantValues: {},
-         rawVariantValues,
-        },
-        quantity: qty,
-        specsSummary: summaryParts.length > 0 ? summaryParts.join(" / ") : `Other ${idx + 1}`,
-       } as OtherItemEntry;
-      });
-      setSavedItems(entries);
-      setSavedOtherItems(otherEntries);
-
-      // Don't populate the form — leave it empty for adding new items
-      // But still load subcategories for the first item for reference
+      applyPurchaseItems(p.items);
       const firstCat = p.items[0]?.category;
       const firstCatId = firstCat && typeof firstCat === "object" ? firstCat._id : firstCat || "";
       if (firstCatId) {
        fetchSubCategories(firstCatId);
       }
-
-      // Clear rawItem since we're not populating the form
       setRawItem(null);
      }
     } else {
@@ -691,8 +751,15 @@ export const useEditPurchase = () => {
    }
   };
   fetchPurchase();
- }, [purchaseId]);
+ }, [purchaseId, applyPurchaseItems]);
 
+ // Auto-restore once when edit page loads with missing models
+ useEffect(() => {
+  if (isLoadingData || autoRestoreAttemptedRef.current) return;
+  if (missingModelsCount <= 0) return;
+  autoRestoreAttemptedRef.current = true;
+  handleRestoreBrandModels();
+ }, [isLoadingData, missingModelsCount, handleRestoreBrandModels]);
  // Resolve variant name strings to _id values once dropdown options are loaded
  useEffect(() => {
   if (!rawItem) return;
@@ -921,7 +988,7 @@ export const useEditPurchase = () => {
  const buildOtherSpecsSummary = () => {
   const parts: string[] = [];
   const brandName = brands.find((b) => b._id === otherItemData.brand)?.name;
-  const modelName = brandModels.find((m) => m._id === otherItemData.brandModel)?.name;
+  const modelName = brandModels.find((m) => m._id === otherItemData.brandModel)?.name || otherItemData.brandModel;
   const capName = capacities.find((c) => c._id === otherItemData.capacity)?.name;
   if (brandName) parts.push(brandName);
   if (modelName) parts.push(modelName);
@@ -1139,6 +1206,32 @@ export const useEditPurchase = () => {
 
  const toUpper = (s: string | undefined) => (s != null && String(s).trim() !== "" ? String(s).trim().toUpperCase() : "");
 
+ /** Model from API-loaded variantValues when legacy brandModel is empty. */
+ const modelFromRawVariants = (d: { rawVariantValues?: { slug?: string; value?: string }[] }) => {
+  const vv = Array.isArray(d.rawVariantValues) ? d.rawVariantValues : [];
+  const entry = vv.find((v) => /brand_?models?|^model$/i.test(String(v.slug || "")));
+  return entry?.value != null ? String(entry.value).trim() : "";
+ };
+
+ /** Resolve model name for save (edit rows store names, not option IDs). */
+ const resolveModelNameForSave = (brandRef: string, modelRef: string): string => {
+  if (!modelRef?.trim()) return "";
+  const brand =
+   brandsRaw.find((b) => b._id === brandRef) ||
+   brandsRaw.find((b) => (b.name || "").trim().toUpperCase() === String(brandRef || "").trim().toUpperCase());
+  const modelsForBrand = brand?.models ?? [];
+  const modelName =
+   modelsForBrand.find((m) => m._id === modelRef)?.name ||
+   modelsForBrand.find(
+    (m) => (m.name || "").trim().toUpperCase() === String(modelRef || "").trim().toUpperCase()
+   )?.name ||
+   brandModels.find((m) => m._id === modelRef)?.name ||
+   brandModels.find(
+    (m) => (m.name || "").trim().toUpperCase() === String(modelRef || "").trim().toUpperCase()
+   )?.name;
+  return toUpper(modelName || modelRef) || "";
+ };
+
  const getVariantValueName = (attributes: CategoryVariantAttribute[], variantValues: Record<string, string>, attributeIndex: number): string | undefined => {
   const options = getVariantOptionsForAttributeIndex(attributes, variantValues, attributeIndex);
   const attr = attributes[attributeIndex];
@@ -1183,20 +1276,27 @@ export const useEditPurchase = () => {
   let variantValuesArr: { slug: string; value: string }[] = [];
   if (useDynamic) {
    const resolved = resolveVariantValues(attrs, d.variantValues);
-   gradeVal = resolved.grade;
-   brandVal = resolved.brand;
-   modelVal = resolved.brandModel;
-   capacityVal = resolved.capacity;
-   colourVal = resolved.colour;
+   gradeVal = resolved.grade || toUpper(d.grade) || undefined;
+   brandVal = resolved.brand || toUpper(d.brand) || undefined;
+   modelVal =
+    resolved.brandModel ||
+    resolveModelNameForSave(d.brand, d.brandModel) ||
+    toUpper(modelFromRawVariants(d)) ||
+    undefined;
+   capacityVal = resolved.capacity || toUpper(d.capacity) || undefined;
+   colourVal = resolved.colour || toUpper(d.colour) || undefined;
    variantValuesArr = resolved.variantValues;
+   // Ensure brand_model is present in variantValues when we have a model from legacy fields
+   if (modelVal && !variantValuesArr.some((v) => /brand_?model|^model$/i.test(v.slug || ""))) {
+    variantValuesArr = [...variantValuesArr, { slug: "brand_model", value: toUpper(modelVal) }];
+   }
   } else {
-   const brand = brandsRaw.find((b) => b._id === d.brand);
-   const modelsForBrand = brand?.models ?? [];
-   modelVal = modelsForBrand.find((m) => m._id === d.brandModel)?.name;
-   gradeVal = grades.find((g) => g._id === d.grade)?.name || d.grade;
-   brandVal = brands.find((b) => b._id === d.brand)?.name || d.brand;
-   capacityVal = capacities.find((c) => c._id === d.capacity)?.name || d.capacity;
-   colourVal = colours.find((c) => c._id === d.colour)?.name || d.colour;
+   modelVal =
+    resolveModelNameForSave(d.brand, d.brandModel) || toUpper(modelFromRawVariants(d)) || undefined;
+   gradeVal = toUpper(grades.find((g) => g._id === d.grade)?.name || d.grade) || undefined;
+   brandVal = toUpper(brands.find((b) => b._id === d.brand)?.name || d.brand) || undefined;
+   capacityVal = toUpper(capacities.find((c) => c._id === d.capacity)?.name || d.capacity) || undefined;
+   colourVal = toUpper(colours.find((c) => c._id === d.colour)?.name || d.colour) || undefined;
    if (gradeVal) variantValuesArr.push({ slug: "grade", value: toUpper(gradeVal) });
    if (brandVal) variantValuesArr.push({ slug: "brands", value: toUpper(brandVal) });
    if (modelVal) variantValuesArr.push({ slug: "brand_model", value: toUpper(modelVal) });
@@ -1232,20 +1332,26 @@ export const useEditPurchase = () => {
   let variantValuesArr: { slug: string; value: string }[] = [];
   if (useDynamic) {
    const resolved = resolveVariantValues(attrs, d.variantValues);
-   gradeVal = resolved.grade;
-   brandVal = resolved.brand;
-   modelVal = resolved.brandModel;
-   capacityVal = resolved.capacity;
-   colourVal = resolved.colour;
+   gradeVal = resolved.grade || toUpper(d.grade) || undefined;
+   brandVal = resolved.brand || toUpper(d.brand) || undefined;
+   modelVal =
+    resolved.brandModel ||
+    resolveModelNameForSave(d.brand, d.brandModel) ||
+    toUpper(modelFromRawVariants(d)) ||
+    undefined;
+   capacityVal = resolved.capacity || toUpper(d.capacity) || undefined;
+   colourVal = resolved.colour || toUpper(d.colour) || undefined;
    variantValuesArr = resolved.variantValues;
+   if (modelVal && !variantValuesArr.some((v) => /brand_?model|^model$/i.test(v.slug || ""))) {
+    variantValuesArr = [...variantValuesArr, { slug: "brand_model", value: toUpper(modelVal) }];
+   }
   } else {
-   const brand = brandsRaw.find((b) => b._id === d.brand);
-   const modelsForBrand = brand?.models ?? [];
-   modelVal = modelsForBrand.find((m) => m._id === d.brandModel)?.name;
-   gradeVal = grades.find((g) => g._id === d.grade)?.name || d.grade;
-   brandVal = brands.find((b) => b._id === d.brand)?.name || d.brand;
-   capacityVal = capacities.find((c) => c._id === d.capacity)?.name || d.capacity;
-   colourVal = colours.find((c) => c._id === d.colour)?.name || d.colour;
+   modelVal =
+    resolveModelNameForSave(d.brand, d.brandModel) || toUpper(modelFromRawVariants(d)) || undefined;
+   gradeVal = toUpper(grades.find((g) => g._id === d.grade)?.name || d.grade) || undefined;
+   brandVal = toUpper(brands.find((b) => b._id === d.brand)?.name || d.brand) || undefined;
+   capacityVal = toUpper(capacities.find((c) => c._id === d.capacity)?.name || d.capacity) || undefined;
+   colourVal = toUpper(colours.find((c) => c._id === d.colour)?.name || d.colour) || undefined;
    if (gradeVal) variantValuesArr.push({ slug: "grade", value: toUpper(gradeVal) });
    if (brandVal) variantValuesArr.push({ slug: "brands", value: toUpper(brandVal) });
    if (modelVal) variantValuesArr.push({ slug: "brand_model", value: toUpper(modelVal) });
@@ -1452,6 +1558,9 @@ export const useEditPurchase = () => {
   loadError,
   isSubmitting,
   submitMessage,
+  missingModelsCount,
+  isRestoringModels,
+  handleRestoreBrandModels,
   handleParcelChange,
   handleQuantityChange,
   handleItemChange,

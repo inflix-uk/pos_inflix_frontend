@@ -199,9 +199,14 @@ const SummaryTableRow: React.FC<{
  : undefined;
  const [priceInput, setPriceInput] = useState(parsePriceDisplay(item.price));
  const [editingPrice, setEditingPrice] = useState(false);
+ const [qtyInput, setQtyInput] = useState(String(item.quantity));
+ const [editingQty, setEditingQty] = useState(false);
  useEffect(() => {
  if (!editingPrice) setPriceInput(parsePriceDisplay(item.price));
  }, [item.price, editingPrice]);
+ useEffect(() => {
+ if (!editingQty) setQtyInput(String(item.quantity));
+ }, [item.quantity, editingQty]);
  const commitPrice = () => {
  setEditingPrice(false);
  const num = parseFloat(priceInput.replace(/[^0-9.-]/g, ""));
@@ -210,8 +215,26 @@ const SummaryTableRow: React.FC<{
  onUpdatePrice(item.sku, num.toFixed(2), item.serialNumbers?.[0], true);
  }
  };
+ const commitQty = () => {
+ setEditingQty(false);
+ const n = parseInt(qtyInput.replace(/[^0-9]/g, ""), 10);
+ if (!Number.isFinite(n) || n < 1) {
+  setQtyInput(String(item.quantity));
+  return;
+ }
+ const delta = n - item.quantity;
+ if (delta !== 0) onUpdateQty(item.sku, delta);
+ };
  const rateNum = parseFloat(item.price.replace(/[^0-9.-]/g, "")) || 0;
- const amount = rateNum * item.quantity;
+ const serials = item.serialNumbers ?? [];
+ const prices = item.serialPrices ?? {};
+ const amount =
+  serials.length > 0 && Object.keys(prices).length > 0
+   ? serials.reduce((sum, sn) => {
+    const raw = (prices[sn] ?? item.price).replace(/[^0-9.-]/g, "");
+    return sum + (parseFloat(raw) || 0);
+   }, 0)
+   : rateNum * item.quantity;
  const isSerialItem = (item.serialNumbers?.length ?? 0) > 0;
  return (
  <tr className="border-b border-slate-100 last:border-0 align-middle bg-white hover:bg-slate-50/80 transition-colors">
@@ -232,7 +255,23 @@ const SummaryTableRow: React.FC<{
   >
   <Minus className="h-3.5 w-3.5" />
   </button>
-  <span className="min-w-[1.5rem] text-center text-sm font-semibold tabular-nums">{item.quantity}</span>
+  <input
+  type="text"
+  inputMode="numeric"
+  value={editingQty ? qtyInput : String(item.quantity)}
+  onChange={(e) => {
+  setQtyInput(e.target.value.replace(/[^0-9]/g, ""));
+  setEditingQty(true);
+  }}
+  onFocus={() => {
+  setQtyInput(String(item.quantity));
+  setEditingQty(true);
+  }}
+  onBlur={commitQty}
+  onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+  className="w-10 min-w-[2rem] text-center text-sm font-semibold tabular-nums rounded border border-blue-200 bg-blue-50 text-blue-900 py-0.5 px-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+  aria-label="Quantity"
+  />
   <button
   type="button"
   onClick={() => onUpdateQty(item.sku, 1)}
@@ -244,10 +283,10 @@ const SummaryTableRow: React.FC<{
   </div>
  )}
  </td>
- <td className="py-1.5 px-2 text-right">
+ <td className="py-1.5 px-2 text-right overflow-visible">
  {onUpdatePrice ? (
-  <span className="inline-flex items-center rounded border border-gray-200 bg-gray-50 focus-within:ring-1 focus-within:ring-blue-500 min-w-[4.5rem] w-22">
-  <span className="pl-1.5 text-gray-500 text-xs shrink-0">{currencySymbol}</span>
+  <span className="inline-flex items-center rounded-md border border-gray-200 bg-gray-50 focus-within:ring-2 focus-within:ring-blue-500/40 focus-within:border-blue-500 min-w-[5.75rem] px-2 py-0.5 normal-case">
+  <span className="text-gray-500 text-xs font-medium shrink-0 select-none">{currencySymbol}</span>
   <input
   type="text"
   inputMode="decimal"
@@ -258,7 +297,7 @@ const SummaryTableRow: React.FC<{
   }}
   onBlur={commitPrice}
   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-  className="w-full min-w-0 py-0.5 pr-1.5 text-sm font-medium bg-transparent border-0 focus:ring-0 tabular-nums text-right"
+  className="w-full min-w-[2.75rem] py-0.5 pl-1 pr-0.5 text-sm font-medium bg-transparent border-0 focus:ring-0 focus:outline-none tabular-nums text-right normal-case"
   aria-label="Unit price"
   />
   </span>
@@ -291,14 +330,12 @@ function compactGradeToken(grade: string): string {
  return g;
 }
 
-/** One line: base name + grade + colour (e.g. "APPLE IPHONE 7 PLUS 128GB GRADE A BLACK"). */
+/** Base name + colour only (grade has its own column). */
 function serialRowInlineDescription(row: SerialDetailRow): string {
  const base = nameWithoutColour(row.name ?? "").trim();
- const token = compactGradeToken(row.grade);
- const g = token ? `GRADE ${token}` : "";
  const c = (row.colour ?? "").trim();
- const colourPart = c && c !== "—" ? c : "";
- return [base, g, colourPart].filter(Boolean).join(" ").trim() || "—";
+ const colourPart = c && c !== "—" && c.toLowerCase() !== base.toLowerCase() ? c : "";
+ return [base, colourPart].filter(Boolean).join(" ").trim() || "—";
 }
 
 /** Editable rate cell for a single serial row */
@@ -324,8 +361,8 @@ const SerialDetailRateCell: React.FC<{
  }
  return (
  <td className="py-1.5 px-2 text-right">
- <span className="inline-flex items-center rounded border border-gray-200 bg-gray-50 focus-within:ring-1 focus-within:ring-blue-500 w-20 justify-end">
- <span className="pl-1.5 text-gray-500 text-xs shrink-0">{currencySymbol}</span>
+ <span className="inline-flex items-center rounded-md border border-gray-200 bg-gray-50 focus-within:ring-2 focus-within:ring-blue-500/40 focus-within:border-blue-500 min-w-[5.75rem] px-2 py-0.5 normal-case justify-end">
+ <span className="text-gray-500 text-xs font-medium shrink-0 select-none">{currencySymbol}</span>
  <input
   type="text"
   inputMode="decimal"
@@ -336,7 +373,7 @@ const SerialDetailRateCell: React.FC<{
   }}
   onBlur={commitPrice}
   onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-  className="w-full min-w-0 py-0.5 pr-1 text-sm font-medium bg-transparent border-0 focus:ring-0 tabular-nums text-right"
+  className="w-full min-w-[2.75rem] py-0.5 pl-1 pr-0.5 text-sm font-medium bg-transparent border-0 focus:ring-0 focus:outline-none tabular-nums text-right normal-case"
   aria-label="Unit price"
  />
  </span>
@@ -363,7 +400,8 @@ const SerialItemsDetailTable: React.FC<{
   <tr className="text-left text-neutral-800/90 text-xs font-semibold uppercase tracking-wide border-b border-neutral-100 bg-neutral-50/80">
   <th className="py-1.5 px-2 w-8 shrink-0">#</th>
   <th className="py-1.5 pl-2 pr-1 min-w-[100px]">Serial / IMEI</th>
-  <th className="py-1.5 pl-1 pr-2 min-w-[180px]">Product</th>
+  <th className="py-1.5 pl-1 pr-2 min-w-[160px]">Product</th>
+  <th className="py-1.5 px-2 w-20 shrink-0">Grade</th>
   <th className="py-1.5 px-2 text-right w-24 shrink-0">Unit</th>
   <th className="py-1.5 px-2 w-10 shrink-0" aria-label="Remove" />
   </tr>
@@ -378,8 +416,11 @@ const SerialItemsDetailTable: React.FC<{
   <td className="py-1.5 pl-2 pr-1 min-w-[100px] align-top">
   <span className="font-mono text-xs font-semibold text-neutral-900">{r.serial}</span>
   </td>
-  <td className="py-1.5 pl-1 pr-2 min-w-[180px] align-top text-gray-900">
+  <td className="py-1.5 pl-1 pr-2 min-w-[160px] align-top text-gray-900">
   <span className="text-sm font-medium leading-snug">{serialRowInlineDescription(r)}</span>
+  </td>
+  <td className="py-1.5 px-2 align-top text-sm font-semibold text-slate-800 whitespace-nowrap">
+  {compactGradeToken(r.grade) ? `GRADE ${compactGradeToken(r.grade)}` : (r.grade?.trim() && r.grade !== "—" ? r.grade : "—")}
   </td>
   <SerialDetailRateCell row={r} onUpdatePrice={onUpdatePrice} currencySymbol={currencySymbol} />
   <td className="py-1.5 px-2 w-10 align-top">
@@ -495,8 +536,8 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
   {onUpdatePrice ? (
   <span>
   <span className="sr-only">Unit price</span>
-  <span className="inline-flex items-center rounded border border-gray-300 bg-gray-50 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 w-full min-w-0">
-   <span className="pl-1 text-gray-500 text-[10px] shrink-0">{currencySymbol}</span>
+  <span className="inline-flex items-center rounded-md border border-gray-300 bg-gray-50 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 w-full min-w-[4.5rem] px-1.5 py-0.5 normal-case">
+   <span className="text-gray-500 text-[10px] font-medium shrink-0 select-none">{currencySymbol}</span>
    <input
    type="text"
    inputMode="decimal"
@@ -507,7 +548,7 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
    }}
    onBlur={commitPrice}
    onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-   className="w-full min-w-0 py-0.5 pr-1 text-[11px] font-bold bg-transparent border-0 focus:ring-0 focus:outline-none tabular-nums"
+   className="w-full min-w-0 py-0.5 pl-0.5 pr-0.5 text-[11px] font-bold bg-transparent border-0 focus:ring-0 focus:outline-none tabular-nums normal-case"
    aria-label="Unit price"
    />
   </span>
@@ -571,8 +612,8 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
   <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
   Unit price
   </label>
-  <div className="flex items-center rounded-lg border border-gray-300 bg-gray-50 overflow-hidden focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-orange-500">
-  <span className="pl-2.5 text-gray-500 text-sm">{currencySymbol}</span>
+  <div className="flex items-center rounded-lg border border-gray-300 bg-gray-50 overflow-hidden focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-orange-500 normal-case">
+  <span className="pl-2.5 pr-1 text-gray-500 text-sm font-medium shrink-0 select-none">{currencySymbol}</span>
   <input
   type="text"
   inputMode="decimal"
@@ -583,7 +624,7 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
   }}
   onBlur={commitPrice}
   onKeyDown={(e) => e.key === "Enter" && commitPrice()}
-  className="w-16 py-1.5 pr-2 text-sm font-medium bg-transparent border-0 focus:ring-0"
+  className="w-16 py-1.5 pr-2 text-sm font-medium bg-transparent border-0 focus:ring-0 focus:outline-none normal-case"
   aria-label="Unit price"
   />
   </div>
@@ -716,7 +757,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
    <th className="py-1.5 px-2 w-8 shrink-0">#</th>
    <th className="py-1.5 pl-2 pr-1 min-w-[180px]">Item</th>
    <th className="py-1.5 px-2 text-right w-20 shrink-0">Qty</th>
-   <th className="py-1.5 px-2 text-right w-24 shrink-0">Unit price</th>
+   <th className="py-1.5 px-2 text-right w-28 shrink-0">Unit price</th>
    <th className="py-1.5 px-2 text-right w-24 shrink-0">Amount</th>
    </tr>
    </thead>

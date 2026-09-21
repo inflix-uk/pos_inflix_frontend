@@ -39,6 +39,22 @@ export interface ProductsPageHeaderProps {
  onExportPdf?: () => void;
  isExporting?: boolean;
  totalCount?: number;
+ serialStockValue?: number;
+ nonSerialStockValue?: number;
+ stockValueCurrency?: string;
+}
+
+function formatStockMoney(amount: number, currency = "GBP"): string {
+ try {
+  return new Intl.NumberFormat("en-GB", {
+   style: "currency",
+   currency: currency || "GBP",
+   minimumFractionDigits: 2,
+   maximumFractionDigits: 2,
+  }).format(amount || 0);
+ } catch {
+  return `${currency || "GBP"} ${(amount || 0).toFixed(2)}`;
+ }
 }
 
 export function ProductsPageHeader(props: ProductsPageHeaderProps) {
@@ -74,6 +90,9 @@ export function ProductsPageHeader(props: ProductsPageHeaderProps) {
  onExportPdf,
  isExporting = false,
  totalCount = 0,
+ serialStockValue = 0,
+ nonSerialStockValue = 0,
+ stockValueCurrency = "GBP",
  } = props;
 
  const [exportOpen, setExportOpen] = useState(false);
@@ -103,6 +122,20 @@ export function ProductsPageHeader(props: ProductsPageHeaderProps) {
   <p className="text-[11px] @[640px]:text-sm text-gray-500 mt-0.5">
   View stock and inventory {totalCount > 0 && `(${totalCount} items)`}
   </p>
+  <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] @[640px]:text-sm">
+  <span className="text-gray-700">
+  <span className="text-gray-500">Serial stock value:</span>{" "}
+  <span className="font-semibold text-gray-900 tabular-nums">
+  {formatStockMoney(serialStockValue, stockValueCurrency)}
+  </span>
+  </span>
+  <span className="text-gray-700">
+  <span className="text-gray-500">Non-serial stock value:</span>{" "}
+  <span className="font-semibold text-gray-900 tabular-nums">
+  {formatStockMoney(nonSerialStockValue, stockValueCurrency)}
+  </span>
+  </span>
+  </div>
   </div>
  </div>
  <div className="flex items-center gap-2 @[640px]:gap-3 flex-wrap">

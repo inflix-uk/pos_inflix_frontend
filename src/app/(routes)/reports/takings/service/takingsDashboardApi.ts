@@ -88,6 +88,9 @@ export async function getTakingsDashboard(params: {
  locationId?: string;
  fromUtc?: string;
  toUtc?: string;
+ /** Z-Report only needs takings; skips COGS/expense aggregates on the server. */
+ lite?: boolean;
+ signal?: AbortSignal;
 }): Promise<TakingsDashboardData> {
  const q = new URLSearchParams({
   from: params.from,
@@ -96,17 +99,33 @@ export async function getTakingsDashboard(params: {
  });
  if (params.fromUtc) q.set("fromUtc", params.fromUtc);
  if (params.toUtc) q.set("toUtc", params.toUtc);
- const res = await fetch(`${API_URL}/api/reports/takings-dashboard?${q}`, {
-  headers: getAuthHeaders(),
- });
- if (!res.ok) {
-  const err = await res.json().catch(() => ({}));
-  throw new Error(
-   (err as { message?: string }).message || "Failed to load takings dashboard"
-  );
+ if (params.lite) q.set("lite", "1");
+ const ownsTimeout = !params.signal;
+ const controller = ownsTimeout ? new AbortController() : null;
+ const timeoutId = ownsTimeout ? window.setTimeout(() => controller!.abort(), 30000) : undefined;
+ const signal = params.signal ?? controller!.signal;
+ try {
+  const res = await fetch(`${API_URL}/api/reports/takings-dashboard?${q}`, {
+   headers: getAuthHeaders(),
+   signal,
+  });
+  if (!res.ok) {
+   const err = await res.json().catch(() => ({}));
+   throw new Error(
+    (err as { message?: string }).message || "Failed to load takings dashboard"
+   );
+  }
+  const json: TakingsDashboardResponse = await res.json();
+  return json.data;
+ } catch (e) {
+  if (e instanceof DOMException && e.name === "AbortError") {
+   if (params.signal?.aborted) throw e;
+   throw new Error("Takings dashboard timed out. Try a single location or a shorter date range.");
+  }
+  throw e;
+ } finally {
+  if (timeoutId != null) window.clearTimeout(timeoutId);
  }
- const json: TakingsDashboardResponse = await res.json();
- return json.data;
 }
 
 /** Today's date in Europe/London (YYYY-MM-DD) */

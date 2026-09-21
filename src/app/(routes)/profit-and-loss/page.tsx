@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
  FileText,
  Loader2,
@@ -10,48 +12,190 @@ import {
  DollarSign,
  FolderTree,
  Package,
+ MapPin,
+ Calendar,
 } from "lucide-react";
 import { accountsApi, type ProfitAndLossData } from "../accounts/service/accountsApi";
+import { locationApi } from "@/app/(routes)/peoples/locations/service/locationApi";
+import { usePermissionsContext } from "@/contexts/PermissionsContext";
+import {
+ formatDateLabel,
+ getTodayLondon,
+} from "@/app/(routes)/reports/takings/service/takingsDashboardApi";
+import { getSalesDateRange, STAFF_SALES_BANNER } from "@/lib/salesDateAccess";
+import type { DashboardRange } from "@/lib/dateUtils";
+
+const STORAGE_KEY = "profit-and-loss-locationId";
 
 const formatMoney = (n: number) =>
  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
 
-const formatDate = (d: string) =>
- new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+function toLondonDateKey(d: Date): string {
+ return d.toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+}
+
+function readStoredLocationId(): string | null {
+ if (typeof window === "undefined") return null;
+ try {
+  return localStorage.getItem(STORAGE_KEY);
+ } catch {
+  return null;
+ }
+}
 
 export default function ProfitAndLossPage() {
+ const searchParams = useSearchParams();
+ const { user, can } = usePermissionsContext();
+ const canViewHistorical = can("report.view");
  const [data, setData] = useState<ProfitAndLossData | null>(null);
  const [loading, setLoading] = useState(true);
  const [error, setError] = useState<string | null>(null);
- const [from, setFrom] = useState(() => {
- const d = new Date();
- d.setMonth(0);
- d.setDate(1);
- return d.toISOString().slice(0, 10);
- });
- const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
+ const [allLocations, setAllLocations] = useState<Array<{ _id: string; name: string }>>([]);
 
- const fetchData = async () => {
- setLoading(true);
- setError(null);
- try {
- const res = await accountsApi.getProfitAndLoss({ from, to });
- setData(res.data);
- } catch (e) {
- setError(e instanceof Error ? e.message : "Failed to load profit and loss");
- } finally {
- setLoading(false);
- }
- };
+ const urlFrom = searchParams.get("from");
+ const urlTo = searchParams.get("to");
+ const urlLocationId = searchParams.get("locationId");
+
+ const [selectedLocationId, setSelectedLocationId] = useState<string>(() => {
+  if (urlLocationId) return urlLocationId;
+  return readStoredLocationId() || "all";
+ });
+ const [range, setRange] = useState<DashboardRange>(() =>
+  urlFrom && urlTo ? "custom" : "today"
+ );
+ const [customFrom, setCustomFrom] = useState(() => urlFrom || getTodayLondon());
+ const [customTo, setCustomTo] = useState(() => urlTo || getTodayLondon());
+ const [from, setFrom] = useState(() => urlFrom || getTodayLondon());
+ const [to, setTo] = useState(() => urlTo || getTodayLondon());
+
+ const hasUnrestrictedLocationAccess =
+  user?.role === "admin" || can("user.manage") || !user?.assignedLocationIds?.length;
+ const canSelectAll = hasUnrestrictedLocationAccess;
+ const allowedLocationIds = useMemo(() => {
+  if (hasUnrestrictedLocationAccess) return null;
+  return user?.assignedLocationIds?.length ? new Set(user.assignedLocationIds) : null;
+ }, [hasUnrestrictedLocationAccess, user?.assignedLocationIds]);
+ const locations = useMemo(() => {
+  if (!allowedLocationIds) return allLocations;
+  return allLocations.filter((l) => allowedLocationIds.has(l._id));
+ }, [allLocations, allowedLocationIds]);
 
  useEffect(() => {
- fetchData();
- }, [from, to]);
+  if (urlFrom && urlTo) {
+   setRange("custom");
+   setCustomFrom(urlFrom);
+   setCustomTo(urlTo);
+   setFrom(urlFrom);
+   setTo(urlTo);
+  }
+  if (urlLocationId) {
+   setSelectedLocationId(urlLocationId === "all" && !canSelectAll ? "" : urlLocationId);
+  }
+ }, [urlFrom, urlTo, urlLocationId, canSelectAll]);
+
+ useEffect(() => {
+  let cancelled = false;
+  locationApi
+   .getLocations({ isActive: true, limit: 500 })
+   .then((res) => {
+    if (cancelled || !res.success || !Array.isArray(res.data)) return;
+    setAllLocations(
+     (res.data as Array<{ _id: string; name: string }>).map((l) => ({
+      _id: l._id,
+      name: l.name,
+     }))
+    );
+   })
+   .catch(() => {});
+  return () => {
+   cancelled = true;
+  };
+ }, []);
+
+ useEffect(() => {
+  if (locations.length === 0) return;
+  if (canSelectAll) {
+   if (!selectedLocationId) setSelectedLocationId("all");
+   return;
+  }
+  const allowed = new Set(locations.map((l) => l._id));
+  if (selectedLocationId && selectedLocationId !== "all" && allowed.has(selectedLocationId)) return;
+  const defaultId = user?.defaultLocationId && allowed.has(user.defaultLocationId)
+   ? user.defaultLocationId
+   : locations[0]?._id;
+  if (defaultId) setSelectedLocationId(defaultId);
+ }, [locations, canSelectAll, selectedLocationId, user?.defaultLocationId]);
+
+ const handleLocationChange = (value: string) => {
+  setSelectedLocationId(value);
+  try {
+   if (value && value !== "all") localStorage.setItem(STORAGE_KEY, value);
+   else localStorage.removeItem(STORAGE_KEY);
+  } catch {
+   // ignore
+  }
+ };
+
+ const locationReady =
+  canSelectAll
+   ? Boolean(selectedLocationId)
+   : Boolean(selectedLocationId && selectedLocationId !== "all");
+
+ const fetchData = useCallback(async () => {
+  if (!locationReady) return;
+  setLoading(true);
+  setError(null);
+  try {
+   const dateRange = getSalesDateRange(range, customFrom, customTo, canViewHistorical);
+   const fromStr = toLondonDateKey(dateRange.fromUtc);
+   const toStr = toLondonDateKey(dateRange.toUtc);
+   setFrom(fromStr);
+   setTo(toStr);
+   const res = await accountsApi.getProfitAndLoss({
+    from: fromStr,
+    to: toStr,
+    locationId: selectedLocationId || "all",
+   });
+   setData(res.data);
+  } catch (e) {
+   setError(e instanceof Error ? e.message : "Failed to load profit and loss");
+  } finally {
+   setLoading(false);
+  }
+ }, [range, customFrom, customTo, selectedLocationId, locationReady, canViewHistorical]);
+
+ useEffect(() => {
+  fetchData();
+ }, [fetchData]);
+
+ const locationLabel = useMemo(() => {
+  if (selectedLocationId === "all") return "All locations";
+  return locations.find((l) => l._id === selectedLocationId)?.name ?? data?.location?.name ?? "—";
+ }, [selectedLocationId, locations, data?.location?.name]);
+
+ const showLocationExpenseNote = selectedLocationId !== "all" && selectedLocationId !== "";
+
+ const dateRangeLabel =
+  range === "today"
+   ? "Today"
+   : range === "yesterday"
+   ? "Yesterday"
+   : range === "7d"
+   ? "7 days"
+   : range === "30d"
+   ? "30 days"
+   : "Custom";
+
+ const drilldownParams = useMemo(
+  () =>
+   `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&locationId=${encodeURIComponent(selectedLocationId)}`,
+  [from, to, selectedLocationId]
+ );
 
  return (
  <div className="@container min-h-screen bg-gray-50/80 p-2 @[640px]:p-3 @[768px]:p-4 @[1024px]:p-6">
  <div className="max-w-5xl mx-auto">
- <div className="flex flex-wrap items-center justify-between gap-2 @[640px]:gap-3 @[768px]:gap-4 mb-4 @[640px]:mb-6 @[768px]:mb-8">
+ <header className="mb-4 @[640px]:mb-5 @[768px]:mb-6 flex flex-col gap-2 @[640px]:gap-3 @[768px]:gap-4">
   <div className="flex items-center gap-2 @[640px]:gap-3 @[768px]:gap-4">
   <div className="p-2 @[640px]:p-2.5 @[768px]:p-3 rounded-lg bg-white border border-gray-200/80 shadow-sm">
   <FileText className="h-5 w-5 @[640px]:h-6 @[640px]:w-6 @[768px]:h-8 @[768px]:w-8 text-orange-500" />
@@ -61,34 +205,139 @@ export default function ProfitAndLossPage() {
   Profit and Loss Statement
   </h1>
   <p className="text-gray-500 text-[11px] @[640px]:text-xs @[768px]:text-sm mt-0.5">
-  Revenue, COGS, gross profit, operating expenses and net profit for the period
+  Revenue, COGS, gross profit, operating expenses and net profit for the period. Times in Europe/London.
   </p>
   </div>
   </div>
-  <div className="flex flex-wrap items-center gap-1.5 @[640px]:gap-2">
-  <input
-  type="date"
-  value={from}
-  onChange={(e) => setFrom(e.target.value)}
-  className="rounded-xl border border-gray-200 px-2.5 @[640px]:px-3 @[768px]:px-4 py-1.5 @[640px]:py-2 @[768px]:py-2.5 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium bg-white focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-  />
-  <span className="text-gray-400 text-[11px] @[640px]:text-xs @[768px]:text-sm">to</span>
-  <input
-  type="date"
-  value={to}
-  onChange={(e) => setTo(e.target.value)}
-  className="rounded-xl border border-gray-200 px-2.5 @[640px]:px-3 @[768px]:px-4 py-1.5 @[640px]:py-2 @[768px]:py-2.5 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium bg-white focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500"
-  />
+
+  <div className="flex flex-col gap-2 @[640px]:gap-3 @[768px]:flex-row @[768px]:flex-wrap @[768px]:items-center">
+  {!canViewHistorical && (
+  <div className="w-full rounded-lg bg-amber-50 border border-amber-200 px-3 @[640px]:px-4 py-2 @[640px]:py-2.5 text-amber-800 text-[11px] @[640px]:text-xs @[768px]:text-sm">
+   {STAFF_SALES_BANNER}
+  </div>
+  )}
+  {canViewHistorical && (
+  <>
+  <div className="flex items-center gap-1.5 @[640px]:gap-2">
+  <Calendar className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 shrink-0 text-gray-500" />
+  <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1">
+  {(["today", "yesterday", "7d", "30d", "custom"] as const).map((r) => (
   <button
+   key={r}
+   type="button"
+   onClick={() => setRange(r)}
+   disabled={loading}
+   className={`rounded-md px-2 @[640px]:px-2.5 @[768px]:px-3 py-1 @[768px]:py-1.5 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium transition-colors disabled:opacity-50 ${
+   range === r
+   ? "bg-gray-900 text-white"
+   : "text-gray-600 hover:bg-gray-100"
+   }`}
+  >
+   {r === "today"
+    ? "Today"
+    : r === "yesterday"
+    ? "Yesterday"
+    : r === "7d"
+    ? "7 days"
+    : r === "30d"
+    ? "30 days"
+    : "Custom"}
+  </button>
+  ))}
+  </div>
+  {range === "custom" && (
+  <div className="flex flex-wrap items-center gap-1.5 @[640px]:gap-2">
+  <label className="text-[11px] @[640px]:text-xs @[768px]:text-sm text-gray-600">From</label>
+  <input
+   type="date"
+   value={customFrom}
+   onChange={(e) => setCustomFrom(e.target.value)}
+   className="rounded-lg border border-gray-300 px-2 @[640px]:px-2.5 @[768px]:px-3 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm"
+  />
+  <label className="text-[11px] @[640px]:text-xs @[768px]:text-sm text-gray-600">To</label>
+  <input
+   type="date"
+   value={customTo}
+   onChange={(e) => setCustomTo(e.target.value)}
+   className="rounded-lg border border-gray-300 px-2 @[640px]:px-2.5 @[768px]:px-3 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm"
+  />
+  </div>
+  )}
+  </div>
+  <div className="flex items-center gap-2 text-[11px] @[640px]:text-xs @[768px]:text-sm text-gray-500">
+  <span>{dateRangeLabel}</span>
+  <span aria-hidden>·</span>
+  <span>{formatDateLabel(from, to)}</span>
+  </div>
+  </>
+  )}
+  {!canViewHistorical && (
+  <div className="flex items-center gap-1.5 @[640px]:gap-2 text-[11px] @[640px]:text-xs @[768px]:text-sm text-gray-600 font-medium">
+  <Calendar className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 shrink-0 text-gray-500" />
+  <span>Today</span>
+  </div>
+  )}
+  <div className="flex items-center gap-1.5 @[640px]:gap-2">
+  <MapPin className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 shrink-0 text-gray-500" />
+  <label htmlFor="pl-location" className="sr-only">Location</label>
+  <select
+  id="pl-location"
+  value={selectedLocationId}
+  onChange={(e) => handleLocationChange(e.target.value)}
+  disabled={loading || (!hasUnrestrictedLocationAccess && locations.length === 0)}
+  className="rounded-lg border border-gray-300 bg-white px-2 @[640px]:px-2.5 @[768px]:px-3 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm text-gray-900 shadow-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 disabled:opacity-50"
+  >
+  {canSelectAll ? <option value="all">All locations</option> : null}
+  {locations.map((loc) => (
+   <option key={loc._id} value={loc._id}>
+   {loc.name}
+   </option>
+  ))}
+  </select>
+  </div>
+  <button
+  type="button"
   onClick={fetchData}
   disabled={loading}
-  className="p-1.5 @[640px]:p-2 @[768px]:p-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 transition-colors"
+  className="inline-flex items-center gap-1.5 @[640px]:gap-2 rounded-lg border border-gray-200 bg-white px-2 @[640px]:px-2.5 @[768px]:px-3 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
   title="Refresh"
   >
-  <RefreshCw className={`h-4 w-4 @[768px]:h-5 @[768px]:w-5 text-gray-600 ${loading ? "animate-spin" : ""}`} />
+  <RefreshCw className={`h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 ${loading ? "animate-spin" : ""}`} />
+  Refresh
   </button>
+  <div className="flex flex-wrap items-center gap-1.5 @[640px]:gap-2 w-full @[768px]:w-auto @[768px]:ml-auto">
+  <Link
+  href={`/sales-item-wise-orders?${drilldownParams}`}
+  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 @[640px]:px-2.5 @[768px]:px-3 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium text-gray-700 hover:bg-gray-50"
+  >
+  <Package className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 shrink-0" />
+  View by Items
+  </Link>
+  <Link
+  href={`/sales-online-orders?${drilldownParams}`}
+  className="rounded-lg border border-gray-200 bg-white px-2 @[640px]:px-2.5 @[768px]:px-3 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium text-gray-700 hover:bg-gray-50"
+  >
+  View Sales
+  </Link>
+  <Link
+  href={`/sales-return?${drilldownParams}`}
+  className="rounded-lg border border-gray-200 bg-white px-2 @[640px]:px-2.5 @[768px]:px-3 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium text-gray-700 hover:bg-gray-50"
+  >
+  View Returns
+  </Link>
+  <Link
+  href={`/expenses?${drilldownParams}`}
+  className="rounded-lg border border-gray-200 bg-white px-2 @[640px]:px-2.5 @[768px]:px-3 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium text-gray-700 hover:bg-gray-50"
+  >
+  View Expenses
+  </Link>
+  <span className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-2 @[640px]:px-2.5 @[768px]:px-3 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium text-orange-700">
+  <FileText className="h-3.5 w-3.5 @[768px]:h-4 @[768px]:w-4 shrink-0" />
+  View P&amp;L Statement
+  </span>
   </div>
- </div>
+  </div>
+ </header>
 
  {error && (
   <div className="mb-3 @[640px]:mb-4 p-2.5 @[640px]:p-3 @[768px]:p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[11px] @[640px]:text-xs @[768px]:text-sm">
@@ -103,6 +352,13 @@ export default function ProfitAndLossPage() {
   </div>
  )}
 
+ {showLocationExpenseNote && (
+  <div className="mb-3 @[640px]:mb-4 p-2.5 @[640px]:p-3 @[768px]:p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-[11px] @[640px]:text-xs @[768px]:text-sm">
+  <strong>Location filter:</strong> Revenue and COGS are for <span className="font-medium">{locationLabel}</span>.
+  Operating expenses are company-wide until expense locations are tracked per branch.
+  </div>
+ )}
+
  {loading && !data ? (
   <div className="flex items-center justify-center py-10 @[640px]:py-12 @[768px]:py-16">
   <Loader2 className="h-6 w-6 @[640px]:h-7 @[640px]:w-7 @[768px]:h-8 @[768px]:w-8 animate-spin text-orange-500" />
@@ -110,7 +366,13 @@ export default function ProfitAndLossPage() {
  ) : data ? (
   <div className="space-y-3 @[640px]:space-y-4 @[768px]:space-y-6">
   <p className="text-[11px] @[640px]:text-xs @[768px]:text-sm text-gray-500">
-  Period: {formatDate(data.from)} to {formatDate(data.to)}
+  {locationLabel !== "All locations" ? (
+   <>
+   <span className="font-medium text-gray-700">{locationLabel}</span>
+   <span className="mx-1.5">·</span>
+   </>
+  ) : null}
+  Period: {formatDateLabel(from, to)}
   </p>
 
   {/* Main P&L: Revenue, COGS, Gross Profit, Expenses, Net Profit */}

@@ -96,6 +96,12 @@ export default function EditSalePage() {
  const [selectedCustomer, setSelectedCustomer] = useState<AccountForSale | null>(null);
  const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
  const [addCustomerLoading, setAddCustomerLoading] = useState(false);
+ const [hasRemainingReturnable, setHasRemainingReturnable] = useState(true);
+
+ const customerPricingGroupId =
+  selectedCustomer && "pricingGroupId" in selectedCustomer && selectedCustomer.pricingGroupId
+   ? String(selectedCustomer.pricingGroupId)
+   : undefined;
 
  useEffect(() => {
  let cancelled = false;
@@ -115,7 +121,7 @@ export default function EditSalePage() {
  loading: productsLoading,
  error: productsError,
  refetch: refetchProducts,
- } = useInventoryProductsForSales();
+ } = useInventoryProductsForSales({ pricingGroupId: customerPricingGroupId });
  const [search, setSearch] = useState("");
  const [categoryFilter, setCategoryFilter] = useState("all");
 
@@ -135,12 +141,22 @@ export default function EditSalePage() {
  let cancelled = false;
  (async () => {
  try {
- const res = await salesApi.getSaleById(id);
+ const [res, linesRes] = await Promise.all([
+  salesApi.getSaleById(id),
+  salesApi.getReturnLines(id).catch(() => null),
+ ]);
  if (cancelled) return;
  setSale(res.data);
  setItems((res.data?.items ?? []).map(toItemPayload));
  setNote(res.data?.note ?? "");
  setLoadError(null);
+ if (Array.isArray(linesRes?.data?.lines)) {
+  const remaining = linesRes.data.lines.reduce(
+   (sum, line) => sum + (Number(line.qtyReturnable) || 0),
+   0
+  );
+  setHasRemainingReturnable(remaining > 0);
+ }
  } catch (e) {
  if (cancelled) return;
  setLoadError(e instanceof Error ? e.message : "Failed to load sale");
@@ -495,7 +511,7 @@ export default function EditSalePage() {
  } catch {
   // Not sold yet — look up the in-stock product matching this serial.
   try {
-  const stockRes = await salesApi.getFindInStockSerial(t);
+  const stockRes = await salesApi.getFindInStockSerial(t, customerPricingGroupId);
   const d = stockRes.data;
   const product: POSProduct = {
   sku: d.sku,
@@ -528,7 +544,7 @@ export default function EditSalePage() {
  setMessage({ type: "error", text: "Product not found" });
  return true;
  },
- [id, addToCart, addBySku]
+ [id, addToCart, addBySku, customerPricingGroupId]
  );
 
  const cartSearchSuggestions = React.useMemo(() => (search.trim() ? filteredPosProducts.slice(0, 8) : []), [search, filteredPosProducts]);
@@ -633,7 +649,8 @@ export default function EditSalePage() {
   <button
   type="button"
   onClick={() => router.push(`/sales-return/start/${sale._id}`)}
-  disabled={!!sale.hasReturn}
+  disabled={!hasRemainingReturnable}
+  title={!hasRemainingReturnable ? "All items on this sale have already been returned" : "Return remaining items"}
   className="inline-flex items-center gap-2 px-3 py-2.5 min-h-[44px] rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
   >
   <RotateCcw className="h-4 w-4" /> Start return
@@ -662,7 +679,9 @@ export default function EditSalePage() {
   <div className="flex-shrink-0 p-3 rounded-xl bg-neutral-50 border border-neutral-200 flex items-center gap-3">
   <RotateCcw className="h-5 w-5 text-neutral-600 shrink-0" />
   <p className="text-sm font-medium text-neutral-800">
-  This sale has been returned. Editing and deleting are disabled.
+  {hasRemainingReturnable
+   ? "This sale already has a return. You can still return remaining phones with Start return. Editing and voiding stay disabled."
+   : "All items on this sale have been returned. Editing and deleting are disabled."}
   </p>
   </div>
  )}

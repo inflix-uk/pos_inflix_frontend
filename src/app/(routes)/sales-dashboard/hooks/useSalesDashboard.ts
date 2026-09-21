@@ -34,20 +34,31 @@ function isColourVariantSlug(slug: string | undefined): boolean {
  return s.includes("colour") || s.includes("color");
 }
 
-/** Merge key for serial lines: variant attribute values except colour; else name+grade fallback. */
+/** Merge key for serial lines: variant attribute values except colour; else name+grade fallback.
+ * Always appends grade so different conditions never share a summary line.
+ * When grade is missing (e.g. old index snapshot), also key by unit price so £125 and £110 stay separate.
+ */
 function serialVariantMergeKey(item: {
  name?: string;
  grade?: string;
+ price?: string;
  variantValues?: { slug?: string; value?: string }[];
 }): string {
+ const grade = productGradeString(item).toUpperCase();
  const raw = item.variantValues?.filter((v) => v?.slug && !isColourVariantSlug(v.slug));
+ let base: string;
  if (raw && raw.length > 0) {
   const parts = [...raw]
    .sort((a, b) => (a.slug ?? "").localeCompare(b.slug ?? ""))
    .map((v) => `${(v.slug ?? "").toLowerCase()}\t${(v.value ?? "").trim().toUpperCase()}`);
-  return `vv:${parts.join("\x1f")}`;
+  // If variantValues already include grade/condition, don't double-key — still append normalized grade below for safety.
+  base = `vv:${parts.join("\x1f")}`;
+ } else {
+  base = variantKey(item);
  }
- return variantKey(item);
+ if (grade) return `${base}\tg:${grade}`;
+ const priceKey = parsePrice(String(item.price ?? "0")).toFixed(2);
+ return `${base}\tp:${priceKey}`;
 }
 
 function productGradeString(p: { grade?: string; name?: string }): string {
@@ -72,6 +83,16 @@ function firstSerialPrice(line: CartLineItem): string {
  return anyPrice ?? line.price;
 }
 
+/** Line amount: sum per-serial prices when present so mixed rates are not flattened to qty × unit. */
+function cartLineAmount(line: CartLineItem): number {
+ const serials = line.serialNumbers ?? [];
+ const prices = line.serialPrices ?? {};
+ if (serials.length > 0 && Object.keys(prices).length > 0) {
+  return serials.reduce((sum, sn) => sum + parsePrice(prices[sn] ?? line.price), 0);
+ }
+ return parsePrice(line.price) * line.quantity;
+}
+
 /** Colour for a product (from API or parsed from name) so we can store per-serial. */
 function productColour(p: { name?: string; colour?: string }): string {
  if (p.colour != null && String(p.colour).trim()) return String(p.colour).trim();
@@ -81,7 +102,7 @@ function productColour(p: { name?: string; colour?: string }): string {
  );
  if (match) return match[1];
  const last = name.split(/\s+/).filter(Boolean).pop();
- if (last && last.length >= 2 && last.length <= 20 && /^[A-Za-z]+$/.test(last)) return last;
+ if (last && last.length >= 2 && last.length <= 20 && /^[A-Za-z]+$/.test(last) && !/^(product|item|misc)$/i.test(last)) return last;
  return "";
 }
 
@@ -256,12 +277,12 @@ export const useSalesDashboard = (options?: {
   return ["all", ...Array.from(set).sort()];
  }, [posProducts, categoriesOverride]);
 
- const addToCart = useCallback((product: POSProduct, qty = 1) => {
-  if (product.serialNumber && Object.keys(soldInfoMap).length > 0) {
+ const addToCart = useCallback((product: POSProduct, qty = 1, opts?: { skipSoldCheck?: boolean }): boolean => {
+  if (!opts?.skipSoldCheck && product.serialNumber && Object.keys(soldInfoMap).length > 0) {
    const info = soldInfoMap[(product.serialNumber as string).trim()];
    if (info) {
     showMessage("error", `Already sold to ${info.customerName}`);
-    return;
+    return false;
    }
   }
   const isSerialItem = !!product.serialNumber;
@@ -278,15 +299,21 @@ export const useSalesDashboard = (options?: {
     } else {
      showMessage("error", `Only ${remaining} more available for "${product.name}" (in stock: ${stock}).`);
     }
-    return;
+    return false;
    }
   }
+  // Prefer ref-based result over a flag inside the updater (more reliable after await).
+  const serialNorm = isSerialItem && product.serialNumber ? product.serialNumber.trim() : null;
+  const cartHasSerial = (lines: CartLineItem[], serial: string) =>
+   lines.some((i) => (i.serialNumbers ?? []).some((s) => s.trim() === serial));
+  if (serialNorm && cartHasSerial(cartStateRef.current, serialNorm)) {
+   return false;
+  }
   setCart((prev) => {
-   const serial = product.serialNumber ?? null;
+   const serial = serialNorm;
    // Serial already in cart (any line) — skip to avoid duplicate after price splits
-   if (isSerialItem && serial) {
-    const alreadyIn = prev.find((i) => (i.serialNumbers ?? []).includes(serial));
-    if (alreadyIn) return prev;
+   if (isSerialItem && serial && cartHasSerial(prev, serial)) {
+    return prev;
    }
    const existingBySku = prev.find((i) => i.sku === product.sku);
    // For serial items: merge into same variant (any price); line price = recent-inventory price by date
@@ -295,8 +322,7 @@ export const useSalesDashboard = (options?: {
    if (existing) {
     if (isSerialItem) {
      const existingSerials = existing.serialNumbers ?? [];
-     if (existingSerials.includes(product.serialNumber!)) return prev;
-     const serial = product.serialNumber!;
+     if (!serial || existingSerials.some((s) => s.trim() === serial)) return prev;
      const serialColours = { ...(existing.serialColours ?? {}), [serial]: productColour(product) };
      const serialInventoryDates = { ...(existing.serialInventoryDates ?? {}), [serial]: (product as POSProduct).inventoryDate ?? "" };
      const serialPrices = { ...(existing.serialPrices ?? {}), [serial]: product.price };
@@ -322,9 +348,11 @@ export const useSalesDashboard = (options?: {
      };
      // Use incoming serial's price (from API = Rate list) so Rate list updates show in cart when adding this item
      const newLinePrice = product.price;
-     return prev.map((i) =>
+     const next = prev.map((i) =>
       i === existing ? { ...updated, price: newLinePrice } : i
      );
+     cartStateRef.current = next;
+     return next;
     }
     const nextQty = existing.quantity + addedQty;
     const baseSerials = existing.serialNumbers ?? [];
@@ -335,7 +363,7 @@ export const useSalesDashboard = (options?: {
         : `${product.serialNumber}-${existing.quantity + i + 1}`
       )
      : [];
-    return prev.map((i) =>
+    const next = prev.map((i) =>
      i.sku === existing.sku
       ? {
         ...i,
@@ -348,6 +376,8 @@ export const useSalesDashboard = (options?: {
        }
       : i
     );
+    cartStateRef.current = next;
+    return next;
    }
    const serialNumbers = serial ? [serial] : undefined;
    const serialColours = serial && isSerialItem ? { [serial]: productColour(product) } : undefined;
@@ -361,7 +391,7 @@ export const useSalesDashboard = (options?: {
     serial && isSerialItem && pg ? { [serial]: pg } : undefined;
    const serialBrandModels =
     serial && isSerialItem && pm ? { [serial]: pm } : undefined;
-   return [
+   const next = [
     ...prev,
     {
      sku: product.sku,
@@ -375,7 +405,7 @@ export const useSalesDashboard = (options?: {
      serialPrices,
      serialGrades,
      serialBrandModels,
-     grade: product.grade,
+     grade: productGradeString(product) || product.grade,
      brand: product.brand,
      colour: product.colour,
      brandModel: product.brandModel,
@@ -388,7 +418,11 @@ export const useSalesDashboard = (options?: {
      cost_missing: p.unitCost == null && !p.purchaseId,
     },
    ];
+   cartStateRef.current = next;
+   return next;
   });
+  if (serialNorm) return cartHasSerial(cartStateRef.current, serialNorm);
+  return true;
  }, [soldInfoMap, blockNegativeStock]);
 
  /** Add multiple serial items — merged by variant; line price = price of serial most recently added to inventory. */
@@ -437,7 +471,7 @@ export const useSalesDashboard = (options?: {
       serialPrices: {},
       serialGrades: {},
       serialBrandModels: {},
-      grade: p.grade,
+      grade: productGradeString(p) || p.grade,
       brand: p.brand,
       colour: p.colour,
       brandModel: p.brandModel,
@@ -794,7 +828,7 @@ export const useSalesDashboard = (options?: {
  );
 
  const subtotal = useMemo(() => {
-  return cart.reduce((sum, i) => sum + parsePrice(i.price) * i.quantity, 0);
+  return cart.reduce((sum, i) => sum + cartLineAmount(i), 0);
  }, [cart]);
 
  const taxConfig = useCartTaxConfig();

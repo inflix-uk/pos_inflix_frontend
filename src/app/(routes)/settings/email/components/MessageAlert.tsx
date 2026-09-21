@@ -13,18 +13,18 @@ export const MessageAlert: React.FC<MessageAlertProps> = ({ message }) => {
 
  return (
  <div
- className={`mb-6 px-4 py-3 rounded-lg text-sm flex items-center gap-2 ${
+ className={`mb-6 px-4 py-3 rounded-lg text-sm flex items-start gap-2 ${
  message.type === "success"
   ? "bg-green-50 border border-green-200 text-green-600"
   : "bg-red-50 border border-red-200 text-red-600"
  }`}
  >
  {message.type === "success" ? (
- <CheckCircle className="h-5 w-5 flex-shrink-0" />
+ <CheckCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
  ) : (
- <XCircle className="h-5 w-5 flex-shrink-0" />
+ <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
  )}
- {message.text}
+ <span className="min-w-0 break-words">{message.text}</span>
  </div>
  );
 };

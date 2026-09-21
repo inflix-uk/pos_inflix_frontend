@@ -14,6 +14,7 @@ import {
  Receipt,
  Download,
  Trash2,
+ RotateCcw,
  Filter,
  Eye,
  X,
@@ -31,11 +32,7 @@ import {
  formatCustomerAddressForInvoice,
  getSaleCustomerDisplay,
 } from "../sales-dashboard/service/salesApi";
-import { downloadInvoiceA4, getInvoiceA4PdfBase64, printInvoiceA4, printReceipt80mm } from "@/lib/invoicePrint";
-import { whatsappApi, describeQueuePosition, type WhatsappStatus } from "../settings/whatsapp/service/whatsappApi";
-import { customerApi } from "../peoples/customers/service/customerApi";
-import SendInvoiceWhatsappModal, { defaultInvoiceWhatsappMessage } from "@/components/invoices/SendInvoiceWhatsappModal";
-import SendInvoiceEmailModal from "@/components/invoices/SendInvoiceEmailModal";
+import { downloadInvoiceA4, printInvoiceA4, printReceipt80mm, invoiceItemDescriptionForPrint } from "@/lib/invoicePrint";
 import { formatDateTimeLondon } from "@/lib/dateUtils";
 import { usePermissionsContext } from "@/contexts/PermissionsContext";
 import {
@@ -72,11 +69,13 @@ const typeBadge = (type: string) => {
 const paymentBadge = (sale: SaleRecord) => {
  const allowed = ["cash", "card", "bank", "credit"] as const;
  const breakdown = sale.payments;
- const methods: string[] = breakdown
- ? allowed.filter((k) => Number((breakdown as Record<string, number | undefined>)[k] ?? 0) > 0)
- : sale.paymentMethod && (allowed as readonly string[]).includes(sale.paymentMethod)
- ? [sale.paymentMethod]
- : [];
+ let methods: string[] = breakdown
+  ? allowed.filter((k) => Number((breakdown as Record<string, number | undefined>)[k] ?? 0) > 0)
+  : [];
+ // Retail/repair sales often set paymentMethod only (payments defaults to all zeros).
+ if (methods.length === 0 && sale.paymentMethod && (allowed as readonly string[]).includes(sale.paymentMethod)) {
+  methods = [sale.paymentMethod];
+ }
  if (methods.length === 0) {
  return <span className="text-xs text-gray-400">—</span>;
  }
@@ -122,7 +121,7 @@ function SalesTableSkeleton({ rows = 6 }: { rows?: number }) {
  </thead>
  <tbody>
   {Array.from({ length: rows }).map((_, i) => (
-  <tr key={i} className="border-b border-gray-100">
+  <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-100"}>
   <td className="px-2 py-4"><div className={`${shimmer} h-4 w-4`} /></td>
   <td className="px-6 py-4"><div className={`${shimmer} h-4 w-36`} /></td>
   <td className="px-6 py-4"><div className={`${shimmer} h-4 w-24`} /></td>
@@ -628,7 +627,7 @@ function InvoicePreviewModal({
     <div className="min-w-0 flex-1">
     <div className="flex items-start gap-1.5">
      <span className="text-[11px] font-medium text-gray-400 mt-0.5">#{idx + 1}</span>
-     <p className="text-sm font-medium text-gray-900 break-words">{item.name}</p>
+     <p className="text-sm font-medium text-gray-900 break-words">{invoiceItemDescriptionForPrint(item)}</p>
     </div>
     {item.grade && <span className="mt-1 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">{item.grade}</span>}
     </div>
@@ -674,7 +673,7 @@ function InvoicePreviewModal({
    <tr key={item._id || idx}>
    <td className="px-3 py-2 text-gray-500">{idx + 1}</td>
    <td className="px-3 py-2 text-gray-900">
-    {item.name}
+    {invoiceItemDescriptionForPrint(item)}
     {item.grade && <span className="ml-1.5 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">{item.grade}</span>}
     {item.serialNumbers && item.serialNumbers.length > 0 && (() => {
     const sc = item.serialColours || {};
@@ -765,7 +764,7 @@ function InvoicePreviewModal({
 
 const Page = () => {
  const router = useRouter();
- const { can, user } = usePermissionsContext();
+ const { can, user, loading: permissionsLoading } = usePermissionsContext();
  const canViewHistorical = can("report.view");
  const canVoid = can("sale.void");
  /** Backend hard-delete requires legacy role admin (not only sale.delete — managers may have that perm). */
@@ -780,6 +779,8 @@ const Page = () => {
  const [searchTerm, setSearchTerm] = useState("");
  const [debouncedSearch, setDebouncedSearch] = useState("");
  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+ const fetchSeqRef = useRef(0);
+ const fetchAbortRef = useRef<AbortController | null>(null);
 
  // Debounce search: wait 400ms after last keystroke before triggering API call
  const handleSearchChange = useCallback((value: string) => {
@@ -859,7 +860,12 @@ const Page = () => {
  quantity: i.quantity,
  unit: i.unit,
  serialNumbers: i.serialNumbers,
+ serialColours: i.serialColours,
  grade: i.grade,
+ brand: i.brand,
+ colour: i.colour,
+ brandModel: i.brandModel,
+ capacity: i.capacity,
  })),
  subtotal: s.subtotal,
  tax: s.tax,
@@ -1031,32 +1037,48 @@ const Page = () => {
  );
 
  const fetchSales = useCallback(async () => {
+ if (permissionsLoading) return;
+ fetchAbortRef.current?.abort();
+ const controller = new AbortController();
+ fetchAbortRef.current = controller;
+ const seq = ++fetchSeqRef.current;
+ const timeoutId = window.setTimeout(() => controller.abort(), 15000);
  setLoading(true);
  setError(null);
  try {
  const todayKey = getTodayLondonDateKey();
- const res = await salesApi.getSales({
- page: currentPage,
- limit: rowsPerPage,
- type: selectedType === "All" ? undefined : selectedType,
- search: debouncedSearch.trim() || undefined,
- from: canViewHistorical ? (dateFrom.trim() || undefined) : todayKey,
- to: canViewHistorical ? (dateTo.trim() || undefined) : todayKey,
- locationId: locationId.trim() || undefined,
- paymentMethod: paymentMethod.trim() || undefined,
- minTotal: minTotal.trim() || undefined,
- maxTotal: maxTotal.trim() || undefined,
- hasReturn: hasReturnFilter || undefined,
- order: listOrder,
- });
+ const res = await salesApi.getSales(
+  {
+  page: currentPage,
+  limit: rowsPerPage,
+  type: selectedType === "All" ? undefined : selectedType,
+  search: debouncedSearch.trim() || undefined,
+  from: canViewHistorical ? (dateFrom.trim() || undefined) : todayKey,
+  to: canViewHistorical ? (dateTo.trim() || undefined) : todayKey,
+  locationId: locationId.trim() || undefined,
+  paymentMethod: paymentMethod.trim() || undefined,
+  minTotal: minTotal.trim() || undefined,
+  maxTotal: maxTotal.trim() || undefined,
+  hasReturn: hasReturnFilter || undefined,
+  order: listOrder,
+  },
+  controller.signal
+ );
+ if (seq !== fetchSeqRef.current) return;
  setSales(res.data ?? []);
  setTotal(res.total ?? 0);
  setPages(res.pages ?? 1);
  } catch (e) {
- setError(e instanceof Error ? e.message : "Failed to load sales");
+ if (seq !== fetchSeqRef.current) return;
+ if (e instanceof DOMException && e.name === "AbortError") {
+  setError("Sales list timed out — try again or use filters to narrow the date range.");
+ } else {
+  setError(e instanceof Error ? e.message : "Failed to load sales");
+ }
  setSales([]);
  } finally {
- setLoading(false);
+ window.clearTimeout(timeoutId);
+ if (seq === fetchSeqRef.current) setLoading(false);
  }
  }, [
  currentPage,
@@ -1072,11 +1094,16 @@ const Page = () => {
  hasReturnFilter,
  listOrder,
  canViewHistorical,
+ permissionsLoading,
  ]);
 
  useEffect(() => {
+ if (permissionsLoading) return;
  fetchSales();
- }, [fetchSales]);
+ return () => {
+ fetchAbortRef.current?.abort();
+ };
+ }, [fetchSales, permissionsLoading]);
 
  useEffect(() => {
  let cancelled = false;
@@ -1450,7 +1477,7 @@ const Page = () => {
   ) : (
   <>
   {/* Mobile: card list (no horizontal scroll) */}
-  <div className="@[640px]:hidden divide-y divide-gray-100">
+  <div className="@[640px]:hidden">
   {sales.length === 0 ? (
    <div className="px-4 py-12 text-center">
    <p className="text-gray-500 font-medium">No sales found</p>
@@ -1465,8 +1492,9 @@ const Page = () => {
    const explicitDue = Number(sale.amountDue);
    const creditPart = Number(sale.payments?.credit || 0);
    const rowBalance = Math.max(0, Number.isFinite(explicitDue) ? explicitDue : (creditPart > 0 ? creditPart : 0));
+   const rowStripe = idx % 2 === 0 ? "bg-white" : "bg-gray-100";
    return (
-    <div key={sale._id} className="px-3 py-3 active:bg-orange-50">
+    <div key={sale._id} className={`px-3 py-3 border-b border-gray-100/80 active:bg-orange-50/80 ${rowStripe}`}>
     <div className="flex items-start justify-between gap-2">
     <div className="min-w-0 flex-1">
      <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
@@ -1482,7 +1510,7 @@ const Page = () => {
      >
      {sale.reference}
      </button>
-     <div className="mt-1 text-sm font-semibold text-gray-900 truncate">{custName}</div>
+     <div className="mt-1 text-sm text-gray-900 truncate">{custName}</div>
      {custContact ? <div className="text-[11px] text-gray-600 truncate">{custContact}</div> : null}
      {custExtra ? <div className="text-[11px] text-gray-500 truncate">{custExtra}</div> : null}
     </div>
@@ -1532,16 +1560,10 @@ const Page = () => {
       disabled: printLoading === sale._id || downloadInvoiceLoadingId === sale._id,
       },
       {
-      key: "whatsapp",
-      label: "Send via WhatsApp (PDF)",
-      icon: <MessageCircle className="h-4 w-4 text-green-600" />,
-      onClick: () => openSendWhatsapp(sale),
-      },
-      {
-      key: "email",
-      label: "Email invoice (PDF)",
-      icon: <Mail className="h-4 w-4 text-blue-600" />,
-      onClick: () => openSendEmail(sale),
+      key: "return",
+      label: "Start return",
+      icon: <RotateCcw className="h-4 w-4 text-gray-700" />,
+      onClick: () => router.push(`/sales-return/start/${sale._id}`),
       },
       {
       key: "edit",
@@ -1650,7 +1672,7 @@ const Page = () => {
    </th>
    </tr>
    </thead>
-   <tbody className="divide-y divide-gray-100">
+   <tbody>
    {sales.length === 0 ? (
    <tr>
    <td colSpan={9} className="px-6 py-16 text-center">
@@ -1666,9 +1688,10 @@ const Page = () => {
    const { name: custName, contact: custContact, extra: custExtra } = displayCustomerLine(sale);
    const lines = sale.items ?? [];
    const rowNumber = (currentPage - 1) * rowsPerPage + idx + 1;
+   const rowStripe = idx % 2 === 0 ? "bg-white" : "bg-gray-100";
    return (
     <React.Fragment key={sale._id}>
-    <tr className="hover:bg-orange-50 hover:shadow-sm transition-colors">
+    <tr className={`${rowStripe} hover:bg-orange-50/80 transition-colors border-b border-gray-100/80`}>
     <td className="px-1.5 @[640px]:px-2 py-0.5 @[640px]:py-1 align-top">
     <button
      type="button"
@@ -1697,7 +1720,7 @@ const Page = () => {
     {sale.reference}
     </button>
     </td>
-    <td className="px-2 @[640px]:px-6 py-0.5 @[640px]:py-1 text-xs @[640px]:text-sm text-gray-900 font-medium align-top leading-tight">
+    <td className="px-2 @[640px]:px-6 py-0.5 @[640px]:py-1 text-xs @[640px]:text-sm text-gray-900 font-normal align-top leading-tight">
     <div>{custName}</div>
     {custContact ? (
      <div className="text-[10px] @[640px]:text-xs text-gray-600 font-normal">{custContact}</div>
@@ -1771,16 +1794,10 @@ const Page = () => {
       disabled: printLoading === sale._id || downloadInvoiceLoadingId === sale._id,
       },
       {
-      key: "whatsapp",
-      label: "Send via WhatsApp (PDF)",
-      icon: <MessageCircle className="h-4 w-4 text-green-600" />,
-      onClick: () => openSendWhatsapp(sale),
-      },
-      {
-      key: "email",
-      label: "Email invoice (PDF)",
-      icon: <Mail className="h-4 w-4 text-blue-600" />,
-      onClick: () => openSendEmail(sale),
+      key: "return",
+      label: "Start return",
+      icon: <RotateCcw className="h-4 w-4 text-gray-700" />,
+      onClick: () => router.push(`/sales-return/start/${sale._id}`),
       },
       {
       key: "edit",
@@ -1812,8 +1829,8 @@ const Page = () => {
     </td>
     </tr>
     {expanded && (
-    <tr className="bg-slate-50/90 border-t border-slate-100">
-    <td colSpan={9} className="px-4 py-4 @[640px]:px-8">
+    <tr className={`${rowStripe} border-b border-gray-100/80`}>
+    <td colSpan={9} className="px-4 py-4 @[640px]:px-8 bg-gray-50/90 border-t border-gray-200/60">
      <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
      Invoice lines ({lines.length})
      </p>

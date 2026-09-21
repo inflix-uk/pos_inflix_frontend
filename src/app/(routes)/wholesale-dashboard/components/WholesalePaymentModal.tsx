@@ -211,24 +211,18 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   credit: credit > 0,
   bank: bank > 0,
  });
- } else if (retailMode) {
- const dueOpen = Math.max(0, total + Math.max(0, previousBalance));
- const dueStr = (Math.round(dueOpen * 100) / 100).toFixed(2);
- setCheckedMethods({ cash: true, card: false, credit: false, bank: false });
- setAmounts({ cash: dueStr, card: "", credit: "", bank: "" });
- setRetailQuickPick("exact");
  }
  }
  // eslint-disable-next-line react-hooks/exhaustive-deps -- only apply initial values when modal opens
  }, [open]);
 
- // Retail + EXACT: refresh tender when amount due changes (discount); skip when user picked +£ chips
+ // Retail + EXACT: refresh tender when amount due changes (discount); only when a single method is active
  useEffect(() => {
  if (!open || !retailMode || retailQuickPick !== "exact") return;
- const active = (["cash", "card", "bank"] as const).find((m) => checkedMethods[m]);
- if (!active) return;
+ const active = (["cash", "card", "bank"] as const).filter((m) => checkedMethods[m]);
+ if (active.length !== 1) return;
  const dueStr = dueRounded.toFixed(2);
- setAmounts({ cash: "", card: "", credit: "", bank: "", [active]: dueStr });
+ setAmounts({ cash: "", card: "", credit: "", bank: "", [active[0]]: dueStr });
  }, [open, retailMode, retailQuickPick, dueRounded, checkedMethods.cash, checkedMethods.card, checkedMethods.bank]);
 
  useEffect(() => {
@@ -245,17 +239,21 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
 
  const toggleMethod = (id: MethodId) => {
  if (retailMode && (id === "cash" || id === "card" || id === "bank")) {
- setCheckedMethods((prev) => {
-  if (prev[id]) {
-  setAmounts((a) => ({ ...a, [id]: "" }));
-  return { ...prev, [id]: false };
-  }
-  const exact = dueRounded.toFixed(2);
-  setAmounts({ cash: "", card: "", credit: "", bank: "", [id]: exact });
-  setRetailQuickPick("exact");
-  return { cash: false, card: false, credit: false, bank: false, [id]: true };
- });
- return;
+  setCheckedMethods((prev) => {
+   const turningOn = !prev[id];
+   const next = { ...prev, [id]: turningOn };
+   setAmounts((a) => {
+    if (!turningOn) return { ...a, [id]: "" };
+    const paidOther = (["cash", "card", "bank"] as const)
+     .filter((m) => m !== id && next[m])
+     .reduce((sum, m) => sum + parseAmount(a[m]), 0);
+    const fill = Math.max(0, Math.round((dueRounded - paidOther) * 100) / 100);
+    return { ...a, [id]: fill > 0 ? fill.toFixed(2) : "0.00" };
+   });
+   if (turningOn) setRetailQuickPick(null);
+   return next;
+  });
+  return;
  }
  setCheckedMethods((prev) => {
  const next = { ...prev, [id]: !prev[id] };
@@ -324,15 +322,17 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  const due = dueRounded;
  if (retailMode) {
  if (paidNow < due - 0.01) {
- const remaining = Math.round((due - paidNow) * 100) / 100;
- setError(`Retail mode requires full payment. Remaining: ${formatMoney(remaining)}`);
+ const remainingAmt = Math.round((due - paidNow) * 100) / 100;
+ setError(`Retail mode requires full payment. Remaining: ${formatMoney(remainingAmt)}`);
  return;
  }
- }
+ // Retail overpayment: keep excess as till change by capping to due (do not create walk-in credit).
  if (paidNow > due + 0.01) {
- setError(`Payment total ${formatMoney(paidNow)} cannot exceed Amount Due ${formatMoney(due)}. Use Refund or Store credit below.`);
+ handleRefund();
  return;
  }
+ }
+ // Wholesale: cash/card/bank overpayment is kept and becomes customer store credit on the backend.
  guardedComplete(buildDetails());
  };
 
@@ -392,14 +392,13 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
 
  const handleStoreCredit = () => {
  setError(null);
- const due = dueRounded;
  const fullPayments = {
  cash: parseAmount(amounts.cash),
  card: parseAmount(amounts.card),
  bank: parseAmount(amounts.bank),
  credit: 0,
  };
- onComplete(buildDetails(fullPayments));
+ guardedComplete(buildDetails(fullPayments));
  };
 
  const handlePrintInvoice = () => {
@@ -686,8 +685,8 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
     type="button"
     onClick={() => {
     setRetailQuickPick(v);
-    setCheckedMethods({ cash: true, card: false, credit: false, bank: false });
-    setAmounts((a) => ({ ...a, cash: (parseAmount(a.cash) + v).toFixed(2), card: "", bank: "" }));
+    setCheckedMethods((prev) => ({ ...prev, cash: true }));
+    setAmounts((a) => ({ ...a, cash: (parseAmount(a.cash) + v).toFixed(2) }));
     }}
     className={retailQuickPick === v ? RETAIL_QUICK_BTN_ACTIVE : RETAIL_QUICK_BTN_INACTIVE}
    >
@@ -717,12 +716,18 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
    <>
    <p className="text-sm font-medium text-gray-700 mb-2">Payment method</p>
    <p className="text-xs text-gray-500 mb-2">
-   Cash, Card and Bank are payments received. Any remainder is automatically applied as Credit.
+   Cash, Card and Bank are payments received. Underpayment is applied as Credit.
+   Overpayment is added as store credit on this account when you create the order.
    </p>
    </>
   )}
   {retailMode && (
    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Pay By</p>
+  )}
+  {retailMode && (
+   <p className="text-[11px] text-slate-500 mb-2">
+   Select one or more methods and enter amounts (total must equal amount due).
+   </p>
   )}
   <div className={retailMode ? "grid grid-cols-3 gap-1.5" : "flex flex-wrap gap-2"}>
   {paymentMethodsToShow.map(({ id, label, icon: Icon }) => (
@@ -821,10 +826,46 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   </div>
 
   {overpayment > 0 && (
-  <div className="p-4 rounded-xl border-2 border-neutral-200 bg-neutral-50">
-  <p className="text-sm font-medium text-neutral-800">
+  <div className="p-4 rounded-xl border-2 border-blue-200 bg-blue-50 space-y-3">
+  <p className="text-sm font-medium text-blue-900">
    Payment exceeds due by: <span className="tabular-nums">{formatMoney(overpayment)}</span>
   </p>
+  {!retailMode ? (
+  <>
+  <p className="text-xs text-blue-800">
+   Create Order will keep the full payment and add{" "}
+   <strong className="tabular-nums">{formatMoney(overpayment)}</strong> as store credit
+   {customerName ? ` for ${customerName}` : " on this account"}.
+  </p>
+  <div className="flex flex-wrap gap-2">
+   <button
+   type="button"
+   onClick={handleStoreCredit}
+   disabled={submitting}
+   className="inline-flex items-center justify-center px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 touch-manipulation"
+   >
+   Create order + store credit
+   </button>
+   <button
+   type="button"
+   onClick={() => handleRefundFrom("cash")}
+   disabled={submitting || parseAmount(amounts.cash) < overpayment - 0.01}
+   className="inline-flex items-center justify-center px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 touch-manipulation"
+   title={
+   parseAmount(amounts.cash) < overpayment - 0.01
+    ? "Not enough cash entered to give change from cash"
+    : "Cap payment to amount due (give change)"
+   }
+   >
+   Give change (no credit)
+   </button>
+  </div>
+  </>
+  ) : (
+  <p className="text-xs text-blue-800">
+   Create Order will treat the excess as change and charge only the amount due.
+  </p>
+  )}
   </div>
   )}
 
@@ -844,10 +885,14 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   <button
   type="button"
   onClick={handleCreateSales}
-  disabled={submitting || overpayment > 0 || (retailMode && remaining > 0.01)}
+  disabled={submitting || (retailMode && remaining > 0.01)}
   className={`flex-1 ${retailMode ? "min-h-[40px] py-2 text-sm rounded-md" : "min-h-[52px] py-3 rounded-xl"} bg-blue-600 text-white font-semibold hover:bg-blue-700 active:bg-blue-800 touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed`}
   >
-  {submitting ? "Saving…" : primaryButtonLabel}
+  {submitting
+   ? "Saving…"
+   : !retailMode && overpayment > 0
+   ? "Create order + credit"
+   : primaryButtonLabel}
   </button>
  </div>
  </div>

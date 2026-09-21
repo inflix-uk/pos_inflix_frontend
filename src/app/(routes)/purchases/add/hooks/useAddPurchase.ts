@@ -6,7 +6,7 @@ import { ParcelData, QuantityData, ItemData, ItemEntry, Step, Currency, ItemMode
 import { categoryApi } from "@/app/(routes)/inventory/category/service/categoryApi";
 import { parseMultiIMEIs } from "../utils/parseMultiIMEIs";
 import { formatSupplierDisplay } from "@/lib/formatSupplierDisplay";
-import { formatProductName } from "@/lib/formatProductName";
+import { formatProductName, formatProductNameInput } from "@/lib/formatProductName";
 import { customerApi } from "@/app/(routes)/peoples/customers/service";
 import { supplierApi } from "@/app/(routes)/peoples/suppliers/service/supplierApi";
 import type { CustomerFormData } from "@/app/(routes)/peoples/customers/types";
@@ -1180,7 +1180,7 @@ export const useAddPurchase = () => {
    const selected = brandsRaw.find((b) => b._id === value);
    setBrandModels(selected?.models?.map((m) => ({ _id: m._id, name: m.name })) || []);
   } else if (field === "name") {
-   setOtherItemData((prev) => ({ ...prev, [field]: formatProductName(value) }));
+   setOtherItemData((prev) => ({ ...prev, [field]: formatProductNameInput(value) }));
   } else if (field === "quantity") {
    setOtherItemData((prev) => ({ ...prev, quantity: value }));
    setSubmitMessage({ type: "", text: "" });
