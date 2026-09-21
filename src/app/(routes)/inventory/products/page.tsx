@@ -170,6 +170,15 @@ export default function ProductsPage() {
  [refetchStockView]
  );
 
+ const handleNameChange = useCallback(
+ async (purchaseId: string, itemId: string, name: string) => {
+ const res = await stockViewApi.updateItemName(purchaseId, itemId, name);
+ if (!res.success) throw new Error(res.message || "Failed to update name");
+ await refetchStockView();
+ },
+ [refetchStockView]
+ );
+
  const handlePurchasePriceChange = useCallback(
  async (purchaseId: string, itemId: string, purchasePrice: number) => {
  const res = await stockViewApi.updateItemPurchasePrice(purchaseId, itemId, purchasePrice);
@@ -461,6 +470,7 @@ export default function ProductsPage() {
    soldInfoMap={soldInfoMap}
    isLoading={stockViewLoading}
    onQuantityChange={handleQuantityChange}
+   onNameChange={handleNameChange}
    onPurchasePriceChange={handlePurchasePriceChange}
    onSalePriceChange={handleSalePriceChange}
    variant="non-serial"
@@ -502,6 +512,7 @@ export default function ProductsPage() {
    soldInfoMap={soldInfoMap}
    isLoading={stockViewLoading}
    onQuantityChange={handleQuantityChange}
+   onNameChange={handleNameChange}
    onPurchasePriceChange={handlePurchasePriceChange}
    onSalePriceChange={handleSalePriceChange}
    variant="non-serial"
@@ -516,6 +527,7 @@ export default function ProductsPage() {
    soldInfoMap={soldInfoMap}
    isLoading={stockViewLoading}
    onQuantityChange={handleQuantityChange}
+   onNameChange={handleNameChange}
    onPurchasePriceChange={handlePurchasePriceChange}
    onSalePriceChange={handleSalePriceChange}
    variant="non-serial"
