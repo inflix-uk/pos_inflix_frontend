@@ -1232,8 +1232,11 @@ export async function buildReceipt80mmPdf(
           });
           if (ro.showItemSerials && item.serialNumbers && item.serialNumbers.length > 0) {
             doc.setFontSize(sfp("items_serial"));
-            doc.text(`IMEI: ${item.serialNumbers.join(", ").slice(0, 32)}`, pad, y);
-            y += 3.5;
+            doc.splitTextToSize(`IMEI: ${item.serialNumbers.join(", ")}`, width - 2 * pad).forEach((ln: string) => {
+              ensurePage();
+              doc.text(ln, pad, y);
+              y += 3.5;
+            });
             doc.setFontSize(sfp("items_qty_price"));
           }
           doc.setFontSize(sfp("items_qty_price"));
