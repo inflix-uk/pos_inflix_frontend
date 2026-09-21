@@ -9,6 +9,7 @@ import type { ExpenseCategory } from "../../expense-category/types";
 import type { ExpenseFormData, PaymentMethod } from "../types";
 import { PAYMENT_METHODS } from "../types";
 import { usePermissions } from "@/hooks/usePermissions";
+import { locationApi } from "@/app/(routes)/peoples/locations/service/locationApi";
 import { ArrowLeft } from "lucide-react";
 
 function round2(n: number): number {
@@ -19,6 +20,7 @@ export default function AddExpensePage() {
  const { can } = usePermissions();
  const router = useRouter();
  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+ const [locations, setLocations] = useState<Array<{ _id: string; name: string }>>([]);
  const [loading, setLoading] = useState(false);
  const [error, setError] = useState<string | null>(null);
 
@@ -35,10 +37,25 @@ export default function AddExpensePage() {
  vatRate: 20,
  paymentMethod: "Cash",
  paymentReference: "",
+ locationId: "",
  });
 
  useEffect(() => {
  expenseCategoryApi.getAll(true).then((data) => setCategories(data.filter((c) => c.isActive)));
+ }, []);
+
+ useEffect(() => {
+ let cancelled = false;
+ locationApi
+  .getLocations({ isActive: true, limit: 500 })
+  .then((res) => {
+  if (cancelled || !res.success || !Array.isArray(res.data)) return;
+  setLocations((res.data as Array<{ _id: string; name: string }>).map((l) => ({ _id: l._id, name: l.name })));
+  })
+  .catch(() => {});
+ return () => {
+  cancelled = true;
+ };
  }, []);
 
  const recalcFromNetAndVat = (net: number, vat: number) => {
@@ -75,6 +92,8 @@ export default function AddExpensePage() {
  vatAmount: vat,
  amountGross: gross,
  occurredAtUtc: new Date(form.occurredAtUtc).toISOString(),
+ // "" would fail to cast to an ObjectId; null is the company-wide value.
+ locationId: form.locationId || null,
  });
  router.push(`/expenses-list/edit/${created._id}`);
  } catch (err) {
@@ -135,6 +154,22 @@ export default function AddExpensePage() {
   <option key={c._id} value={c._id}>{c.name} (VAT {c.defaultVatRate}%)</option>
   ))}
   </select>
+  </div>
+  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">Shop</label>
+  <select
+  value={form.locationId ?? ""}
+  onChange={(e) => setForm((f) => ({ ...f, locationId: e.target.value }))}
+  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+  >
+  <option value="">Company-wide (all shops)</option>
+  {locations.map((l) => (
+  <option key={l._id} value={l._id}>{l.name}</option>
+  ))}
+  </select>
+  <p className="mt-1 text-xs text-gray-500">
+  Company-wide expenses only appear on reports when &quot;All locations&quot; is selected.
+  </p>
   </div>
   <div>
   <label className="block text-sm font-medium text-gray-700 mb-1">Vendor name</label>

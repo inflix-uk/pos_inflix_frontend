@@ -251,7 +251,7 @@ export default function TakingsDashboardPage() {
   View Returns
   </Link>
   <Link
-  href={`/expenses?${drilldownParams}`}
+  href={`/expenses-list?${drilldownParams}`}
   className="rounded-lg border border-gray-200 bg-white px-2 @[640px]:px-2.5 @[768px]:px-3 py-1.5 @[768px]:py-2 text-[11px] @[640px]:text-xs @[768px]:text-sm font-medium text-gray-700 hover:bg-gray-50"
   >
   View Expenses
@@ -317,6 +317,9 @@ export default function TakingsDashboardPage() {
   <h2 className="mb-2.5 @[640px]:mb-3 @[768px]:mb-4 text-[11px] @[640px]:text-xs @[768px]:text-sm font-semibold uppercase tracking-wide text-gray-500">
   Payment breakdown
   </h2>
+  <p className="mb-2.5 @[640px]:mb-3 text-[11px] @[640px]:text-xs text-gray-500">
+  Payments for sales in the selected period only (excludes settling older account balances at checkout).
+  </p>
   <div className="grid grid-cols-1 gap-2.5 @[480px]:gap-3 @[768px]:gap-4 @[640px]:grid-cols-2 @[1024px]:grid-cols-4">
   {(["cash", "card", "bank", "credit"] as const).map((method) => (
   <PaymentCard

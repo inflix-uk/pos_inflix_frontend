@@ -55,7 +55,7 @@ function canonicalAttributeSlug(slug: string): string {
 }
 
 const VARIANT_SLUG_ALIASES: Record<string, string[]> = {
- brand: ["brand"],
+ brand: ["brand", "brands"],
  model: ["model", "brandmodel", "brand_model"],
  capacity: ["capacity"],
  colour: ["colour", "color"],
