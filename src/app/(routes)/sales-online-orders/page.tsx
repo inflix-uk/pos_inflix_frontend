@@ -32,7 +32,11 @@ import {
  formatCustomerAddressForInvoice,
  getSaleCustomerDisplay,
 } from "../sales-dashboard/service/salesApi";
-import { downloadInvoiceA4, printInvoiceA4, printReceipt80mm, invoiceItemDescriptionForPrint } from "@/lib/invoicePrint";
+import { downloadInvoiceA4, getInvoiceA4PdfBase64, printInvoiceA4, printReceipt80mm, invoiceItemDescriptionForPrint } from "@/lib/invoicePrint";
+import { whatsappApi, describeQueuePosition, type WhatsappStatus } from "../settings/whatsapp/service/whatsappApi";
+import { customerApi } from "../peoples/customers/service/customerApi";
+import SendInvoiceWhatsappModal, { defaultInvoiceWhatsappMessage } from "@/components/invoices/SendInvoiceWhatsappModal";
+import SendInvoiceEmailModal from "@/components/invoices/SendInvoiceEmailModal";
 import { formatDateTimeLondon } from "@/lib/dateUtils";
 import { usePermissionsContext } from "@/contexts/PermissionsContext";
 import {
@@ -1560,6 +1564,18 @@ const Page = () => {
       disabled: printLoading === sale._id || downloadInvoiceLoadingId === sale._id,
       },
       {
+      key: "whatsapp",
+      label: "Send via WhatsApp (PDF)",
+      icon: <MessageCircle className="h-4 w-4 text-green-600" />,
+      onClick: () => openSendWhatsapp(sale),
+      },
+      {
+      key: "email",
+      label: "Email invoice (PDF)",
+      icon: <Mail className="h-4 w-4 text-blue-600" />,
+      onClick: () => openSendEmail(sale),
+      },
+      {
       key: "return",
       label: "Start return",
       icon: <RotateCcw className="h-4 w-4 text-gray-700" />,
@@ -1792,6 +1808,18 @@ const Page = () => {
       icon: <Receipt className="h-4 w-4 text-orange-600" />,
       onClick: () => handlePrintReceipt(sale),
       disabled: printLoading === sale._id || downloadInvoiceLoadingId === sale._id,
+      },
+      {
+      key: "whatsapp",
+      label: "Send via WhatsApp (PDF)",
+      icon: <MessageCircle className="h-4 w-4 text-green-600" />,
+      onClick: () => openSendWhatsapp(sale),
+      },
+      {
+      key: "email",
+      label: "Email invoice (PDF)",
+      icon: <Mail className="h-4 w-4 text-blue-600" />,
+      onClick: () => openSendEmail(sale),
       },
       {
       key: "return",
