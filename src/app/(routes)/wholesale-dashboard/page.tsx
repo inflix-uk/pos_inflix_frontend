@@ -629,6 +629,8 @@ const Page = () => {
 
  const [showInvoiceStep, setShowInvoiceStep] = useState(false);
  const [saleForPrint, setSaleForPrint] = useState<SaleForPrint | null>(null);
+ /** Customer's WhatsApp number for the saved order (the customer selection is cleared after save). */
+ const [saleWhatsappPhone, setSaleWhatsappPhone] = useState("");
  const customerPricingGroupId = selectedCustomer && "pricingGroupId" in selectedCustomer ? (selectedCustomer as Customer).pricingGroupId ?? undefined : undefined;
  const prevPricingGroupIdRef = useRef<string | undefined>(undefined);
 
@@ -1584,6 +1586,12 @@ const Page = () => {
    0,
    Math.round(((details.amountDue ?? 0) - paymentReceived) * 100) / 100,
   );
+  // Mobile is the likelier WhatsApp number; fall back to the main phone.
+  setSaleWhatsappPhone(
+  (selectedCustomer && "mobile" in selectedCustomer ? selectedCustomer.mobile?.trim() : "") ||
+   selectedCustomer?.phone?.trim() ||
+   "",
+  );
   setSaleForPrint({
   _id: result.data._id,
   reference: result.data.reference,
@@ -1652,6 +1660,8 @@ const Page = () => {
  }}
  customerName={selectedCustomer?.name}
  customerEmail={selectedCustomer?.email}
+ customerWhatsapp={saleWhatsappPhone}
+ onSendWhatsapp={orderWriter.sendWhatsapp}
  previousBalance={
   previousBalanceForModal != null
   ? previousBalanceForModal
