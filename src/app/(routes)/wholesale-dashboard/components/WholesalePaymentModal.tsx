@@ -1,11 +1,20 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { X, Banknote, CreditCard, Wallet, Landmark, Printer, Mail, Receipt, CheckCircle, Download, Loader2 } from "lucide-react";
-import { downloadInvoiceA4, printInvoiceA4, printReceipt80mm, type SaleForPrint } from "@/lib/invoicePrint";
+import { X, Banknote, CreditCard, Wallet, Landmark, Printer, Mail, Receipt, CheckCircle, Download, Loader2, MessageCircle } from "lucide-react";
+import {
+ downloadInvoiceA4,
+ getInvoiceA4PdfBase64,
+ printInvoiceA4,
+ printReceipt80mm,
+ type SaleForPrint,
+} from "@/lib/invoicePrint";
 import { printReceipt as printReceiptSilent, openCashDrawer } from "@/services/printService";
 import { useAppCurrency } from "@/lib/app-currency-context";
 import { bankAccountApi } from "../../bank-accounts/service/bankAccountApi";
+import { whatsappApi, describeQueuePosition, type WhatsappStatus } from "../../settings/whatsapp/service/whatsappApi";
+import SendInvoiceWhatsappModal, { defaultInvoiceWhatsappMessage } from "@/components/invoices/SendInvoiceWhatsappModal";
+import type { OrderWriter } from "./OrderWriterContext";
 
 const parseAmount = (s: string): number => {
  const n = parseFloat(s.replace(/[^0-9.-]/g, ""));
@@ -73,6 +82,10 @@ interface WholesalePaymentModalProps {
  customerName?: string;
  /** Customer email (for Email invoice) */
  customerEmail?: string;
+ /** Customer WhatsApp number, pre-filled in the WhatsApp invoice dialog */
+ customerWhatsapp?: string;
+ /** When set, the invoice step offers "WhatsApp invoice" (A4 PDF from the connected WhatsApp) */
+ onSendWhatsapp?: OrderWriter["sendWhatsapp"];
  /** Customer's previous/outstanding balance (added to amount due) */
  previousBalance?: number;
  /** When true, show Print / Email / Receipt options (after order created) */
@@ -106,6 +119,8 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  onComplete,
  customerName,
  customerEmail,
+ customerWhatsapp,
+ onSendWhatsapp,
  previousBalance = 0,
  showInvoiceStep = false,
  saleForPrint = null,
@@ -138,6 +153,14 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  const [error, setError] = useState<string | null>(null);
  const [submitting, setSubmitting] = useState(false);
  const [drawerOpening, setDrawerOpening] = useState(false);
+ const [whatsappOpen, setWhatsappOpen] = useState(false);
+ /** Sale the WhatsApp phone/message fields were filled for, so edits survive reopening the dialog. */
+ const [whatsappSaleId, setWhatsappSaleId] = useState<string | null>(null);
+ const [whatsappPhone, setWhatsappPhone] = useState("");
+ const [whatsappMessage, setWhatsappMessage] = useState("");
+ const [whatsappConnection, setWhatsappConnection] = useState<WhatsappStatus | null>(null);
+ const [whatsappSending, setWhatsappSending] = useState(false);
+ const [whatsappNotice, setWhatsappNotice] = useState<{ saleId: string; type: "success" | "error"; text: string } | null>(null);
  const [retailQuickPick, setRetailQuickPick] = useState<RetailQuickPick>(null);
  // One idempotency key per modal session. Same key is reused across retries inside this
  // modal (e.g. user clicks again after a perceived network failure) so the backend can
@@ -431,6 +454,55 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
  };
 
+ const handleWhatsappInvoice = () => {
+  if (!saleForPrint) return;
+  if (whatsappSaleId !== saleForPrint._id) {
+   setWhatsappSaleId(saleForPrint._id);
+   setWhatsappPhone(customerWhatsapp || "");
+   setWhatsappMessage(defaultInvoiceWhatsappMessage(saleForPrint));
+  }
+  setWhatsappNotice(null);
+  setWhatsappConnection(null);
+  setWhatsappOpen(true);
+  whatsappApi
+   .getStatus()
+   .then((s) => setWhatsappConnection(s.status))
+   .catch(() => setWhatsappConnection("disconnected"));
+ };
+
+ const handleSendWhatsapp = async () => {
+  if (!saleForPrint || !onSendWhatsapp) return;
+  const phone = whatsappPhone.trim();
+  if (!phone) return;
+  const saleId = saleForPrint._id;
+  setWhatsappSending(true);
+  try {
+   const { base64, filename } = await getInvoiceA4PdfBase64(saleForPrint);
+   const res = await onSendWhatsapp(saleId, {
+    phone,
+    pdfBase64: base64,
+    filename,
+    message: whatsappMessage.trim() || undefined,
+   });
+   setWhatsappNotice({
+    saleId,
+    type: "success",
+    text: `${res.message || "Invoice queued for WhatsApp"}. ${describeQueuePosition(res.data)}`,
+   });
+  } catch (e) {
+   setWhatsappNotice({
+    saleId,
+    type: "error",
+    text: e instanceof Error ? e.message : "Failed to send invoice via WhatsApp",
+   });
+  } finally {
+   setWhatsappSending(false);
+   setWhatsappOpen(false);
+  }
+ };
+
+ const showWhatsappBtn = !retailMode && Boolean(onSendWhatsapp);
+
  const handleOpenDrawer = async () => {
   setDrawerOpening(true);
   try {
@@ -490,11 +562,24 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
     ? showOpenDrawerBtn
      ? "sm:grid-cols-3"
      : "sm:grid-cols-2"
-    : showOpenDrawerBtn
+    : showOpenDrawerBtn || showWhatsappBtn
      ? "sm:grid-cols-2 lg:grid-cols-4"
      : "sm:grid-cols-3"
   }`}
   >
+  {showWhatsappBtn && (
+  <button
+   type="button"
+   onClick={handleWhatsappInvoice}
+   disabled={!saleForPrint}
+   className="group flex flex-col items-center gap-3 p-4 rounded-xl border-2 border-green-200 bg-green-50/60 text-green-800 font-medium hover:border-green-300 hover:bg-green-50 active:scale-[0.98] transition-all touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+   <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-green-200 group-hover:bg-green-100 text-green-600">
+   <MessageCircle className="h-6 w-6" />
+   </span>
+   <span className="text-sm">WhatsApp invoice</span>
+  </button>
+  )}
   {!retailMode && (
   <>
    <button
@@ -562,6 +647,18 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   </button>
   )}
   </div>
+  {whatsappNotice && whatsappNotice.saleId === saleForPrint?._id && (
+  <p
+   role="status"
+   className={`mt-3 rounded-lg border px-3 py-2 text-sm ${
+    whatsappNotice.type === "success"
+     ? "border-green-200 bg-green-50 text-green-800"
+     : "border-red-200 bg-red-50 text-red-700"
+   }`}
+  >
+   {whatsappNotice.text}
+  </p>
+  )}
   </div>
   <div className="p-5 pt-0">
   <button
@@ -573,6 +670,24 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   </button>
   </div>
  </div>
+ {/* Rendered inside this z-50 layer so the dialog stacks above the success card. */}
+ {whatsappOpen && saleForPrint && (
+  <SendInvoiceWhatsappModal
+  invoice={saleForPrint}
+  phone={whatsappPhone}
+  onPhoneChange={setWhatsappPhone}
+  message={whatsappMessage}
+  onMessageChange={setWhatsappMessage}
+  connection={whatsappConnection}
+  loading={whatsappSending}
+  prefillLoading={false}
+  onCancel={() => {
+   if (whatsappSending) return;
+   setWhatsappOpen(false);
+  }}
+  onSend={handleSendWhatsapp}
+  />
+ )}
  </div>
  );
  }

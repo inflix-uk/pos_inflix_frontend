@@ -13,6 +13,7 @@ import {
  type CreateSalePayload,
  type CreateSaleResponse,
 } from "../../sales-dashboard/service/salesApi";
+import type { WhatsappEnqueueResult } from "../../settings/whatsapp/service/whatsappApi";
 
 export interface OrderWriter {
  /** Label shown on the primary action / success toast (e.g. "Order", "Invoice"). */
@@ -51,6 +52,11 @@ export interface OrderWriter {
   id: string,
   payload: CreateSalePayload,
  ) => Promise<CreateSaleResponse>;
+ /** Queue the saved sale / invoice PDF for delivery from the connected WhatsApp. */
+ sendWhatsapp: (
+  id: string,
+  payload: { phone: string; pdfBase64: string; filename: string; message?: string },
+ ) => Promise<{ success: boolean; message?: string; data: WhatsappEnqueueResult }>;
 }
 
 const DEFAULT_WRITER: OrderWriter = {
@@ -59,6 +65,7 @@ const DEFAULT_WRITER: OrderWriter = {
  referencePrefix: "INV-",
  createSale: (payload) => salesApi.createSale(payload),
  checkReference: (reference, signal) => salesApi.checkReference(reference, signal),
+ sendWhatsapp: (id, payload) => salesApi.sendSaleWhatsapp(id, payload),
  enableDrafts: true,
 };
 

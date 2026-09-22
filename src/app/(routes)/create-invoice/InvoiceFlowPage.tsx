@@ -203,6 +203,7 @@ export function InvoiceFlowPage({ editInvoiceId }: { editInvoiceId?: string }) {
    editInvoiceId,
    checkReference: (reference, signal) =>
     invoicesApi.checkReference(reference, signal, editInvoiceId),
+   sendWhatsapp: (id, payload) => invoicesApi.sendInvoiceWhatsapp(id, payload),
    enableDrafts: false,
    forceWholesaleMode: true,
    enableInvoiceDate: true,
