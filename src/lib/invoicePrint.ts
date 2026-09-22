@@ -213,8 +213,9 @@ export function saleInvoiceDisplayDate(sale: SaleForPrint): string {
 }
 
 export function shouldShowWholesaleAccountSummary(sale: SaleForPrint): boolean {
-  const prevBal = Math.max(0, Number(sale.previousBalance) || 0);
-  if (prevBal > MONEY_EPS) return true;
+  // Negative previous balance is store credit taken off this invoice, so it always needs the summary.
+  const prevBal = Number(sale.previousBalance) || 0;
+  if (Math.abs(prevBal) > MONEY_EPS) return true;
 
   const invTotal = Math.max(0, (Number(sale.total) || 0) - (Number(sale.discount) || 0));
   const totalDueBeforePayments = prevBal + invTotal;
@@ -810,13 +811,14 @@ export async function buildInvoicePdf(
     const prevBal = Number(sale.previousBalance) || 0;
     const invTotal = (Number(sale.total) || 0) - (Number(sale.discount) || 0);
     const totalDueBeforePayments = prevBal + invTotal;
+    const hasCredit = prevBal < -MONEY_EPS;
     doc.setTextColor(110, 110, 110);
-    doc.text("Previous Balance:", left, y);
+    doc.text(hasCredit ? "Previous Balance (Credit):" : "Previous Balance:", left, y);
     doc.setTextColor(0, 0, 0);
-    doc.text(formatMoney(prevBal), right, y, { align: "right" });
+    doc.text(hasCredit ? "-" + formatMoney(-prevBal) : formatMoney(prevBal), right, y, { align: "right" });
     y += 6;
     doc.setTextColor(110, 110, 110);
-    doc.text("Invoice Total + Previous Balance:", left, y);
+    doc.text(hasCredit ? "Invoice Total after Credit:" : "Invoice Total + Previous Balance:", left, y);
     doc.setTextColor(0, 0, 0);
     doc.text(formatMoney(totalDueBeforePayments), right, y, { align: "right" });
     y += 6;
@@ -830,6 +832,13 @@ export async function buildInvoicePdf(
       y += 6;
     }
     const balanceDue = totalDueBeforePayments - received;
+    if (balanceDue < -MONEY_EPS) {
+      doc.setTextColor(110, 110, 110);
+      doc.text("Credit Remaining on Account:", left, y);
+      doc.setTextColor(0, 0, 0);
+      doc.text(formatMoney(-balanceDue), right, y, { align: "right" });
+      y += 6;
+    }
     y += 5;
     doc.setDrawColor(220, 220, 220);
     doc.setLineWidth(0.1);
