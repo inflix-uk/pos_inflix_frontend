@@ -191,7 +191,9 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  };
 
  const discountInput = parseAmount(discount);
- const previousBalanceNum = Math.max(0, previousBalance);
+ // Negative = store credit. The backend nets it into the customer balance either way,
+ // so it must lower the amount due here too or the invoice overstates what is owed.
+ const previousBalanceNum = Math.round((Number(previousBalance) || 0) * 100) / 100;
  const discountNum = (() => {
  if (discountType === "percent") {
   const pct = Math.min(100, Math.max(0, discountInput));
@@ -775,6 +777,14 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
    <label className="block text-xs font-medium text-gray-700 mb-1">Previous balance</label>
    <div className="px-3 py-2 rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-800 font-semibold text-sm">
    {formatMoney(previousBalanceNum)}
+   </div>
+  </>
+  )}
+  {previousBalanceNum < 0 && (
+  <>
+   <label className="block text-xs font-medium text-gray-700 mb-1">Store credit</label>
+   <div className="px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold text-sm">
+   -{formatMoney(-previousBalanceNum)}
    </div>
   </>
   )}

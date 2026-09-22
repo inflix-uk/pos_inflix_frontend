@@ -172,7 +172,8 @@ function isMeaningfulAddressLine(line: string): boolean {
 }
 
 function computeWholesaleBalanceDue(sale: SaleForPrint): number {
-  const prevBal = Math.max(0, Number(sale.previousBalance) || 0);
+  // Negative previous balance is store credit, which pays part of this invoice.
+  const prevBal = Number(sale.previousBalance) || 0;
   const invTotal = Math.max(0, (Number(sale.total) || 0) - (Number(sale.discount) || 0));
   const totalDueBeforePayments = prevBal + invTotal;
   const payments = sale.payments || {};
@@ -719,9 +720,11 @@ export async function buildBusinessInvoicePdf(
     (Number(summaryPayments.card) || 0) +
     (Number(summaryPayments.bank) || 0);
   const summaryCredit = Number(summaryPayments.credit) || 0;
-  const summaryBalanceDue = Math.max(0, summaryTotalDueBeforePayments - summaryReceived);
+  const summaryBalanceAfter = summaryTotalDueBeforePayments - summaryReceived;
+  const summaryBalanceDue = Math.max(0, summaryBalanceAfter);
+  const summaryHasCredit = summaryPrevBal < -MONEY_EPS;
   const hasMeaningfulWholesaleSummary =
-    summaryPrevBal > MONEY_EPS ||
+    Math.abs(summaryPrevBal) > MONEY_EPS ||
     summaryReceived > MONEY_EPS ||
     summaryCredit > MONEY_EPS ||
     summaryBalanceDue > MONEY_EPS;
@@ -732,7 +735,8 @@ export async function buildBusinessInvoicePdf(
     const totalDueBeforePayments = summaryTotalDueBeforePayments;
     const received = summaryReceived;
     const balanceDue = summaryBalanceDue;
-    const summaryH = received > 0 ? 38 : 33;
+    const creditRemaining = summaryBalanceAfter < -MONEY_EPS ? -summaryBalanceAfter : 0;
+    const summaryH = 33 + (received > 0 ? 5 : 0) + (creditRemaining > 0 ? 5 : 0);
 
     y = ensureSpace(doc, y, summaryH + 8, io.marginMm);
     drawPanel(doc, left, y, contentW, summaryH);
@@ -750,10 +754,18 @@ export async function buildBusinessInvoicePdf(
       ay += 5;
     };
 
-    summaryRow("Previous balance", formatMoney(prevBal));
-    summaryRow("This invoice + previous balance", formatMoney(totalDueBeforePayments));
+    if (summaryHasCredit) {
+      summaryRow("Previous balance (credit)", `-${formatMoney(-prevBal)}`);
+      summaryRow("This invoice after credit", formatMoney(totalDueBeforePayments));
+    } else {
+      summaryRow("Previous balance", formatMoney(prevBal));
+      summaryRow("This invoice + previous balance", formatMoney(totalDueBeforePayments));
+    }
     if (received > 0) {
       summaryRow("Payments received", `-${formatMoney(received)}`);
+    }
+    if (creditRemaining > 0) {
+      summaryRow("Credit remaining on account", formatMoney(creditRemaining));
     }
     ay += 1;
     doc.setDrawColor(BORDER.r, BORDER.g, BORDER.b);
