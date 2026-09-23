@@ -675,7 +675,8 @@ export const ItemForm: React.FC<ItemFormProps> = ({
   const isEditingRow = editingItemId === item.id;
   // Editing row auto-expands so the user always sees the "open" state. Otherwise normal toggle.
   const isExpanded = isEditingRow || expandedItems.has(item.id);
-  const d = item.data;
+  // While editing, show live form values so CONDITION/etc. updates immediately in the summary.
+  const d = isEditingRow ? data : item.data;
   const imeiLines = parseMultiIMEIs(d.multiIMEIs);
   return (
   <div
@@ -838,7 +839,7 @@ export const ItemForm: React.FC<ItemFormProps> = ({
   {savedOtherItems.map((item, idx) => {
   const isEditingRow = editingOtherItemId === item.id;
   const isExpanded = isEditingRow || expandedItems.has(item.id);
-  const d = item.data;
+  const d = isEditingRow ? otherItemData : item.data;
   return (
   <div
    key={item.id}

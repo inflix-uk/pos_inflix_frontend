@@ -366,7 +366,11 @@ export const useEditPurchase = () => {
   const hasLegacy = itemData.grade || itemData.brand || itemData.brandModel || itemData.capacity || itemData.colour;
   if (!hasLegacy) return;
   const getLegacyName = (slug: string): string | undefined => {
-   if (slug === "grade") return grades.find((g) => g._id === itemData.grade)?.name;
+   if (slug === "grade" || slug === "condition") {
+    return grades.find((g) => g._id === itemData.grade)?.name
+     || (itemData.grade && String(itemData.grade).trim())
+     || undefined;
+   }
    if (slug === "brands" || slug === "brand") return brands.find((b) => b._id === itemData.brand)?.name;
    if (slug === "brand_model" || slug === "model") return brandModels.find((m) => m._id === itemData.brandModel)?.name;
    if (slug === "storage" || slug === "capacity") return capacities.find((c) => c._id === itemData.capacity)?.name;
@@ -520,9 +524,38 @@ export const useEditPurchase = () => {
    const idx = attrs.findIndex((a) => a._id === attributeId);
    const next = { ...prev.variantValues, [attributeId]: valueId };
    if (idx >= 0) for (let j = idx + 1; j < attrs.length; j++) delete next[attrs[j]._id];
-   return { ...prev, variantValues: next };
+   const patch: Partial<typeof prev> = { variantValues: next };
+   // Keep legacy grade in sync when CONDITION/GRADE variant changes (summary + payload use item.grade).
+   if (idx >= 0) {
+    const slug = String(attrs[idx].slug || "").toLowerCase();
+    if (slug === "grade" || slug === "condition") {
+     const options = getVariantOptionsForAttributeIndex(attrs, next, idx);
+     const optName = options.find((o) => o._id === valueId)?.name;
+     if (optName) patch.grade = String(optName).trim().toUpperCase();
+    }
+   }
+   return { ...prev, ...patch };
   });
- }, [categoryVariantAttributesImei]);
+ }, [categoryVariantAttributesImei, getVariantOptionsForAttributeIndex]);
+
+ const handleOtherItemVariantChange = useCallback((attributeId: string, valueId: string) => {
+  setOtherItemData((prev) => {
+   const attrs = categoryVariantAttributesOther;
+   const idx = attrs.findIndex((a) => a._id === attributeId);
+   const next = { ...prev.variantValues, [attributeId]: valueId };
+   if (idx >= 0) for (let j = idx + 1; j < attrs.length; j++) delete next[attrs[j]._id];
+   const patch: Partial<typeof prev> = { variantValues: next };
+   if (idx >= 0) {
+    const slug = String(attrs[idx].slug || "").toLowerCase();
+    if (slug === "grade" || slug === "condition") {
+     const options = getVariantOptionsForAttributeIndex(attrs, next, idx);
+     const optName = options.find((o) => o._id === valueId)?.name;
+     if (optName) patch.grade = String(optName).trim().toUpperCase();
+    }
+   }
+   return { ...prev, ...patch };
+  });
+ }, [categoryVariantAttributesOther, getVariantOptionsForAttributeIndex]);
 
  const handleItemVariantModelChange = useCallback((_attributeId: string, modelId: string) => {
   const attrs = categoryVariantAttributesImei;
@@ -534,16 +567,6 @@ export const useEditPurchase = () => {
    return { ...prev, variantValues: next };
   });
  }, [categoryVariantAttributesImei]);
-
- const handleOtherItemVariantChange = useCallback((attributeId: string, valueId: string) => {
-  setOtherItemData((prev) => {
-   const attrs = categoryVariantAttributesOther;
-   const idx = attrs.findIndex((a) => a._id === attributeId);
-   const next = { ...prev.variantValues, [attributeId]: valueId };
-   if (idx >= 0) for (let j = idx + 1; j < attrs.length; j++) delete next[attrs[j]._id];
-   return { ...prev, variantValues: next };
-  });
- }, [categoryVariantAttributesOther]);
 
  const handleOtherItemVariantModelChange = useCallback((_attributeId: string, modelId: string) => {
   const attrs = categoryVariantAttributesOther;
@@ -1255,7 +1278,7 @@ export const useEditPurchase = () => {
    const slug = attr.slug;
    const valueUpper = toUpper(valueName) ?? valueName;
    list.push({ slug, value: valueUpper });
-   if (slug === "grade") fixed.grade = valueUpper;
+   if (slug === "grade" || slug === "condition") fixed.grade = valueUpper;
    else if (slug === "brands" || slug === "brand") fixed.brand = valueUpper;
    else if (slug === "brand_model" || slug === "model") fixed.brandModel = valueUpper;
    else if (slug === "storage" || slug === "capacity") fixed.capacity = valueUpper;
