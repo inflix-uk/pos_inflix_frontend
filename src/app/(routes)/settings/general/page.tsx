@@ -9,7 +9,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { THEMES } from "@/lib/theme";
 import { usePermissions } from "@/hooks/usePermissions";
 import { getInventorySettings, updateInventorySettings } from "./service/inventorySettingsApi";
-import { getGeneralSettings, updateSalesMode, updateNegativeStock, updateRefundOtpThreshold, setupAdminTotp, verifyAndEnableAdminTotp, disableAdminTotp } from "../sales/service/generalSettingsApi";
+import { getGeneralSettings, updateSalesMode, updateNegativeStock, updateAccountBalanceAtCheckout, updateRefundOtpThreshold, setupAdminTotp, verifyAndEnableAdminTotp, disableAdminTotp } from "../sales/service/generalSettingsApi";
 
 const GeneralSettingsPage = () => {
  const { currencyCode, setCurrency, currencies } = useAppCurrency();
@@ -32,6 +32,9 @@ const GeneralSettingsPage = () => {
  const [allowNegativeStock, setAllowNegativeStock] = useState(false);
  const [negStockSaving, setNegStockSaving] = useState(false);
  const [negStockMessage, setNegStockMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+ const [accountBalanceAtCheckout, setAccountBalanceAtCheckout] = useState(true);
+ const [accountBalanceSaving, setAccountBalanceSaving] = useState(false);
+ const [accountBalanceMessage, setAccountBalanceMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
  const [adminTotpEnabled, setAdminTotpEnabled] = useState(false);
  const [refundOtpThreshold, setRefundOtpThreshold] = useState<number>(50);
  const [thresholdInput, setThresholdInput] = useState<string>("50");
@@ -66,6 +69,9 @@ const GeneralSettingsPage = () => {
   }
   if (typeof res.data.allowNegativeStock === "boolean") {
   setAllowNegativeStock(res.data.allowNegativeStock);
+  }
+  if (typeof res.data.accountBalanceAtCheckoutEnabled === "boolean") {
+  setAccountBalanceAtCheckout(res.data.accountBalanceAtCheckoutEnabled);
   }
   if (typeof res.data.adminTotpEnabled === "boolean") {
   setAdminTotpEnabled(res.data.adminTotpEnabled);
@@ -200,6 +206,31 @@ const GeneralSettingsPage = () => {
  setNegStockMessage({ type: "error", text: "Could not update setting." });
  } finally {
  setNegStockSaving(false);
+ }
+ }, [canManageSalesMode]);
+
+ const handleAccountBalanceToggle = useCallback(async (value: boolean) => {
+ if (!canManageSalesMode) return;
+ setAccountBalanceSaving(true);
+ setAccountBalanceMessage(null);
+ try {
+ const res = await updateAccountBalanceAtCheckout({ accountBalanceAtCheckoutEnabled: value });
+ if (res.success && res.data) {
+ setAccountBalanceAtCheckout(res.data.accountBalanceAtCheckoutEnabled !== false);
+ setAccountBalanceMessage({
+  type: "success",
+  text: value
+  ? "Customer balance is used — what they owe is added, and their store credit pays part of the sale."
+  : "Each sale stands alone — settle balances from the account statement instead.",
+ });
+ setTimeout(() => setAccountBalanceMessage(null), 4000);
+ } else {
+ setAccountBalanceMessage({ type: "error", text: res.message || "Could not update setting." });
+ }
+ } catch {
+ setAccountBalanceMessage({ type: "error", text: "Could not update setting." });
+ } finally {
+ setAccountBalanceSaving(false);
  }
  }, [canManageSalesMode]);
 
@@ -534,6 +565,72 @@ const GeneralSettingsPage = () => {
   </div>
   </div>
   )}
+ </div>
+
+ <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+ <h2 className="text-lg font-medium text-gray-800 mb-2 flex items-center gap-2">
+  <ShoppingBag className="h-5 w-5 text-orange-500" />
+  Customer balance on Create Sales
+ </h2>
+ <p className="text-sm text-gray-500 mb-4">
+  Controls whether a customer&apos;s account balance is used when you take payment.
+  When <strong>on</strong>, what they already owe is added to the amount due and their store credit pays part of the sale.
+  When <strong>off</strong>, every sale asks for its own amount only, and balances are settled from the account statement.
+  The shared <strong>Walk-in Customer</strong> never uses a balance either way.
+ </p>
+ {accountBalanceMessage && (
+  <div
+  className={`mb-4 px-3 py-2 rounded-lg text-sm ${
+   accountBalanceMessage.type === "success" ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
+  }`}
+  >
+  {accountBalanceMessage.text}
+  </div>
+ )}
+ {salesModeLoading ? (
+  <div className="flex items-center gap-2 text-gray-500 py-2">
+  <Loader2 className="h-5 w-5 animate-spin" /> Loading…
+  </div>
+ ) : (
+  <div className="flex flex-col gap-3">
+  <div className="flex items-center gap-3">
+   <span className={`text-sm font-medium ${!accountBalanceAtCheckout ? "text-gray-900" : "text-gray-500"}`}>
+   This sale only
+   </span>
+   <button
+   type="button"
+   role="switch"
+   aria-checked={accountBalanceAtCheckout}
+   disabled={!canManageSalesMode || accountBalanceSaving}
+   onClick={() => canManageSalesMode && handleAccountBalanceToggle(!accountBalanceAtCheckout)}
+   className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+    accountBalanceAtCheckout ? "bg-orange-500" : "bg-gray-200"
+   }`}
+   >
+   <span
+    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+    accountBalanceAtCheckout ? "translate-x-5" : "translate-x-1"
+    }`}
+   />
+   </button>
+   <span className={`text-sm font-medium ${accountBalanceAtCheckout ? "text-gray-900" : "text-gray-500"}`}>
+   Use balance and credit
+   </span>
+  </div>
+  <div className="flex items-center gap-2 text-sm text-gray-500">
+   {accountBalanceSaving && (
+   <>
+    <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+   </>
+   )}
+   {!canManageSalesMode && (
+   <span className="text-neutral-800 bg-neutral-50 px-2 py-1 rounded-md">
+    Only users with <span className="font-medium">settings.manage</span> can change this.
+   </span>
+   )}
+  </div>
+  </div>
+ )}
  </div>
 
  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

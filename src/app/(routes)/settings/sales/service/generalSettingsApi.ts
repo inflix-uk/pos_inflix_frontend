@@ -14,6 +14,8 @@ export interface GeneralSettingsData {
  defaultAccount?: { _id: string; name: string };
  retailModeEnabled?: boolean;
  allowNegativeStock?: boolean;
+ /** When false, a sale never adds the account's balance or spends its store credit. */
+ accountBalanceAtCheckoutEnabled?: boolean;
  adminTotpEnabled?: boolean;
  refundOtpThreshold?: number;
  updatedAtUtc?: string;
@@ -70,6 +72,21 @@ export async function updateNegativeStock(body: {
  message?: string;
 }> {
  const res = await fetch(`${API_URL}/api/settings/general/negative-stock`, {
+  method: "PUT",
+  headers: getAuthHeaders(),
+  body: JSON.stringify(body),
+ });
+ return res.json();
+}
+
+export async function updateAccountBalanceAtCheckout(body: {
+ accountBalanceAtCheckoutEnabled: boolean;
+}): Promise<{
+ success: boolean;
+ data?: GeneralSettingsData;
+ message?: string;
+}> {
+ const res = await fetch(`${API_URL}/api/settings/general/account-balance-at-checkout`, {
   method: "PUT",
   headers: getAuthHeaders(),
   body: JSON.stringify(body),
