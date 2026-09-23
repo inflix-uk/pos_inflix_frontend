@@ -1,4 +1,4 @@
-export { CustomerAccountSelect, type AccountForSale, type CustomerAccountSelectRef } from "./CustomerAccountSelect";
+export { CustomerAccountSelect, isWalkInAccount, type AccountForSale, type CustomerAccountSelectRef } from "./CustomerAccountSelect";
 export { WholesaleHeader } from "./WholesaleHeader";
 export { CustomerSummaryCard } from "./CustomerSummaryCard";
 export { CustomerContextStrip } from "./CustomerContextStrip";
