@@ -15,6 +15,7 @@ import {
 } from "../sales-dashboard/components";
 import {
  CustomerAccountSelect,
+ isWalkInAccount,
  type CustomerAccountSelectRef,
  type AccountForSale,
  WholesalePaymentModal,
@@ -826,9 +827,10 @@ const Page = () => {
  setPreviousBalanceForModal(null);
  return;
  }
- const isCustomer = "contactName" in selectedCustomer;
- if (!isCustomer) {
- setPreviousBalanceForModal("balance" in selectedCustomer && typeof (selectedCustomer as { balance?: number }).balance === "number" ? (selectedCustomer as { balance: number }).balance : 0);
+ // Walk-in is one shared account for every anonymous sale: its balance belongs to earlier
+ // walk-in customers, so it must never be added to — or taken off — this sale.
+ if (isWalkInAccount(selectedCustomer)) {
+ setPreviousBalanceForModal(0);
  return;
  }
  let cancelled = false;
@@ -1663,7 +1665,9 @@ const Page = () => {
  customerWhatsapp={saleWhatsappPhone}
  onSendWhatsapp={orderWriter.sendWhatsapp}
  previousBalance={
-  previousBalanceForModal != null
+  selectedCustomer && isWalkInAccount(selectedCustomer)
+  ? 0
+  : previousBalanceForModal != null
   ? previousBalanceForModal
   : selectedCustomer
   ? ("balance" in selectedCustomer && typeof selectedCustomer.balance === "number"

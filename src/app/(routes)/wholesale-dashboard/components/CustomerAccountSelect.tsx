@@ -34,12 +34,13 @@ interface CustomerAccountSelectProps {
  compact?: boolean;
 }
 
-const isWalkIn = (a: Customer | Supplier): boolean =>
- a.name.trim().toLowerCase() === "walk-in customer";
+/** The shared Walk-in account every anonymous sale is booked against. */
+export const isWalkInAccount = (a: Customer | Supplier): boolean =>
+ ("isWalkIn" in a && a.isWalkIn === true) || a.name.trim().toLowerCase() === "walk-in customer";
 
 const walkInFirst = (a: AccountForSale, b: AccountForSale): number => {
- const aw = isWalkIn(a);
- const bw = isWalkIn(b);
+ const aw = isWalkInAccount(a);
+ const bw = isWalkInAccount(b);
  if (aw && !bw) return -1;
  if (!aw && bw) return 1;
  return 0;
