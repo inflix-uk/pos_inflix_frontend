@@ -211,6 +211,8 @@ const Page = () => {
  const [bulkDrawerOpen, setBulkDrawerOpen] = useState(false);
  const [selectedCustomer, setSelectedCustomerState] = useState<AccountForSale | null>(null);
  const [previousBalanceForModal, setPreviousBalanceForModal] = useState<number | null>(null);
+ /** Settings > General: when off, a sale never adds the account's balance or spends its credit. */
+ const [accountBalanceAtCheckout, setAccountBalanceAtCheckout] = useState(true);
  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
  const [orderSummaryCollapsed, setOrderSummaryCollapsed] = useState(false);
  const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
@@ -523,6 +525,7 @@ const Page = () => {
  const blockNeg = setRes.data.allowNegativeStock === false;
  setBlockNegativeStock(blockNeg);
  try { sessionStorage.setItem("create-sales-blockNegStock", blockNeg ? "1" : "0"); } catch {}
+ setAccountBalanceAtCheckout(setRes.data.accountBalanceAtCheckoutEnabled !== false);
 
  const params = new URLSearchParams(window.location.search);
  const hasUrlAccount = params.has("customerId") || params.has("accountId");
@@ -828,8 +831,9 @@ const Page = () => {
  return;
  }
  // Walk-in is one shared account for every anonymous sale: its balance belongs to earlier
- // walk-in customers, so it must never be added to — or taken off — this sale.
- if (isWalkInAccount(selectedCustomer)) {
+ // walk-in customers, so it must never be added to — or taken off — this sale. The company
+ // can switch the same off for every account in Settings > General.
+ if (!accountBalanceAtCheckout || isWalkInAccount(selectedCustomer)) {
  setPreviousBalanceForModal(0);
  return;
  }
@@ -849,7 +853,7 @@ const Page = () => {
  return () => {
  cancelled = true;
  };
- }, [paymentModalOpen, selectedCustomer?._id]);
+ }, [paymentModalOpen, selectedCustomer?._id, accountBalanceAtCheckout]);
 
  const cartItemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
 
@@ -1665,7 +1669,7 @@ const Page = () => {
  customerWhatsapp={saleWhatsappPhone}
  onSendWhatsapp={orderWriter.sendWhatsapp}
  previousBalance={
-  selectedCustomer && isWalkInAccount(selectedCustomer)
+  !accountBalanceAtCheckout || (selectedCustomer && isWalkInAccount(selectedCustomer))
   ? 0
   : previousBalanceForModal != null
   ? previousBalanceForModal
