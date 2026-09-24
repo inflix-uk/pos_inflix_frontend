@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { Users, Loader2, RefreshCw, FileDown, Search } from "lucide-react";
 import { accountsApi, type DebtorsCreditorsData, type DebtorsCreditorsRow } from "../accounts/service/accountsApi";
+import { usePermissionsContext } from "@/contexts/PermissionsContext";
 
 const formatMoney = (n: number) =>
  n === 0 ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2 }).format(n);
@@ -15,9 +17,13 @@ type Tab = "debtors" | "creditors";
 function AccountTable({
  rows,
  loading,
+ accountType,
+ canOpenStatement,
 }: {
  rows: DebtorsCreditorsRow[];
  loading: boolean;
+ accountType: "customer" | "supplier";
+ canOpenStatement: boolean;
 }) {
  if (loading) return null;
  return (
@@ -47,7 +53,19 @@ function AccountTable({
   className="border-b border-gray-100 hover:bg-gray-50/60 transition-colors"
   >
   <td className="py-2 @[640px]:py-2.5 @[768px]:py-3 px-2.5 @[640px]:px-3 @[768px]:px-4 text-gray-500 tabular-nums">{i + 1}</td>
-  <td className="py-2 @[640px]:py-2.5 @[768px]:py-3 px-2.5 @[640px]:px-3 @[768px]:px-4 font-medium text-gray-900">{row.name || "—"}</td>
+  <td className="py-2 @[640px]:py-2.5 @[768px]:py-3 px-2.5 @[640px]:px-3 @[768px]:px-4 font-medium text-gray-900">
+   {canOpenStatement && row.accountId ? (
+   <Link
+   href={`/account-statement?type=${accountType}&id=${encodeURIComponent(row.accountId)}`}
+   className="hover:text-orange-600 hover:underline"
+   title="View account statement"
+   >
+   {row.name || "—"}
+   </Link>
+   ) : (
+   row.name || "—"
+   )}
+  </td>
   <td className="py-2 @[640px]:py-2.5 @[768px]:py-3 px-2.5 @[640px]:px-3 @[768px]:px-4 text-gray-600 hidden @[640px]:table-cell">{row.phone || "—"}</td>
   <td className="py-2 @[640px]:py-2.5 @[768px]:py-3 px-2.5 @[640px]:px-3 @[768px]:px-4 text-gray-600 hidden @[768px]:table-cell truncate max-w-[200px]" title={row.email || undefined}>
    {row.email || "—"}
@@ -76,6 +94,9 @@ function AccountTable({
 }
 
 export default function DebtorsCreditorsPage() {
+ const { can } = usePermissionsContext();
+ // This page is gated on report.view, but the statement page needs accounts.view.
+ const canOpenStatement = can("accounts.view");
  const [data, setData] = useState<DebtorsCreditorsData | null>(null);
  const [loading, setLoading] = useState(true);
  const [error, setError] = useState<string | null>(null);
@@ -269,7 +290,12 @@ export default function DebtorsCreditorsPage() {
   <Loader2 className="h-6 w-6 @[640px]:h-7 @[640px]:w-7 @[768px]:h-8 @[768px]:w-8 animate-spin text-neutral-500" />
   </div>
   ) : (
-  <AccountTable rows={rows} loading={loading} />
+  <AccountTable
+  rows={rows}
+  loading={loading}
+  accountType={tab === "debtors" ? "customer" : "supplier"}
+  canOpenStatement={canOpenStatement}
+  />
   )}
   </div>
  </div>
