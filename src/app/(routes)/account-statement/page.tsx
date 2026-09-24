@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import {
  FileText,
  Loader2,
@@ -42,9 +43,13 @@ const formatDate = (d: string) =>
 type AccountType = "customer" | "supplier";
 
 export default function AccountStatementPage() {
- const [accountType, setAccountType] = useState<AccountType>("customer");
- const [customerId, setCustomerId] = useState("");
- const [supplierId, setSupplierId] = useState("");
+ // Deep link from Debtors & Creditors: ?type=customer|supplier&id=<accountId>
+ const searchParams = useSearchParams();
+ const urlType: AccountType = searchParams.get("type") === "supplier" ? "supplier" : "customer";
+ const urlId = (searchParams.get("id") || "").trim();
+ const [accountType, setAccountType] = useState<AccountType>(urlType);
+ const [customerId, setCustomerId] = useState(() => (urlType === "customer" ? urlId : ""));
+ const [supplierId, setSupplierId] = useState(() => (urlType === "supplier" ? urlId : ""));
  const [customers, setCustomers] = useState<Customer[]>([]);
  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
  const [customerStatement, setCustomerStatement] = useState<CustomerStatement | null>(null);
@@ -136,6 +141,15 @@ export default function AccountStatementPage() {
  useEffect(() => {
  loadLists();
  }, [loadLists]);
+
+ // Keep the URL on the selected account so a refresh doesn't reopen the deep-linked one.
+ useEffect(() => {
+ const id = accountType === "customer" ? customerId : supplierId;
+ const search = id ? `?type=${accountType}&id=${encodeURIComponent(id)}` : "";
+ if (window.location.search !== search) {
+ window.history.replaceState(null, "", `${window.location.pathname}${search}`);
+ }
+ }, [accountType, customerId, supplierId]);
 
  useEffect(() => {
  if (!emailPdfModalOpen) return;
