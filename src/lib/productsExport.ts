@@ -285,42 +285,167 @@ export function downloadProductsPdf(
 
 /* ── Rate list ───────────────────────────────────── */
 
+/** One Rate List line (a variant: category + grade + brand + model + capacity) with units per colour. */
 export interface RateListExportItem {
-  name: string;
+  category: string;
   grade: string;
   brand: string;
   brandModel: string;
   capacity: string;
-  serialCount: number;
   salePrice: number;
   currency: string;
+  colours: { colour: string; quantity: number }[];
 }
 
-function rateItemToRecord(item: RateListExportItem) {
-  const price = item.currency ? `${item.currency} ${item.salePrice}` : String(item.salePrice);
-  return {
-    Name: item.name || "-",
-    Condition: item.grade || "-",
-    Brand: item.brand || "-",
-    Model: item.brandModel || "-",
-    Capacity: item.capacity || "-",
-    Serials: item.serialCount > 0 ? String(item.serialCount) : "-",
-    "Sale Price": price,
-  };
+interface RateListExportLine {
+  model: string;
+  grade: string;
+  capacity: string;
+  colour: string;
+  rate: number;
+  currency: string;
+  quantity: number;
 }
+
+interface RateListExportBrand {
+  brand: string;
+  quantity: number;
+  lines: RateListExportLine[];
+}
+
+interface RateListExportCategory {
+  category: string;
+  quantity: number;
+  brands: RateListExportBrand[];
+}
+
+const RATE_LIST_COLUMNS = ["Model", "Grade", "Capacity", "Colour", "Rate", "Quantity"] as const;
+
+const naturalCompare = (a: string, b: string) =>
+  a.localeCompare(b, "en-GB", { numeric: true, sensitivity: "base" });
+
+/** Labels for blank values; they sort last. */
+const OTHER_BRAND = "Other";
+const NO_CATEGORY = "Uncategorised";
+
+/** Category → brand → one line per model/grade/capacity/colour, sorted for reading. */
+export function buildRateListSections(items: RateListExportItem[]): RateListExportCategory[] {
+  const categories = new Map<string, Map<string, RateListExportLine[]>>();
+  for (const item of items) {
+    const category = (item.category || "").trim() || NO_CATEGORY;
+    const brand = (item.brand || "").trim() || OTHER_BRAND;
+    if (!categories.has(category)) categories.set(category, new Map());
+    const brands = categories.get(category)!;
+    if (!brands.has(brand)) brands.set(brand, []);
+    const colours = item.colours.length ? item.colours : [{ colour: "", quantity: 0 }];
+    for (const c of colours) {
+      brands.get(brand)!.push({
+        model: (item.brandModel || "").trim(),
+        grade: (item.grade || "").trim(),
+        capacity: (item.capacity || "").trim(),
+        colour: (c.colour || "").trim(),
+        rate: Number(item.salePrice) || 0,
+        currency: item.currency,
+        quantity: c.quantity,
+      });
+    }
+  }
+
+  const lastIf = (label: string) => (a: string, b: string) =>
+    (a === label ? 1 : 0) - (b === label ? 1 : 0) || naturalCompare(a, b);
+
+  return [...categories.keys()].sort(lastIf(NO_CATEGORY)).map((category) => {
+    const brands = categories.get(category)!;
+    const brandSections = [...brands.keys()].sort(lastIf(OTHER_BRAND)).map((brand) => {
+      const lines = brands.get(brand)!.sort(
+        (a, b) =>
+          naturalCompare(a.model, b.model) ||
+          naturalCompare(a.grade, b.grade) ||
+          naturalCompare(a.capacity, b.capacity) ||
+          naturalCompare(a.colour, b.colour)
+      );
+      return { brand, quantity: lines.reduce((s, l) => s + l.quantity, 0), lines };
+    });
+    return {
+      category,
+      quantity: brandSections.reduce((s, b) => s + b.quantity, 0),
+      brands: brandSections,
+    };
+  });
+}
+
+/** £135 / £135.50 — whole pounds without pence, like the printed stock list. */
+function formatRate(value: number, currency: string): string {
+  const code = (currency || "GBP").trim().toUpperCase();
+  const digits = Number.isInteger(value) ? 0 : 2;
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits: digits,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${currency ? `${currency} ` : ""}${value.toFixed(digits)}`;
+  }
+}
+
+const dashIfEmpty = (s: string) => s || "-";
 
 export function downloadRateListExcel(items: RateListExportItem[], filenamePrefix = "rate-list") {
-  const data = items.map(rateItemToRecord);
-  const ws = XLSX.utils.json_to_sheet(data);
-  const headers = Object.keys(data[0] ?? {});
-  ws["!cols"] = headers.map((h) => {
+  const sections = buildRateListSections(items);
+  const total = sections.reduce((s, c) => s + c.quantity, 0);
+  const width = RATE_LIST_COLUMNS.length;
+  const aoa: (string | number)[][] = [["Rate List"], [`Generated: ${datestamp()}  |  ${total} units`], []];
+  const merges: XLSX.Range[] = [];
+  const pushHeading = (text: string) => {
+    aoa.push([text]);
+    merges.push({ s: { r: aoa.length - 1, c: 0 }, e: { r: aoa.length - 1, c: width - 1 } });
+  };
+  merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: width - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: width - 1 } });
+
+  for (const category of sections) {
+    pushHeading(`${category.category.toUpperCase()}  (${category.quantity} units)`);
+    for (const brand of category.brands) {
+      pushHeading(`${brand.brand}  (${brand.quantity} units)`);
+      aoa.push([...RATE_LIST_COLUMNS]);
+      for (const line of brand.lines) {
+        // Rate and quantity stay numbers so the sheet can be summed or re-priced.
+        aoa.push([
+          dashIfEmpty(line.model),
+          dashIfEmpty(line.grade),
+          dashIfEmpty(line.capacity),
+          dashIfEmpty(line.colour),
+          line.rate,
+          line.quantity,
+        ]);
+      }
+      aoa.push([]);
+    }
+  }
+  if (sections.length === 0) aoa.push(["No items to export."]);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!merges"] = merges;
+  ws["!cols"] = RATE_LIST_COLUMNS.map((h, c) => {
     let max = h.length;
-    for (const row of data) {
-      const len = String((row as Record<string, string>)[h] ?? "").length;
+    for (const row of aoa) {
+      if (row.length < width) continue; // headings span the whole row; don't size columns by them
+      const len = String(row[c] ?? "").length;
       if (len > max) max = len;
     }
     return { wch: Math.min(max + 2, 40) };
   });
+  // Show the numeric rate as money without turning it into text.
+  const rateCol = RATE_LIST_COLUMNS.indexOf("Rate");
+  const currency = (items.find((i) => i.currency)?.currency || "GBP").trim().toUpperCase();
+  const symbol = currency === "GBP" ? "£" : `${currency} `;
+  aoa.forEach((row, r) => {
+    if (row.length !== width || typeof row[rateCol] !== "number") return;
+    const cell = ws[XLSX.utils.encode_cell({ r, c: rateCol })];
+    if (cell) cell.z = `"${symbol}"#,##0.00`;
+  });
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Rate List");
   const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
@@ -331,80 +456,116 @@ export function downloadRateListExcel(items: RateListExportItem[], filenamePrefi
 }
 
 export function downloadRateListPdf(items: RateListExportItem[], filenamePrefix = "rate-list") {
+  const sections = buildRateListSections(items);
+  const total = sections.reduce((s, c) => s + c.quantity, 0);
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 14;
+  const bottom = pageH - 12;
   let y = 16;
+
+  const cols = [
+    { header: "Model", w: 62, right: false },
+    { header: "Grade", w: 18, right: false },
+    { header: "Capacity", w: 24, right: false },
+    { header: "Colour", w: 38, right: false },
+    { header: "Rate", w: 22, right: true },
+    { header: "Quantity", w: 18, right: true },
+  ];
+  const tableW = cols.reduce((s, c) => s + c.w, 0);
+  const rowH = 5.5;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.text("Rate List", margin, y);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.text(`Generated: ${datestamp()}  |  ${items.length} items`, pageW - margin, y, { align: "right" });
-  y += 10;
+  doc.text(`Generated: ${datestamp()}  |  ${total} units`, pageW - margin, y, { align: "right" });
+  y += 9;
 
-  const cols = [
-    { header: "Name", w: 52 },
-    { header: "Condition", w: 22 },
-    { header: "Brand", w: 24 },
-    { header: "Model", w: 28 },
-    { header: "Capacity", w: 20 },
-    { header: "Serials", w: 16 },
-    { header: "Sale Price", w: 22 },
-  ];
-
-  const records = items.map(rateItemToRecord);
-
-  const drawHeader = () => {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setFillColor(249, 115, 22);
-    doc.setTextColor(255, 255, 255);
+  const drawRow = (cells: string[]) => {
     let x = margin;
-    for (const col of cols) {
-      doc.rect(x, y, col.w, 6, "F");
-      doc.text(col.header, x + 1.5, y + 4);
+    cols.forEach((col, c) => {
+      const text = doc.splitTextToSize(cells[c], col.w - 3)[0] || cells[c];
+      if (col.right) doc.text(text, x + col.w - 1.5, y + 3.7, { align: "right" });
+      else doc.text(text, x + 1.5, y + 3.7);
       x += col.w;
-    }
-    doc.setTextColor(0, 0, 0);
-    y += 7;
-  };
-
-  const newPage = (needed: number) => {
-    if (y + needed > pageH - 12) {
-      doc.addPage();
-      y = 16;
-      drawHeader();
-    }
-  };
-
-  drawHeader();
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  const rowH = 5.5;
-
-  for (let i = 0; i < records.length; i++) {
-    newPage(rowH + 1);
-    const rec = records[i];
-    let x = margin;
-    if (i % 2 === 0) {
-      doc.setFillColor(255, 247, 237);
-      doc.rect(x, y - 0.5, cols.reduce((s, c) => s + c.w, 0), rowH, "F");
-    }
-    const keys = ["Name", "Condition", "Brand", "Model", "Capacity", "Serials", "Sale Price"];
-    for (let j = 0; j < cols.length; j++) {
-      const text = (rec as Record<string, string>)[keys[j]] ?? "-";
-      const clipped = doc.splitTextToSize(text, cols[j].w - 2)[0] || text;
-      doc.text(clipped, x + 1.5, y + 3.5);
-      x += cols[j].w;
-    }
+    });
     y += rowH;
+  };
+
+  const drawCategory = (label: string) => {
+    doc.setFillColor(249, 115, 22);
+    doc.rect(margin, y, tableW, 7, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.text(label, margin + 2, y + 4.9);
+    doc.setTextColor(0, 0, 0);
+    y += 9;
+  };
+
+  const drawBrand = (label: string) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.text(label, margin, y + 3.5);
+    y += 5.5;
+  };
+
+  const drawTableHeader = () => {
+    doc.setFillColor(243, 244, 246);
+    doc.rect(margin, y, tableW, rowH, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(75, 85, 99);
+    drawRow(cols.map((c) => c.header));
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+  };
+
+  const newPage = () => {
+    doc.addPage();
+    y = 16;
+  };
+
+  for (const category of sections) {
+    // Keep the category bar with its first brand heading, table header and first row.
+    if (y + 9 + 5.5 + rowH * 2 > bottom) newPage();
+    drawCategory(`${category.category.toUpperCase()}   (${category.quantity} units)`);
+
+    for (const brand of category.brands) {
+      if (y + 5.5 + rowH * 2 > bottom) newPage();
+      const brandLabel = `${brand.brand}   (${brand.quantity} units)`;
+      drawBrand(brandLabel);
+      drawTableHeader();
+
+      brand.lines.forEach((line, i) => {
+        if (y + rowH > bottom) {
+          newPage();
+          drawBrand(`${brandLabel} (continued)`);
+          drawTableHeader();
+        }
+        if (i % 2 === 1) {
+          doc.setFillColor(255, 247, 237);
+          doc.rect(margin, y, tableW, rowH, "F");
+        }
+        drawRow([
+          dashIfEmpty(line.model),
+          dashIfEmpty(line.grade),
+          dashIfEmpty(line.capacity),
+          dashIfEmpty(line.colour),
+          formatRate(line.rate, line.currency),
+          String(line.quantity),
+        ]);
+      });
+      y += 4;
+    }
+    y += 2;
   }
 
-  if (records.length === 0) {
+  if (sections.length === 0) {
     doc.setFont("helvetica", "italic");
     doc.setTextColor(120, 120, 120);
     doc.text("No items to export.", margin, y + 6);

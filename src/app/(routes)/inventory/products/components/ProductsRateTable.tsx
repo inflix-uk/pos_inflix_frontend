@@ -56,6 +56,8 @@ export interface RateListItem {
  currency: string;
  serialCount: number;
  serials: string[];
+ /** Units per colour within this variant (for the category/brand/colour export). */
+ colours: { colour: string; quantity: number }[];
  /** All purchase item refs in this group — updating price updates all. */
  itemRefs: { purchaseId: string; itemId: string }[];
  /** First row's barcode in this variant (for mapping to Product for group pricing). */
@@ -68,6 +70,15 @@ export interface RateListItem {
 function getRowDate(row: StockViewRow): string {
  const d = row.createdAt ?? row.date ?? "";
  return typeof d === "string" ? d : "";
+}
+
+/** Add a row's units to its colour (colours matched case-insensitively). */
+function addColourQuantity(colours: RateListItem["colours"], row: StockViewRow) {
+ const colour = (row.colour || "").trim();
+ const quantity = row.isSerialProduct ? 1 : Math.max(0, Number(row.quantity) || 0);
+ const existing = colours.find((c) => c.colour.toUpperCase() === colour.toUpperCase());
+ if (existing) existing.quantity += quantity;
+ else colours.push({ colour, quantity });
 }
 
 /** Group stock view rows by variant; each item gets firstBarcode from first row for ProductGroupPrice mapping. */
@@ -90,6 +101,7 @@ export function groupRowsByVariant(rows: StockViewRow[]): RateListItem[] {
  if (existing) {
  existing.serialCount += row.isSerialProduct ? 1 : 0;
  if (imeiStr) existing.serials.push(imeiStr);
+ addColourQuantity(existing.colours, row);
  const hasRef = existing.itemRefs.some((r) => r.purchaseId === ref.purchaseId && r.itemId === ref.itemId);
  if (!hasRef) existing.itemRefs.push(ref);
  if (rowProductId && !existing.firstProductId) existing.firstProductId = rowProductId;
@@ -112,11 +124,13 @@ export function groupRowsByVariant(rows: StockViewRow[]): RateListItem[] {
  currency: row.currency ?? "",
  serialCount: row.isSerialProduct ? 1 : 0,
  serials: imeiStr ? [imeiStr] : [],
+ colours: [],
  itemRefs: [ref],
  firstBarcode: rowBarcode,
  firstProductId: rowProductId,
  _maxDate: rowDate,
  };
+ addColourQuantity(item.colours, row);
  map.set(key, item);
  }
  return [...map.values()]

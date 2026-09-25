@@ -11,7 +11,6 @@ import { StockListSidebar } from "../../stock/stock-1/components/StockListSideba
 import { ProductsPageHeader } from "./components/ProductsPageHeader";
 import { ProductsStockTable, ProductsRateTable, groupRowsByVariant } from "./components";
 import { downloadRateListExcel, downloadRateListPdf } from "@/lib/productsExport";
-import type { RateListExportItem } from "@/lib/productsExport";
 import { ProductHistoryModal } from "../product-history/ProductHistoryModal";
 import { Pagination } from "../../stock/view/components/Pagination";
 import { RefreshCw } from "lucide-react";
@@ -283,7 +282,7 @@ export default function ProductsPage() {
  const exportRateListAsExcel = useCallback(() => {
  setIsExportingRateList(true);
  try {
- downloadRateListExcel(rateListItems as RateListExportItem[]);
+ downloadRateListExcel(rateListItems);
  } finally {
  setIsExportingRateList(false);
  }
@@ -292,7 +291,7 @@ export default function ProductsPage() {
  const exportRateListAsPdf = useCallback(() => {
  setIsExportingRateList(true);
  try {
- downloadRateListPdf(rateListItems as RateListExportItem[]);
+ downloadRateListPdf(rateListItems);
  } finally {
  setIsExportingRateList(false);
  }
