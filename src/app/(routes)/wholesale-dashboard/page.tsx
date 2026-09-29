@@ -670,10 +670,13 @@ const Page = () => {
  return () => document.removeEventListener("visibilitychange", onVisibility);
  }, [refetchProducts]);
 
- // Always use inventory (parcels) only — never fall back to demo/context products so only real stock is shown
+ // Always use inventory (parcels) only — never fall back to demo/context products so only real stock is shown.
+ // Grid shows non-serial stock only: phones/IMEI units are added by scanning the serial. The feed returns every
+ // item of any purchase holding a non-serial line, so IMEI units from mixed purchases must be dropped here.
+ // inventoryProducts keeps them for cart price sync.
  const posProductsOverride = useMemo(
  () =>
- inventoryProducts.map((p) => ({
+ inventoryProducts.filter((p) => !p.serialNumber).map((p) => ({
  sku: p.sku,
  name: p.name,
  category: p.category,
@@ -1031,7 +1034,7 @@ const Page = () => {
  }, [search, typeaheadResults, filteredProducts]);
 
  const productGridEmptyHint = useMemo(() => {
-  if (productsLoading || productsError || inventoryProducts.length > 0) return undefined;
+  if (productsLoading || productsError || posProductsOverride.length > 0) return undefined;
   const locName = inventoryLocationId
    ? locations.find((l) => l._id === inventoryLocationId)?.name
    : null;
@@ -1039,7 +1042,7 @@ const Page = () => {
    return `No stock at ${locName}. Match the location dropdown to your purchase import "Send to", or use the refresh button. Phones/IMEIs are added by scanning the serial above — not this grid.`;
   }
   return "No non-serial stock loaded. Phones and IMEI devices are added by scanning the serial in the search bar.";
- }, [productsLoading, productsError, inventoryProducts.length, inventoryLocationId, locations]);
+ }, [productsLoading, productsError, posProductsOverride.length, inventoryLocationId, locations]);
 
  const currentStep: WholesaleStep = !selectedCustomer ? 1 : cartItemCount === 0 ? 2 : 3;
  const canComplete = Boolean(cartItemCount > 0 && (retailModeEnabled || selectedCustomer));
