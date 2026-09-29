@@ -168,10 +168,22 @@ export function ProductHistoryModal({
     : "bg-emerald-100 text-emerald-800"
    }`}
    >
-   {history.status === "sold" ? "Sold" : history.status === "returned" ? "Returned" : history.status === "not_in_stock" ? "Not in stock" : "In stock"}
+   {history.status === "sold"
+    ? "Sold"
+    : history.status === "returned"
+    ? "Returned"
+    : history.status === "not_in_stock"
+    ? history.found === false ? "Not found" : "Not in stock"
+    : "In stock"}
    </span>
    </div>
   </div>
+  {history.found === false && (
+   <p className="mt-3 text-sm text-gray-600">
+   No purchase or sale has this exact serial. Check it was typed or scanned correctly — a scanner
+   on the wrong keyboard layout (e.g. German) swaps Y and Z.
+   </p>
+  )}
   {o?.item && (
    <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-2 sm:grid-cols-4 gap-3">
    {o.item.purchasePrice != null && (
