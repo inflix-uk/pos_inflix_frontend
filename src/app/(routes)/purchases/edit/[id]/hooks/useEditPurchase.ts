@@ -1287,6 +1287,26 @@ export const useEditPurchase = () => {
   return { ...fixed, variantValues: list };
  };
 
+ // A group that wasn't opened in the form still carries the variant values it was saved with —
+ // keep them. Rebuilding with fixed slugs (brands / storage / color) on every save adds duplicate
+ // attribute columns (Brand + Brands, Capacity + Storage) wherever the category uses other slugs.
+ const savedOrFixedVariantValues = (
+  d: { rawVariantValues?: { slug?: string; value?: string }[] },
+  v: { gradeVal?: string; brandVal?: string; modelVal?: string; capacityVal?: string; colourVal?: string }
+ ): { slug: string; value: string }[] => {
+  const raw = (Array.isArray(d.rawVariantValues) ? d.rawVariantValues : []).filter(
+   (r) => (r.slug || "").trim() && (r.value || "").trim()
+  );
+  if (raw.length > 0) return raw.map((r) => ({ slug: String(r.slug).trim(), value: toUpper(String(r.value)) }));
+  const out: { slug: string; value: string }[] = [];
+  if (v.gradeVal) out.push({ slug: "grade", value: toUpper(v.gradeVal) });
+  if (v.brandVal) out.push({ slug: "brands", value: toUpper(v.brandVal) });
+  if (v.modelVal) out.push({ slug: "brand_model", value: toUpper(v.modelVal) });
+  if (v.capacityVal) out.push({ slug: "storage", value: toUpper(v.capacityVal) });
+  if (v.colourVal) out.push({ slug: "color", value: toUpper(v.colourVal) });
+  return out;
+ };
+
  const buildItemPayload = (d: ItemData) => {
   const imeis = parseMultiIMEIs(d.multiIMEIs);
   const cid = d.type;
@@ -1321,11 +1341,7 @@ export const useEditPurchase = () => {
    brandVal = toUpper(brands.find((b) => b._id === d.brand)?.name || d.brand) || undefined;
    capacityVal = toUpper(capacities.find((c) => c._id === d.capacity)?.name || d.capacity) || undefined;
    colourVal = toUpper(colours.find((c) => c._id === d.colour)?.name || d.colour) || undefined;
-   if (gradeVal) variantValuesArr.push({ slug: "grade", value: toUpper(gradeVal) });
-   if (brandVal) variantValuesArr.push({ slug: "brands", value: toUpper(brandVal) });
-   if (modelVal) variantValuesArr.push({ slug: "brand_model", value: toUpper(modelVal) });
-   if (capacityVal) variantValuesArr.push({ slug: "storage", value: toUpper(capacityVal) });
-   if (colourVal) variantValuesArr.push({ slug: "color", value: toUpper(colourVal) });
+   variantValuesArr = savedOrFixedVariantValues(d, { gradeVal, brandVal, modelVal, capacityVal, colourVal });
   }
   return {
    sendTo: d.sendTo || undefined,
@@ -1376,11 +1392,7 @@ export const useEditPurchase = () => {
    brandVal = toUpper(brands.find((b) => b._id === d.brand)?.name || d.brand) || undefined;
    capacityVal = toUpper(capacities.find((c) => c._id === d.capacity)?.name || d.capacity) || undefined;
    colourVal = toUpper(colours.find((c) => c._id === d.colour)?.name || d.colour) || undefined;
-   if (gradeVal) variantValuesArr.push({ slug: "grade", value: toUpper(gradeVal) });
-   if (brandVal) variantValuesArr.push({ slug: "brands", value: toUpper(brandVal) });
-   if (modelVal) variantValuesArr.push({ slug: "brand_model", value: toUpper(modelVal) });
-   if (capacityVal) variantValuesArr.push({ slug: "storage", value: toUpper(capacityVal) });
-   if (colourVal) variantValuesArr.push({ slug: "color", value: toUpper(colourVal) });
+   variantValuesArr = savedOrFixedVariantValues(d, { gradeVal, brandVal, modelVal, capacityVal, colourVal });
   }
   return {
    name: d.name?.trim() ? formatProductName(d.name) : undefined,
@@ -1405,16 +1417,25 @@ export const useEditPurchase = () => {
   setIsSubmitting(true);
   setSubmitMessage({ type: "", text: "" });
 
+  // A group open in the form is sent from the form (with its edits) instead of its saved copy —
+  // sending both repeats its serials ("Duplicate IMEI") or keeps the old copy of a non-serial item.
+  const sendImeiForm = currentFormIMEICount > 0;
+  const sendOtherForm = currentOtherQuantity > 0;
+
   // Combine IMEI items
   const imeiItems = [
-   ...savedItems.map((entry) => buildItemPayload(entry.data)),
-   ...(currentFormIMEICount > 0 ? [buildItemPayload(itemData)] : []),
+   ...savedItems
+    .filter((entry) => !(sendImeiForm && entry.id === editingItemId))
+    .map((entry) => buildItemPayload(entry.data)),
+   ...(sendImeiForm ? [buildItemPayload(itemData)] : []),
   ];
 
   // Combine Other items
   const otherItems = [
-   ...savedOtherItems.map((entry) => buildOtherItemPayload(entry.data)),
-   ...(currentOtherQuantity > 0 ? [buildOtherItemPayload(otherItemData)] : []),
+   ...savedOtherItems
+    .filter((entry) => !(sendOtherForm && entry.id === editingOtherItemId))
+    .map((entry) => buildOtherItemPayload(entry.data)),
+   ...(sendOtherForm ? [buildOtherItemPayload(otherItemData)] : []),
   ];
 
   // Validation: need at least one item of any type

@@ -388,8 +388,22 @@ function ProductsStockTableRow({
  }
  }, [editingName, onNameChange, row.purchaseId, row.itemId, row.name]);
 
- const canEditCost = isNonSerial && row.purchaseId && row.itemId && onPurchasePriceChange;
- const canEditSale = isNonSerial && row.purchaseId && row.itemId && onSalePriceChange;
+ // Serial rows: only phones still in stock. Their price belongs to the purchase line, shared by
+ // every IMEI on it, so a change on a line with several phones is confirmed first.
+ const canEditPrices =
+  Boolean(row.purchaseId && row.itemId) && (isNonSerial || (row.isSerialProduct && !soldInfo && !row.soldInfo));
+ const canEditCost = canEditPrices && onPurchasePriceChange;
+ const canEditSale = canEditPrices && onSalePriceChange;
+ const sharedLineCount = row.isSerialProduct ? (row.lineImeiCount ?? 1) : 1;
+ const confirmSharedLinePrice = useCallback(
+  (label: string) =>
+   sharedLineCount <= 1 ||
+   window.confirm(
+    `This ${label} is shared by all ${sharedLineCount} phones on the same purchase line` +
+     `${row.purchaseNumber ? ` (${row.purchaseNumber})` : ""}. Change it for all of them?`
+   ),
+  [sharedLineCount, row.purchaseNumber]
+ );
 
  const handleCostBlur = useCallback(async () => {
  if (editingCost === null || !onPurchasePriceChange || !row.purchaseId || !row.itemId) return;
@@ -403,6 +417,10 @@ function ProductsStockTableRow({
  setEditingCost(null);
  return;
  }
+ if (!confirmSharedLinePrice("cost")) {
+ setEditingCost(null);
+ return;
+ }
  setSavingCost(true);
  try {
  await onPurchasePriceChange(row.purchaseId, row.itemId, num);
@@ -412,7 +430,7 @@ function ProductsStockTableRow({
  } finally {
  setSavingCost(false);
  }
- }, [editingCost, onPurchasePriceChange, row.purchaseId, row.itemId, row.purchasePrice]);
+ }, [editingCost, onPurchasePriceChange, row.purchaseId, row.itemId, row.purchasePrice, confirmSharedLinePrice]);
 
  const handleSaleBlur = useCallback(async () => {
  if (editingSale === null || !onSalePriceChange || !row.purchaseId || !row.itemId) return;
@@ -426,6 +444,10 @@ function ProductsStockTableRow({
  setEditingSale(null);
  return;
  }
+ if (!confirmSharedLinePrice("sale price")) {
+ setEditingSale(null);
+ return;
+ }
  setSavingSale(true);
  try {
  await onSalePriceChange(row.purchaseId, row.itemId, num);
@@ -435,7 +457,7 @@ function ProductsStockTableRow({
  } finally {
  setSavingSale(false);
  }
- }, [editingSale, onSalePriceChange, row.purchaseId, row.itemId, row.salePrice]);
+ }, [editingSale, onSalePriceChange, row.purchaseId, row.itemId, row.salePrice, confirmSharedLinePrice]);
 
  const handlePriceKeyDown = useCallback(
  (e: React.KeyboardEvent) => {
