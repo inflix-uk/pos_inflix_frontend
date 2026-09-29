@@ -12,6 +12,7 @@ import { ProductsPageHeader } from "./components/ProductsPageHeader";
 import { ProductsStockTable, ProductsRateTable, groupRowsByVariant } from "./components";
 import { downloadRateListExcel, downloadRateListPdf } from "@/lib/productsExport";
 import { ProductHistoryModal } from "../product-history/ProductHistoryModal";
+import { usePermissionsContext } from "@/contexts/PermissionsContext";
 import { Pagination } from "../../stock/view/components/Pagination";
 import { RefreshCw } from "lucide-react";
 
@@ -40,6 +41,9 @@ export default function ProductsPage() {
  },
  [searchParams, router, pathname]
  );
+ // Serial rows: cost / sale price can be corrected inline by users who can edit purchases.
+ const { can } = usePermissionsContext();
+ const canEditSerialPrices = can("purchase.edit");
  const [productHistoryOpen, setProductHistoryOpen] = useState(false);
  const [productHistorySerial, setProductHistorySerial] = useState("");
 
@@ -457,6 +461,8 @@ export default function ProductsPage() {
    soldInfoMap={soldInfoMap}
    isLoading={stockViewLoading}
    onQuantityChange={handleQuantityChange}
+   onPurchasePriceChange={canEditSerialPrices ? handlePurchasePriceChange : undefined}
+   onSalePriceChange={canEditSerialPrices ? handleSalePriceChange : undefined}
    variant="serial"
    title={`Serial products — ${cat}`}
    onViewHistory={handleViewHistory}
@@ -488,6 +494,8 @@ export default function ProductsPage() {
    soldInfoMap={soldInfoMap}
    isLoading={stockViewLoading}
    onQuantityChange={handleQuantityChange}
+   onPurchasePriceChange={canEditSerialPrices ? handlePurchasePriceChange : undefined}
+   onSalePriceChange={canEditSerialPrices ? handleSalePriceChange : undefined}
    variant="serial"
    title={category}
    onViewHistory={handleViewHistory}

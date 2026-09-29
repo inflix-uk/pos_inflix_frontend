@@ -70,6 +70,8 @@ export interface ProductHistoryResponse {
  success: boolean;
  serialNumber: string;
  status: "in_stock" | "sold" | "returned" | "not_in_stock";
+ /** false = nothing in the system has this exact serial (likely mistyped / mis-scanned), not just out of stock */
+ found?: boolean;
  origin: ProductHistoryOrigin | null;
  sales: ProductHistorySale[];
  movements: ProductHistoryMovement[];

@@ -131,10 +131,16 @@ export default function ProductHistoryPage() {
     : history.status === "returned"
      ? "Returned"
      : history.status === "not_in_stock"
-      ? "Not in stock"
+      ? history.found === false ? "Not found" : "Not in stock"
       : "In stock"}
    </span>
   </div>
+  {history.found === false && (
+   <p className="mt-3 text-sm text-gray-600">
+   No purchase or sale has this exact serial. Check it was typed or scanned correctly — a scanner
+   on the wrong keyboard layout (e.g. German) swaps Y and Z.
+   </p>
+  )}
   {o?.item && (
    <div className="mt-4 @[640px]:mt-5 @[768px]:mt-6 pt-4 @[640px]:pt-5 @[768px]:pt-6 border-t border-gray-100 grid grid-cols-2 @[768px]:grid-cols-4 gap-3 @[640px]:gap-4">
    {o.item.purchasePrice != null && (

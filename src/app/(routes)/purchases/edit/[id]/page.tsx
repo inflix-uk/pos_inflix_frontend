@@ -344,9 +344,14 @@ const EditPurchasePage = () => {
   <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
   Reset
   </button>
+  {!parcelData.account && (
+  <p className="text-xs text-amber-700">
+   This purchase has no supplier. Items and prices can still be updated.
+  </p>
+  )}
   <button
   onClick={handleItemSubmit}
-  disabled={isSubmitting || !detailsSaved || !parcelData.account}
+  disabled={isSubmitting || !detailsSaved}
   className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
   >
   <Save className="w-3.5 h-3.5 mr-1.5" />

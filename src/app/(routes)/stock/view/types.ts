@@ -40,6 +40,8 @@ export interface StockViewRow {
  variantAttributeSlugsOrder?: string[];
  /** Auto-generated serial item ID number (e.g. SID-000001) */
  serialItemIdNumber?: string;
+ /** Serial rows: IMEIs on the same purchase line — they share one cost / sale price */
+ lineImeiCount?: number;
  /** Parcel/intake note saved with the purchase */
  note?: string;
  /** When row is sold, backend may embed sold info (avoids separate sold-serials call) */
