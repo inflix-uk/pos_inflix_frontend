@@ -7,6 +7,7 @@ import { categoryApi } from "@/app/(routes)/inventory/category/service/categoryA
 import { parseMultiIMEIs } from "../utils/parseMultiIMEIs";
 import { formatSupplierDisplay } from "@/lib/formatSupplierDisplay";
 import { formatProductName, formatProductNameInput } from "@/lib/formatProductName";
+import { getLondonDateString } from "@/lib/dateUtils";
 import { customerApi } from "@/app/(routes)/peoples/customers/service";
 import { supplierApi } from "@/app/(routes)/peoples/suppliers/service/supplierApi";
 import type { CustomerFormData } from "@/app/(routes)/peoples/customers/types";
@@ -155,20 +156,20 @@ export const useAddPurchase = () => {
  const [currentStep, setCurrentStep] = useState<Step>("parcel");
  const [detailsSaved, setDetailsSaved] = useState(false);
 
- const [parcelData, setParcelData] = useState<ParcelData>({
-  date: "2026-01-24",
+ const [parcelData, setParcelData] = useState<ParcelData>(() => ({
+  date: getLondonDateString(),
   account: "",
   parcelNumber: "",
   note: "",
   currency: "GBP",
- });
+ }));
 
- const [quantityData, setQuantityData] = useState<QuantityData>({
-  date: "2026-01-24",
+ const [quantityData, setQuantityData] = useState<QuantityData>(() => ({
+  date: getLondonDateString(),
   imeiQuantity: "",
   otherQuantity: "",
   note: "",
- });
+ }));
 
  const [itemData, setItemData] = useState<ItemData>({
   sendTo: "",
@@ -1780,7 +1781,7 @@ export const useAddPurchase = () => {
   setDetailsSaved(false);
   if (currentStep === "parcel") {
    setParcelData({
-    date: "2026-01-24",
+    date: getLondonDateString(),
     account: "",
     parcelNumber: "",
     note: "",
@@ -1788,7 +1789,7 @@ export const useAddPurchase = () => {
    });
   } else if (currentStep === "quantity") {
    setQuantityData({
-    date: "2026-01-24",
+    date: getLondonDateString(),
     imeiQuantity: "",
     otherQuantity: "",
     note: "",
