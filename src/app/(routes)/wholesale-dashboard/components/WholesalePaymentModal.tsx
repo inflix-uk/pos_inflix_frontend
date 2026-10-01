@@ -102,8 +102,11 @@ interface WholesalePaymentModalProps {
  initialDiscountValue?: number;
  /** Primary button label (e.g. "Save changes" for edit sale) */
  primaryButtonLabel?: string;
- /** Pre-fill payment amounts (e.g. when editing an existing sale so user sees recorded payments) */
- initialPayments?: { cash?: number; card?: number; credit?: number; bank?: number };
+ /**
+  * Editing a saved sale: money already received on it (at checkout and by Take payment). It is
+  * shown as paid and kept on save, so the payment fields only take new money.
+  */
+ receivedPayments?: { cash?: number; card?: number; bank?: number };
  /** Optional: show a short message (e.g. toast) for receipt print feedback */
  onMessage?: (type: "success" | "error", text: string) => void;
  /** When true (Retail/Walk-in mode): hide Credit, require full payment (no balance due). */
@@ -129,7 +132,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  initialDiscountType,
  initialDiscountValue,
  primaryButtonLabel = "Create Order",
- initialPayments,
+ receivedPayments,
  onMessage,
  retailMode = false,
  completedTitle = "Order created",
@@ -162,6 +165,8 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  const [whatsappSending, setWhatsappSending] = useState(false);
  const [whatsappNotice, setWhatsappNotice] = useState<{ saleId: string; type: "success" | "error"; text: string } | null>(null);
  const [retailQuickPick, setRetailQuickPick] = useState<RetailQuickPick>(null);
+ /** Edit sale: received money has been moved into the payment fields so it can be changed. */
+ const [editingReceived, setEditingReceived] = useState(false);
  // One idempotency key per modal session. Same key is reused across retries inside this
  // modal (e.g. user clicks again after a perceived network failure) so the backend can
  // dedupe instead of erroring out. Regenerated when the modal is freshly opened.
@@ -203,8 +208,23 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  })();
  const amountDue = Math.max(0, total - discountNum + previousBalanceNum);
  const dueRounded = Math.round(amountDue * 100) / 100;
+ const received = {
+ cash: Math.round((Number(receivedPayments?.cash) || 0) * 100) / 100,
+ card: Math.round((Number(receivedPayments?.card) || 0) * 100) / 100,
+ bank: Math.round((Number(receivedPayments?.bank) || 0) * 100) / 100,
+ };
+ const receivedSum = Math.round((received.cash + received.card + received.bank) * 100) / 100;
+ // Kept on top of whatever is entered below, unless it has been moved into the fields to change it.
+ const receivedTotal = editingReceived ? 0 : receivedSum;
+ /** What is still to be paid at this checkout once money already received is counted. */
+ const toPayRounded = Math.max(0, Math.round((dueRounded - receivedTotal) * 100) / 100);
+ const receivedBreakdown = PAYMENT_METHODS.flatMap((m) =>
+ m.id !== "credit" && received[m.id] > 0 ? [`${m.label} ${formatMoney(received[m.id])}`] : []
+ ).join(", ");
+ const receivedOverDue = Math.max(0, Math.round((receivedTotal - dueRounded) * 100) / 100);
 
  useEffect(() => {
+ setEditingReceived(false);
  if (!open) {
  setDiscount("");
  setDiscountType("flat");
@@ -219,24 +239,6 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  } else if (initialDiscount != null) {
  setDiscount(initialDiscount.toFixed(2));
  }
- if (initialPayments) {
- const cash = Number(initialPayments.cash) || 0;
- const card = Number(initialPayments.card) || 0;
- const credit = Number(initialPayments.credit) || 0;
- const bank = Number(initialPayments.bank) || 0;
- setAmounts({
-  cash: cash > 0 ? cash.toFixed(2) : "",
-  card: card > 0 ? card.toFixed(2) : "",
-  credit: credit > 0 ? credit.toFixed(2) : "",
-  bank: bank > 0 ? bank.toFixed(2) : "",
- });
- setCheckedMethods({
-  cash: cash > 0,
-  card: card > 0,
-  credit: credit > 0,
-  bank: bank > 0,
- });
- }
  }
  // eslint-disable-next-line react-hooks/exhaustive-deps -- only apply initial values when modal opens
  }, [open]);
@@ -246,9 +248,9 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  if (!open || !retailMode || retailQuickPick !== "exact") return;
  const active = (["cash", "card", "bank"] as const).filter((m) => checkedMethods[m]);
  if (active.length !== 1) return;
- const dueStr = dueRounded.toFixed(2);
+ const dueStr = toPayRounded.toFixed(2);
  setAmounts({ cash: "", card: "", credit: "", bank: "", [active[0]]: dueStr });
- }, [open, retailMode, retailQuickPick, dueRounded, checkedMethods.cash, checkedMethods.card, checkedMethods.bank]);
+ }, [open, retailMode, retailQuickPick, toPayRounded, checkedMethods.cash, checkedMethods.card, checkedMethods.bank]);
 
  useEffect(() => {
  if (!open) return;
@@ -272,7 +274,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
     const paidOther = (["cash", "card", "bank"] as const)
      .filter((m) => m !== id && next[m])
      .reduce((sum, m) => sum + parseAmount(a[m]), 0);
-    const fill = Math.max(0, Math.round((dueRounded - paidOther) * 100) / 100);
+    const fill = Math.max(0, Math.round((toPayRounded - paidOther) * 100) / 100);
     return { ...a, [id]: fill > 0 ? fill.toFixed(2) : "0.00" };
    });
    if (turningOn) setRetailQuickPick(null);
@@ -306,16 +308,26 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  };
 
  const paidNow = parseAmount(amounts.cash) + parseAmount(amounts.card) + parseAmount(amounts.bank);
- const creditAuto = retailMode ? 0 : Math.max(0, dueRounded - paidNow);
+ const creditAuto = retailMode ? 0 : Math.max(0, toPayRounded - paidNow);
  const enteredTotal = paidNow + (retailMode ? 0 : parseAmount(amounts.credit));
- const remaining = Math.max(0, dueRounded - paidNow);
- const overpayment = paidNow > dueRounded + 0.01 ? Math.round((paidNow - dueRounded) * 100) / 100 : 0;
+ const remaining = Math.max(0, toPayRounded - paidNow);
+ const overpayment = paidNow > toPayRounded + 0.01 ? Math.round((paidNow - toPayRounded) * 100) / 100 : 0;
  const paymentMethodsToShow = retailMode
  ? (PAYMENT_METHODS as readonly { id: MethodId; label: string; icon: React.ElementType }[]).filter((m) => m.id !== "credit")
  : PAYMENT_METHODS;
 
+ /** Saved payments are invoice totals: add back money received earlier that the fields left out. */
+ const withReceived = (p: { cash: number; card: number; credit: number; bank: number }) =>
+ receivedTotal > 0
+  ? {
+   ...p,
+   cash: Math.round((p.cash + received.cash) * 100) / 100,
+   card: Math.round((p.card + received.card) * 100) / 100,
+   bank: Math.round((p.bank + received.bank) * 100) / 100,
+  }
+  : p;
+
  const buildDetails = (paymentsOverride?: { cash: number; card: number; credit: number; bank: number }): WholesalePaymentDetails => {
- const due = dueRounded;
  if (!requestIdRef.current) requestIdRef.current = makeRequestId();
  const baseDetails = {
  discount: discountNum,
@@ -323,28 +335,45 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  discountValue: discountInput,
  additionalPayment: 0,
  previousBalance: previousBalanceNum,
- amountDue: due,
+ amountDue: dueRounded,
  bankAccount: defaultBankName || "Default",
  clientRequestId: requestIdRef.current,
  };
  if (paymentsOverride) {
- return { ...baseDetails, payments: paymentsOverride };
+ return { ...baseDetails, payments: withReceived(paymentsOverride) };
  }
- const creditAmount = retailMode ? 0 : Math.max(0, due - paidNow);
+ const creditAmount = retailMode ? 0 : Math.max(0, toPayRounded - paidNow);
  return {
  ...baseDetails,
- payments: {
+ payments: withReceived({
  cash: parseAmount(amounts.cash),
  card: parseAmount(amounts.card),
  credit: creditAmount,
  bank: parseAmount(amounts.bank),
- },
+ }),
  };
+ };
+
+ /** Moves money received earlier into the payment fields so it can be lowered (e.g. a payment entered by mistake). */
+ const editReceivedAmounts = () => {
+ setEditingReceived(true);
+ setAmounts((a) => ({
+  ...a,
+  cash: received.cash > 0 ? (parseAmount(a.cash) + received.cash).toFixed(2) : a.cash,
+  card: received.card > 0 ? (parseAmount(a.card) + received.card).toFixed(2) : a.card,
+  bank: received.bank > 0 ? (parseAmount(a.bank) + received.bank).toFixed(2) : a.bank,
+ }));
+ setCheckedMethods((c) => ({
+  ...c,
+  cash: c.cash || received.cash > 0,
+  card: c.card || received.card > 0,
+  bank: c.bank || received.bank > 0,
+ }));
  };
 
  const handleCreateSales = () => {
  setError(null);
- const due = dueRounded;
+ const due = toPayRounded;
  if (retailMode) {
  if (paidNow < due - 0.01) {
  const remainingAmt = Math.round((due - paidNow) * 100) / 100;
@@ -363,7 +392,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
 
  const handleRefund = () => {
  setError(null);
- const due = dueRounded;
+ const due = toPayRounded;
  if (paidNow <= due + 0.01) return;
  const totalPaid = paidNow;
  const scale = totalPaid > 0 ? due / totalPaid : 0;
@@ -410,7 +439,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  };
  }
  const sum = cappedPayments.cash + cappedPayments.card + cappedPayments.bank;
- const diff = Math.round((dueRounded - sum) * 100) / 100;
+ const diff = Math.round((toPayRounded - sum) * 100) / 100;
  if (Math.abs(diff) > 0.01) cappedPayments.cash = Math.round((cappedPayments.cash + diff) * 100) / 100;
  guardedComplete(buildDetails(cappedPayments));
  };
@@ -795,6 +824,35 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   {formatMoney(amountDue)}
   </div>
   </div>
+  {receivedTotal > 0 && (
+  <>
+  <div>
+   <label className="block text-xs font-medium text-gray-700 mb-1">Already paid</label>
+   <div className="px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold text-sm">
+   -{formatMoney(receivedTotal)}
+   </div>
+  </div>
+  <div>
+   <label className="block text-xs font-medium text-gray-700 mb-1">Left to pay</label>
+   <div className="px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 font-bold text-sm">
+   {formatMoney(toPayRounded)}
+   </div>
+  </div>
+  <p className="col-span-2 text-xs text-gray-500">
+   {receivedBreakdown} received earlier stays on this invoice. Enter only money taken now.{" "}
+   {receivedOverDue > 0 && `${formatMoney(receivedOverDue)} paid over the new total stays on the account as store credit. `}
+   <button type="button" onClick={editReceivedAmounts} className="font-medium text-blue-600 hover:underline">
+   Change received amounts
+   </button>
+  </p>
+  </>
+  )}
+  {editingReceived && receivedSum > 0 && (
+  <p className="col-span-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+   Cash, Card and Bank below now include the {formatMoney(receivedSum)} received earlier. Lowering them removes
+   that payment and the customer will owe it again.
+  </p>
+  )}
   </div>
 
   {retailMode && (
@@ -823,7 +881,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
    onClick={() => {
    setRetailQuickPick("exact");
    setCheckedMethods({ cash: true, card: false, credit: false, bank: false });
-   setAmounts({ cash: dueRounded.toFixed(2), card: "", credit: "", bank: "" });
+   setAmounts({ cash: toPayRounded.toFixed(2), card: "", credit: "", bank: "" });
    }}
    className={retailQuickPick === "exact" ? RETAIL_QUICK_BTN_ACTIVE : RETAIL_QUICK_BTN_INACTIVE}
    >
@@ -904,7 +962,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   />
   </div>
   )}
-  {dueRounded > 0 && !retailMode && (
+  {toPayRounded > 0 && !retailMode && (
   <div>
   <label className="block text-sm font-medium text-gray-700 mb-1">Credit (remainder, auto)</label>
   <div className="px-4 py-3 rounded-xl border-2 border-neutral-200 bg-neutral-50 text-neutral-800 font-semibold tabular-nums">
@@ -934,7 +992,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
    Cash/Card/Bank: <strong className="tabular-nums">{formatMoney(paidNow)}</strong>
   </span>
   <span className="text-gray-600">
-   Due: <strong className="tabular-nums text-blue-600">{formatMoney(dueRounded)}</strong>
+   Due: <strong className="tabular-nums text-blue-600">{formatMoney(toPayRounded)}</strong>
   </span>
   {remaining > 0 && !retailMode && (
    <span className="text-neutral-700 font-medium">

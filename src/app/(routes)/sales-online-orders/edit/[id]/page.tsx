@@ -1049,12 +1049,11 @@ export default function EditSalePage() {
   initialDiscount={discount}
   initialDiscountType={sale.discountType}
   initialDiscountValue={sale.discountValue}
-  initialPayments={
+  receivedPayments={
   sale.payments
   ? {
    cash: sale.payments.cash ?? 0,
    card: sale.payments.card ?? 0,
-   credit: sale.payments.credit ?? 0,
    bank: sale.payments.bank ?? 0,
   }
   : undefined
