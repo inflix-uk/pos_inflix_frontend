@@ -814,6 +814,37 @@ export const NotesTermsForm: React.FC<NotesTermsFormProps> = ({
   placeholder="Enter PDF sales terms..."
   />
   </div>
+
+  {/* Trade-in Terms */}
+  <div>
+  <SectionLabel
+  htmlFor="notes-field-trade-in-terms"
+  icon={FileText}
+  tipAriaLabel="About trade-in terms"
+  tip={
+  <>
+   <p className="mb-2">
+   Shown to the customer when they <strong className="font-medium text-slate-800">sell you a device</strong>{" "}
+   (Trade-ins). They tick &quot;I accept&quot; and sign — on the till or on a phone via the QR code — and the
+   text is printed on the trade-in PDF.
+   </p>
+   <p>Leave it empty if you don&apos;t want customers to accept terms on trade-ins.</p>
+  </>
+  }
+  >
+  Trade-in terms &amp; conditions
+  </SectionLabel>
+  <textarea
+  id="notes-field-trade-in-terms"
+  name="tradeInTerms"
+  value={formData.tradeInTerms}
+  onChange={onChange}
+  rows={6}
+  maxLength={5000}
+  className="block w-full resize-none rounded-xl border border-slate-200/90 bg-white px-4 py-3 text-gray-800 shadow-sm transition focus:border-orange-400 focus:ring-2 focus:ring-orange-400/40 focus:ring-offset-0"
+  placeholder="e.g. I confirm I am the legal owner of the device and it is not stolen..."
+  />
+  </div>
   </div>
 
   <div

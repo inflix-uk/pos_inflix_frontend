@@ -21,6 +21,7 @@ export interface NotesTermsSettings {
  invoicePdfPrint?: Partial<InvoicePdfPrintOptions> | null;
  businessInvoicePdfPrint?: Partial<BusinessInvoicePdfPrintOptions> | null;
  businessInvoiceTerms?: string;
+ tradeInTerms?: string;
  a4InvoiceTemplate?: A4InvoiceTemplateId;
  createdBy?: string;
  updatedBy?: string;
@@ -41,6 +42,7 @@ export interface NotesTermsFormData {
  invoicePdfPrint: InvoicePdfPrintOptions;
  businessInvoicePdfPrint: BusinessInvoicePdfPrintOptions;
  businessInvoiceTerms: string;
+ tradeInTerms: string;
  a4InvoiceTemplate: A4InvoiceTemplateId;
 }
 
