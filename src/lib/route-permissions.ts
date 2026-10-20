@@ -35,6 +35,7 @@ import {
   Layers,
   Tags,
   Printer,
+  Smartphone,
 } from "lucide-react";
 
 /** Path → required permissions. Empty array = any authenticated user. No entry = treat as protected by parent or deny. */
@@ -67,6 +68,8 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   // Repairs
   "/repairs": ["repair.view"],
   "/repairs/add": ["repair.create"],
+  "/trade-ins": ["tradein.view", "tradein.create"],
+  "/trade-ins/new": ["tradein.create"],
 
   // Customers / People
   "/customers": ["customer.view"],
@@ -227,6 +230,13 @@ export const NAV_CONFIG: NavSection[] = [
     label: "Repairs",
     items: [
       { title: "Repairs", path: "/repairs", icon: Wrench, requiredPermsAnyOf: ["repair.view"] },
+    ],
+  },
+  {
+    label: "Trade-ins",
+    items: [
+      { title: "New trade-in", path: "/trade-ins/new", icon: PlusSquare, requiredPermsAnyOf: ["tradein.create"] },
+      { title: "Trade-ins", path: "/trade-ins", icon: Smartphone, requiredPermsAnyOf: ["tradein.view"] },
     ],
   },
   {

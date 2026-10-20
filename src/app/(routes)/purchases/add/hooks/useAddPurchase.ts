@@ -1633,16 +1633,11 @@ export const useAddPurchase = () => {
   };
  };
 
- const handleItemSubmit = async () => {
-  setIsSubmitting(true);
-  setSubmitMessage({ type: "", text: "" });
-
-  if (!parcelData.account) {
-   setSubmitMessage({ type: "error", text: "Account is required" });
-   setIsSubmitting(false);
-   return;
-  }
-
+ /**
+  * Build + validate every item line (saved items plus the one still in the form) into the
+  * POST /api/purchases item payload. Shared with the Trade-in page, which reuses this item form.
+  */
+ const collectItemsForSubmit = () => {
   // Combine IMEI items
   const imeiItems = [
    ...savedItems.map((entry) => buildItemPayload(entry.data, entry.data.type)),
@@ -1657,29 +1652,23 @@ export const useAddPurchase = () => {
 
   // Validation: need at least one item of any type
   if (imeiItems.length === 0 && otherItems.length === 0) {
-   setSubmitMessage({ type: "error", text: "Add at least one item" });
-   setIsSubmitting(false);
-   return;
+   return { ok: false as const, error: "Add at least one item" };
   }
 
   // Validation: every serial item must have all variant attributes filled
   for (const entry of savedItems) {
    if (!isSerialItemVariantComplete(entry.data)) {
-    setSubmitMessage({
-     type: "error",
-     text: "All serial items must have every variant attribute filled. Edit the item and complete missing fields.",
-    });
-    setIsSubmitting(false);
-    return;
+    return {
+     ok: false as const,
+     error: "All serial items must have every variant attribute filled. Edit the item and complete missing fields.",
+    };
    }
   }
   if (currentFormIMEICount > 0 && !isSerialItemVariantComplete(itemData)) {
-   setSubmitMessage({
-    type: "error",
-    text: "Please fill all variant attributes for the current serial item before submitting.",
-   });
-   setIsSubmitting(false);
-   return;
+   return {
+    ok: false as const,
+    error: "Please fill all variant attributes for the current serial item before submitting.",
+   };
   }
 
   const allItems = [...imeiItems, ...otherItems];
@@ -1693,12 +1682,10 @@ export const useAddPurchase = () => {
     item.salePrice <= 0
   );
   if (missingPrice) {
-   setSubmitMessage({
-    type: "error",
-    text: "Purchase price and sale price are required for every item. Enter a value greater than 0.",
-   });
-   setIsSubmitting(false);
-   return;
+   return {
+    ok: false as const,
+    error: "Purchase price and sale price are required for every item. Enter a value greater than 0.",
+   };
   }
   const allIMEIs = imeiItems.flatMap((item) => item.imeis);
 
@@ -1709,6 +1696,27 @@ export const useAddPurchase = () => {
 
   // Calculate total other quantity
   const totalOtherQty = otherItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  return { ok: true as const, allItems, allIMEIs, grandTotal, totalOtherQty };
+ };
+
+ const handleItemSubmit = async () => {
+  setIsSubmitting(true);
+  setSubmitMessage({ type: "", text: "" });
+
+  if (!parcelData.account) {
+   setSubmitMessage({ type: "error", text: "Account is required" });
+   setIsSubmitting(false);
+   return;
+  }
+
+  const collected = collectItemsForSubmit();
+  if (!collected.ok) {
+   setSubmitMessage({ type: "error", text: collected.error });
+   setIsSubmitting(false);
+   return;
+  }
+  const { allItems, allIMEIs, grandTotal, totalOtherQty } = collected;
 
   const purchasePayload: Record<string, unknown> = {
    parcelNumber: parcelData.parcelNumber,
@@ -1898,6 +1906,7 @@ export const useAddPurchase = () => {
   handleParcelSubmit,
   handleQuantitySubmit,
   handleItemSubmit,
+  collectItemsForSubmit,
   handleAddItem,
   handleRemoveItem,
   handleEditItem,

@@ -44,6 +44,7 @@ const initialFormData: NotesTermsFormData = {
  invoicePdfPrint: mergeInvoicePdfPrintOptions(),
  businessInvoicePdfPrint: mergeBusinessInvoicePdfPrintOptions(),
  businessInvoiceTerms: "",
+ tradeInTerms: "",
  a4InvoiceTemplate: "dispatch",
 };
 
@@ -60,6 +61,7 @@ const buildFormData = (data: NotesTermsSettings): NotesTermsFormData => ({
  invoicePdfPrint: mergeInvoicePdfPrintOptions(data.invoicePdfPrint),
  businessInvoicePdfPrint: mergeBusinessInvoicePdfPrintOptions(data.businessInvoicePdfPrint),
  businessInvoiceTerms: data.businessInvoiceTerms || "",
+ tradeInTerms: data.tradeInTerms ?? "",
  a4InvoiceTemplate: normalizeA4InvoiceTemplate(data.a4InvoiceTemplate),
 });
 
