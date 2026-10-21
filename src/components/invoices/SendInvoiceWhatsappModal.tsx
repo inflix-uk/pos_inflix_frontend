@@ -11,14 +11,28 @@ export interface SendableInvoice {
  reference: string;
  customerName?: string;
  total: number;
+ discount?: number | null;
+ previousBalance?: number | null;
+ payments?: { cash?: number | null; card?: number | null; bank?: number | null } | null;
 }
 
 const formatMoney = (n: number) =>
  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2 }).format(n);
 
-/** Default caption — matches the backend default when no message is supplied. */
+/** Same "Balance Due" as the A4 invoice: previous balance + this invoice − payments received. */
+export function invoiceBalanceDue(invoice: SendableInvoice): number {
+ const prevBal = Number(invoice.previousBalance) || 0;
+ const invTotal = (Number(invoice.total) || 0) - (Number(invoice.discount) || 0);
+ const p = invoice.payments || {};
+ const received = (Number(p.cash) || 0) + (Number(p.card) || 0) + (Number(p.bank) || 0);
+ return Math.max(0, Math.round((prevBal + invTotal - received) * 100) / 100);
+}
+
+/** Default caption sent with the invoice PDF. */
 export function defaultInvoiceWhatsappMessage(invoice: SendableInvoice): string {
- return `Invoice ${invoice.reference} for ${invoice.customerName || "Customer"}. Total: ${formatMoney(Number(invoice.total) || 0)}.`;
+ return `Invoice ${invoice.reference} for ${invoice.customerName || "Customer"}. Total: ${formatMoney(
+  Number(invoice.total) || 0
+ )}. Balance Due: ${formatMoney(invoiceBalanceDue(invoice))}.`;
 }
 
 export default function SendInvoiceWhatsappModal({
@@ -136,6 +150,8 @@ export default function SendInvoiceWhatsappModal({
       Customer: <span className="font-medium text-gray-800">{invoice.customerName || "—"}</span>
       {" · "}
       Total: <span className="font-medium text-gray-800">{formatMoney(invoice.total)}</span>
+      {" · "}
+      Balance Due: <span className="font-medium text-gray-800">{formatMoney(invoiceBalanceDue(invoice))}</span>
      </div>
     </form>
     <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end gap-2 bg-gray-50 rounded-b-xl">
