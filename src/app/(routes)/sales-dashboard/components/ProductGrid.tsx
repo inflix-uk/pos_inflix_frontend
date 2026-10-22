@@ -5,6 +5,7 @@ import { Search, Package, PackagePlus, Plus } from "lucide-react";
 import { getLucideIconByName } from "@/lib/lucide-icons";
 import { cn } from "@/lib/utils";
 import { HelpTip } from "@/components/HelpTip";
+import { VatBadge } from "@/components/VatBadge";
 import type { POSProduct } from "../types";
 
 const SUGGESTIONS_MAX = 8;
@@ -341,6 +342,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
     <span className="text-[11px] font-semibold tabular-nums text-slate-900 @[480px]/pg:text-xs @[768px]/pg:text-sm">
      {product.price}
     </span>
+    {product.taxName && <VatBadge name={product.taxName} className="ml-1 align-middle text-[9px]" />}
     </div>
     {showStock && (
     <span
@@ -436,6 +438,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
    {product.category}
    </span>
    )}
+   {product.taxName && <VatBadge name={product.taxName} className="text-[9px]" />}
    {product.barcode && (
    <span
    className="w-full truncate text-center font-mono text-[9px] text-gray-500 sm:text-[10px]"

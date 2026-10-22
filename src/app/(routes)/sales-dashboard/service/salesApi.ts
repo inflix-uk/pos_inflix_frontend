@@ -137,6 +137,13 @@ const getAuthHeaders = (): HeadersInit => {
  };
 };
 
+export interface ItemTaxInfo {
+ taxId: string;
+ name: string;
+ rate: number;
+ type: string;
+}
+
 export interface CreateSaleResponse {
  success: boolean;
  data?: { _id: string; reference?: string; [key: string]: unknown };
@@ -718,6 +725,26 @@ export const salesApi = {
    const err = await response.json().catch(() => ({}));
    throw new Error(err.message || "Batch lookup failed");
   }
+  return response.json();
+ },
+
+ /** Tax option (Settings → Tax) chosen on the purchase: per IMEI for serial items, per purchase line otherwise. */
+ getItemTaxes: async (body: {
+  serials?: string[];
+  items?: { purchaseId: string; purchaseItemId: string }[];
+ }): Promise<{
+  success: boolean;
+  data?: {
+   items: Record<string, ItemTaxInfo | null>;
+   serials: Record<string, ItemTaxInfo | null>;
+  };
+ }> => {
+  const response = await fetch(`${API_BASE_URL}/purchases/item-taxes`, {
+   method: "POST",
+   headers: getAuthHeaders(),
+   body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error("Failed to load tax options");
   return response.json();
  },
 
