@@ -39,6 +39,13 @@ export interface InventoryProductForSales {
  inventoryDate?: string;
  categoryId?: string;
  variantValues?: { slug?: string; value?: string }[];
+ /** Tax option chosen on the purchase (Settings → Tax), e.g. "Marginal VAT" */
+ taxName?: string;
+}
+
+function getTaxName(tax: PurchaseItemRaw["tax"]): string | undefined {
+ if (tax && typeof tax === "object" && tax.name && String(tax.name).trim()) return String(tax.name).trim();
+ return undefined;
 }
 
 function getCategoryName(category: PurchaseItemRaw["category"]): string {
@@ -93,6 +100,7 @@ interface FlattenRow {
  inventoryDate?: string;
  categoryId?: string;
  variantValues?: { slug?: string; value?: string }[];
+ taxName?: string;
 }
 
 /** Flatten purchases to one row per serial (IMEI) and one per non-serial item (for sales/wholesale dashboards) */
@@ -136,6 +144,7 @@ function flattenPurchasesToRows(purchases: PurchaseRaw[], allowNegativeStock: bo
    const rawQty = Number(item.quantity);
    const qty = Number.isFinite(rawQty) ? rawQty : 0;
    const unitCost = item.purchasePrice != null ? Number(item.purchasePrice) : undefined;
+   const taxName = getTaxName(item.tax);
 
    if (isSerial) {
     imeis.forEach((imei) => {
@@ -159,6 +168,7 @@ function flattenPurchasesToRows(purchases: PurchaseRaw[], allowNegativeStock: bo
       inventoryDate: purchaseDate,
       categoryId,
       variantValues,
+      taxName,
      });
     });
    } else {
@@ -185,6 +195,7 @@ function flattenPurchasesToRows(purchases: PurchaseRaw[], allowNegativeStock: bo
      inventoryDate: purchaseDate,
      categoryId,
      variantValues,
+     taxName,
     });
    }
   });
@@ -229,6 +240,7 @@ function rowToProduct(row: FlattenRow): InventoryProductForSales {
   inventoryDate: row.inventoryDate,
   categoryId: row.categoryId,
   variantValues: row.variantValues,
+  taxName: row.taxName,
  };
 }
 

@@ -130,6 +130,7 @@ export interface SalesDashboardProductsOverride {
   unitCost?: number;
   purchaseId?: string;
   purchaseItemId?: string;
+  taxName?: string;
  }>;
 }
 
@@ -234,6 +235,7 @@ export const useSalesDashboard = (options?: {
     unitCost: (p as { unitCost?: number }).unitCost,
     purchaseId: (p as { purchaseId?: string }).purchaseId,
     purchaseItemId: (p as { purchaseItemId?: string }).purchaseItemId,
+    taxName: (p as { taxName?: string }).taxName,
    })),
   [products]
  );
@@ -416,6 +418,8 @@ export const useSalesDashboard = (options?: {
      purchaseId: p.purchaseId,
      purchaseItemId: p.purchaseItemId,
      cost_missing: p.unitCost == null && !p.purchaseId,
+     // Serial lines are labelled per IMEI in the cart (units can come from different purchases).
+     taxName: isSerialItem ? undefined : product.taxName,
     },
    ];
    cartStateRef.current = next;

@@ -6,6 +6,8 @@ import type { CartLineItem } from "../types";
 import { useAppCurrency } from "@/lib/app-currency-context";
 import { HelpTip } from "@/components/HelpTip";
 import { useCartTaxSlot } from "./CartTaxSlotContext";
+import { VatBadge, VatBadges } from "@/components/VatBadge";
+import { useCartTaxLabels } from "../hooks/useCartTaxLabels";
 
 interface CartPanelProps {
  title?: string;
@@ -183,6 +185,7 @@ const SummaryTableRow: React.FC<{
  currencySymbol: string;
  accent?: "orange" | "blue";
  categoryVariantSlugOrderByCategoryId?: Record<string, string[]>;
+ taxNames?: string[];
 }> = ({
  index,
  item,
@@ -192,6 +195,7 @@ const SummaryTableRow: React.FC<{
  currencySymbol,
  accent = "blue",
  categoryVariantSlugOrderByCategoryId,
+ taxNames = [],
 }) => {
  const slugOrder =
  item.categoryId && categoryVariantSlugOrderByCategoryId
@@ -241,6 +245,7 @@ const SummaryTableRow: React.FC<{
  <td className="py-1.5 px-2 text-slate-500 tabular-nums shrink-0">{index + 1}</td>
  <td className="py-1.5 pl-2 pr-1 min-w-[180px] font-medium text-slate-900">
  {itemsSummaryVariantDescription(item, slugOrder)}
+ <VatBadges names={taxNames} className="ml-1.5 align-middle" />
  </td>
  <td className="py-1.5 px-2 text-right">
  {isSerialItem ? (
@@ -318,6 +323,7 @@ type SerialDetailRow = {
  colour: string;
  rate: string;
  sku: string;
+ taxName?: string | null;
 };
 
 /** Grade value → short token (e.g. "GRADE A" / "Grade A" → "A") for inline description. */
@@ -418,6 +424,7 @@ const SerialItemsDetailTable: React.FC<{
   </td>
   <td className="py-1.5 pl-1 pr-2 min-w-[160px] align-top text-gray-900">
   <span className="text-sm font-medium leading-snug">{serialRowInlineDescription(r)}</span>
+  {r.taxName && <VatBadge name={r.taxName} className="ml-1.5 align-middle" />}
   </td>
   <td className="py-1.5 px-2 align-top text-sm font-semibold text-slate-800 whitespace-nowrap">
   {compactGradeToken(r.grade) ? `GRADE ${compactGradeToken(r.grade)}` : (r.grade?.trim() && r.grade !== "—" ? r.grade : "—")}
@@ -450,6 +457,7 @@ interface CartLineRowProps {
  accent?: "orange" | "blue";
  formatMoney: (n: number) => string;
  currencySymbol: string;
+ taxNames?: string[];
 }
 
 const CartLineRow: React.FC<CartLineRowProps> = ({
@@ -461,6 +469,7 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
  accent = "orange",
  formatMoney,
  currencySymbol,
+ taxNames = [],
 }) => {
  const lineTotalClass = accent === "blue" ? "text-blue-600" : "text-orange-600";
  const [priceInput, setPriceInput] = useState(parsePriceDisplay(item.price));
@@ -499,6 +508,7 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
   <p className="text-[11px] @[480px]/cp:text-xs font-medium text-gray-900 truncate min-w-0">
   {item.name}
   </p>
+  <VatBadges names={taxNames} className="mt-0.5" />
   </div>
   <div className="grid grid-cols-[minmax(0,1fr)_72px_80px_72px_28px] gap-1.5 items-center flex-shrink-0 min-w-0">
   <div className="min-w-0 flex items-center justify-start">
@@ -587,6 +597,7 @@ const CartLineRow: React.FC<CartLineRowProps> = ({
   <p className={`text-sm font-semibold text-gray-900 leading-tight ${collapsible ? "line-clamp-3 break-words" : ""}`}>
   {item.name}
   </p>
+  <VatBadges names={taxNames} />
   {item.serialNumbers && item.serialNumbers.length > 0 && (
   <span className={`font-mono text-sm font-semibold rounded-md px-2 py-1 break-all shrink-0 ${accent === "blue" ? "bg-blue-50 border border-blue-200 text-blue-900" : "bg-gray-100 border border-gray-200 text-gray-900"}`} title={item.serialNumbers.join(", ")}>
   {item.serialNumbers.length > 1 ? `${item.serialNumbers[0]} (+${item.serialNumbers.length - 1} more)` : item.serialNumbers[0]}
@@ -696,6 +707,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
  onHold,
 }) => {
  const taxSlot = useCartTaxSlot();
+ const { taxNamesForLine, taxNameForSerial } = useCartTaxLabels(items);
  const { formatMoney, currencySymbol } = useAppCurrency();
  const canPay = items.length > 0 && !payDisabled;
  const isWholesale = accent === "blue";
@@ -773,6 +785,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
    currencySymbol={currencySymbol}
    accent={accent}
    categoryVariantSlugOrderByCategoryId={categoryVariantSlugOrderByCategoryId}
+   taxNames={taxNamesForLine(item)}
    />
    ))}
    </tbody>
@@ -797,6 +810,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
    colour,
    rate,
    sku: item.sku,
+   taxName: taxNameForSerial(serial),
    });
    });
   }
@@ -835,6 +849,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({
   accent={accent}
   formatMoney={formatMoney}
   currencySymbol={currencySymbol}
+  taxNames={taxNamesForLine(item)}
   />
   ))}
   </ul>

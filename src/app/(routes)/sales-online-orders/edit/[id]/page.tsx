@@ -459,6 +459,7 @@ export default function EditSalePage() {
  iconColor: p.iconColor,
  serialNumber: p.serialNumber,
  barcode: p.barcode,
+ taxName: p.taxName,
  })),
  [inventoryProducts]
  );

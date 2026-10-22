@@ -36,6 +36,8 @@ export interface PurchaseItemRaw {
  name?: string;
  barcode?: string;
  variantValues?: { slug?: string; value?: string }[];
+ /** Tax option (populated with name on the create-sales list) */
+ tax?: { _id?: string; name?: string } | string | null;
 }
 
 /** Raw purchase from GET /api/purchases */

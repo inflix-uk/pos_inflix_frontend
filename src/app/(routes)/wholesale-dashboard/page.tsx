@@ -697,6 +697,7 @@ const Page = () => {
  purchaseId: p.purchaseId,
  purchaseItemId: p.purchaseItemId,
  inventoryDate: p.inventoryDate,
+ taxName: p.taxName,
  })),
  [inventoryProducts]
  );

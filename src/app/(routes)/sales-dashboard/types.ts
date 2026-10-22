@@ -34,6 +34,8 @@ export interface CartLineItem {
  purchaseId?: string;
  purchaseItemId?: string;
  cost_missing?: boolean;
+ /** Tax option chosen on the purchase (Settings → Tax), e.g. "Marginal VAT" */
+ taxName?: string;
 }
 
 /** Product as shown in POS grid (from products context) */
@@ -63,6 +65,8 @@ export interface POSProduct {
  unitCost?: number;
  purchaseId?: string;
  purchaseItemId?: string;
+ /** Tax option chosen on the purchase (Settings → Tax), e.g. "Marginal VAT" */
+ taxName?: string;
 }
 
 export type PaymentMethod = "cash" | "card" | "credit" | "bank";
