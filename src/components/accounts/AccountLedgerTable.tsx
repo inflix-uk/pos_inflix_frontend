@@ -1,12 +1,14 @@
 "use client";
 
-import React from "react";
-import type { StatementLine } from "@/app/(routes)/accounts/service/accountsApi";
+import React, { useState } from "react";
+import type { StatementLine, StatementLineDetails } from "@/app/(routes)/accounts/service/accountsApi";
 import {
+ describeReturnedItems,
  describeStatementLine,
  formatStatementBalance,
  type StatementAccountType,
 } from "@/lib/accountStatementExport";
+import { StatementLineDetailsModal } from "./StatementLineDetailsModal";
 
 interface AccountLedgerTableProps {
  accountType: StatementAccountType;
@@ -38,6 +40,7 @@ export function AccountLedgerTable({
  renderActions,
  compact = false,
 }: AccountLedgerTableProps) {
+ const [openDetails, setOpenDetails] = useState<StatementLineDetails | null>(null);
  const cell = compact ? "py-2 px-3" : "py-3 px-4";
  const num = `${cell} text-right tabular-nums whitespace-nowrap`;
  const showActions = !!renderActions;
@@ -55,6 +58,7 @@ export function AccountLedgerTable({
   ) : null;
 
  return (
+  <>
   <table className="w-full text-sm">
    <thead>
     <tr className="border-b border-gray-200 bg-gray-50">
@@ -78,7 +82,25 @@ export function AccountLedgerTable({
      newestFirst.map((line) => (
       <tr key={line._id} className="border-b border-gray-100">
        <td className={`${cell} text-gray-600 whitespace-nowrap`}>{formatDate(line.date)}</td>
-       <td className={`${cell} text-gray-900`}>{describeStatementLine(line)}</td>
+       <td className={`${cell} text-gray-900`}>
+        {line.details ? (
+         <button
+          type="button"
+          onClick={() => setOpenDetails(line.details!)}
+          className="text-left text-blue-700 hover:text-blue-900 hover:underline"
+          title={`View ${line.details.kind === "return" ? "returned" : "invoice"} items`}
+         >
+          {describeStatementLine(line)}
+         </button>
+        ) : (
+         describeStatementLine(line)
+        )}
+        {describeReturnedItems(line, formatMoney).map((t, i) => (
+         <div key={i} className="mt-0.5 text-xs text-gray-500 break-words">
+          Returned: {t}
+         </div>
+        ))}
+       </td>
        <td className={`${cell} text-gray-600 max-w-xs`}>
         {line.note?.trim() ? (
          <span className="whitespace-pre-wrap break-words" title={line.note.trim()}>
@@ -117,5 +139,14 @@ export function AccountLedgerTable({
     </tr>
    </tfoot>
   </table>
+  {openDetails && (
+   <StatementLineDetailsModal
+    details={openDetails}
+    formatDate={formatDate}
+    formatMoney={formatMoney}
+    onClose={() => setOpenDetails(null)}
+   />
+  )}
+  </>
  );
 }

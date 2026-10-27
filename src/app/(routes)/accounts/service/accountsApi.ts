@@ -23,6 +23,30 @@ export interface StatementLine {
  date: string;
  paymentMethod?: string;
  note?: string;
+ /** Items on the linked invoice or return (customer statements). */
+ details?: StatementLineDetails;
+}
+
+export interface StatementLineItem {
+ name: string;
+ sku?: string;
+ quantity: number;
+ price: number;
+ total: number;
+ serialNumbers: string[];
+}
+
+export interface StatementLineDetails {
+ kind: "invoice" | "return";
+ reference?: string;
+ /** Return only: the invoice the items came from. */
+ linkedInvoiceRef?: string;
+ date?: string;
+ status?: string;
+ items: StatementLineItem[];
+ subtotal: number;
+ discount: number;
+ total: number;
 }
 
 /** Customer: debit = invoice, credit = payment, balance = owed to us (negative = store credit).

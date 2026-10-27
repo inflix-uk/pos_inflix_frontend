@@ -48,6 +48,21 @@ export function describeStatementLine(line: AccountStatementLine): string {
   }
 }
 
+/**
+ * Returned items on a return / store-credit line, one string per item, e.g.
+ * "iPhone 13 128GB x 1 @ £85.00 · S/N 3567…". Empty for other lines.
+ */
+export function describeReturnedItems(
+  line: AccountStatementLine,
+  formatMoney: (n: number) => string
+): string[] {
+  if (line.details?.kind !== "return") return [];
+  return line.details.items.map((it) => {
+    const serials = it.serialNumbers?.length ? ` · S/N ${it.serialNumbers.join(", ")}` : "";
+    return `${it.name} x ${it.quantity} @ ${formatMoney(it.price)}${serials}`;
+  });
+}
+
 /** Running-balance cell. Customers in credit / suppliers owing us are shown with a CR / DR suffix. */
 export function formatStatementBalance(
   n: number,
@@ -103,10 +118,12 @@ export function downloadAccountStatementCsv(params: AccountStatementPdfParams) {
     ["", "Opening balance", "", "", "", bal(params.openingBalance)],
   ];
   for (const line of params.lines) {
+    const returned = describeReturnedItems(line, params.formatMoney);
+    const notes = [line.note?.trim() || "", ...returned.map((t) => `Returned: ${t}`)].filter(Boolean);
     rows.push([
       params.formatDate(line.date),
       describeStatementLine(line),
-      line.note?.trim() || "",
+      notes.join("\n"),
       amt(line.debit),
       amt(line.credit),
       bal(line.balance),
@@ -206,6 +223,9 @@ export function buildAccountStatementPdfDoc(params: AccountStatementPdfParams): 
     const descLines: string[] = doc.splitTextToSize(describeStatementLine(line), descMaxW);
     const note = line.note?.trim();
     const noteLines: string[] = note ? doc.splitTextToSize(note, descMaxW) : [];
+    for (const t of describeReturnedItems(line, params.formatMoney)) {
+      noteLines.push(...(doc.splitTextToSize(`Returned: ${t}`, descMaxW) as string[]));
+    }
     const rowH = (descLines.length + noteLines.length) * lineHeight + 2;
     newPageIfNeeded(rowH + 2);
     rule();
