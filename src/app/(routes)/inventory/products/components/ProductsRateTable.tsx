@@ -64,6 +64,84 @@ export interface RateListItem {
  firstBarcode?: string;
  /** First row's productId when backend resolved it by barcode (serial items). */
  firstProductId?: string;
+ /** Non-serial only: barcode / SKU shared by the grouped purchase lines. */
+ barcode?: string;
+ /** Non-serial only: units in stock across all grouped purchase lines. */
+ quantity?: number;
+}
+
+/**
+ * Non-serial (no IMEI) grouping key: barcode when present, otherwise category + name.
+ * Prefixed so it can never collide with a serial variant key.
+ */
+export function nonSerialKey(row: StockViewRow): string {
+ const barcode = (row.barcode || "").trim();
+ if (barcode) return `NS:BC:${barcode.toUpperCase()}`;
+ const name = (row.name || "").trim();
+ const category = (row.category || "").trim();
+ return `NS:NM:${category.toUpperCase()}|${name.toUpperCase()}`;
+}
+
+/**
+ * Group non-serial stock rows (one per purchase line) into one rate-list line per product.
+ * Quantity is summed; sale price comes from the most recent purchase line.
+ */
+export function groupNonSerialRows(rows: StockViewRow[]): RateListItem[] {
+ const map = new Map<string, RateListItem & { _maxDate?: string }>();
+ for (const row of rows) {
+ if (row.isSerialProduct) continue;
+ const ref = getItemKey(row);
+ if (!ref) continue;
+ const key = nonSerialKey(row);
+ const rowDate = getRowDate(row);
+ const rowPrice = Math.max(0, Number(row.salePrice) || 0);
+ const qty = Math.max(0, Number(row.quantity) || 0);
+ const existing = map.get(key);
+ if (existing) {
+ existing.quantity = (existing.quantity ?? 0) + qty;
+ addColourQuantity(existing.colours, row);
+ if (!existing.itemRefs.some((r) => r.purchaseId === ref.purchaseId && r.itemId === ref.itemId)) {
+  existing.itemRefs.push(ref);
+ }
+ if (rowDate && rowDate > (existing._maxDate ?? "")) {
+  existing._maxDate = rowDate;
+  existing.salePrice = rowPrice;
+ }
+ continue;
+ }
+ const item: RateListItem & { _maxDate?: string } = {
+ variantKey: key,
+ name: (row.name && row.name.trim()) || [row.brand, row.brandModel].filter(Boolean).join(" ") || "-",
+ category: row.category ?? "",
+ grade: row.grade ?? "",
+ brand: row.brand ?? "",
+ brandModel: row.brandModel ?? "",
+ capacity: row.capacity ?? "",
+ salePrice: rowPrice,
+ currency: row.currency ?? "",
+ serialCount: 0,
+ serials: [],
+ colours: [],
+ itemRefs: [ref],
+ firstBarcode: row.barcode?.trim() || undefined,
+ firstProductId: row.productId,
+ barcode: row.barcode?.trim() || "",
+ quantity: qty,
+ _maxDate: rowDate,
+ };
+ addColourQuantity(item.colours, row);
+ map.set(key, item);
+ }
+ return [...map.values()]
+ .map((item) => {
+ delete item._maxDate;
+ return item as RateListItem;
+ })
+ .sort(
+ (a, b) =>
+  a.category.localeCompare(b.category, undefined, { sensitivity: "base" }) ||
+  a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+ );
 }
 
 /** Use most recent purchase date for ordering (createdAt preferred). */
@@ -179,6 +257,8 @@ interface ProductsRateTableProps {
  onVariantGroupPriceChange?: (variantKey: string, price: number | null) => Promise<void>;
  /** When in group mode and user blurs but variant has no linked product (no productIds), call this so parent can show a message. */
  onNoProductIdLink?: () => void;
+ /** "serial" (default): IMEI items grouped by variant. "non-serial": items without IMEI grouped by barcode/name. */
+ itemType?: "serial" | "non-serial";
 }
 
 export function ProductsRateTable({
@@ -193,14 +273,20 @@ export function ProductsRateTable({
  onGroupPriceChange,
  onVariantGroupPriceChange,
  onNoProductIdLink,
+ itemType = "serial",
 }: ProductsRateTableProps) {
+ const isNonSerial = itemType === "non-serial";
  const [editingKey, setEditingKey] = useState<string | null>(null);
  const [editValue, setEditValue] = useState("");
  const [saving, setSaving] = useState(false);
  /** After saving in normal mode, show saved price until refetch updates rows (avoids showing stale price so "revert" is saved). */
  const [lastSavedPriceByVariantKey, setLastSavedPriceByVariantKey] = useState<Record<string, number>>({});
 
- const items = React.useMemo(() => groupRowsByVariant(rows), [rows]);
+ const items = React.useMemo(
+ () => (isNonSerial ? groupNonSerialRows(rows) : groupRowsByVariant(rows)),
+ [rows, isNonSerial]
+ );
+ const colCount = isNonSerial ? 5 : 7;
 
  // Clear optimistic prices when rows change (e.g. after refetch) so we use server data.
  useEffect(() => {
@@ -337,6 +423,15 @@ export function ProductsRateTable({
  <div className="overflow-x-auto">
  <table className="w-full min-w-[900px]">
  <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
+  {isNonSerial ? (
+  <tr>
+  <th className={`${thClass} ${colMinWidths.name}`}>Name</th>
+  <th className={`${thClass} ${colMinWidths.brand}`}>Category</th>
+  <th className={`${thClass} ${colMinWidths.model}`}>Barcode / SKU</th>
+  <th className={`${thClass} ${colMinWidths.capacity}`}>In stock</th>
+  <th className={`${thClass} ${colMinWidths.salePrice}`}>Sale price</th>
+  </tr>
+  ) : (
   <tr>
   <th className={`${thClass} ${colMinWidths.name}`}>Name</th>
   <th className={`${thClass} ${colMinWidths.condition}`}>Condition</th>
@@ -346,20 +441,25 @@ export function ProductsRateTable({
   <th className={`${thClass} ${colMinWidths.serials}`}>Serials</th>
   <th className={`${thClass} ${colMinWidths.salePrice}`}>Sale price</th>
   </tr>
+  )}
  </thead>
  <tbody className="divide-y divide-gray-100 bg-white">
   {isLoading ? (
   <tr>
-  <td colSpan={7} className="px-4 py-16 text-center text-gray-500">
+  <td colSpan={colCount} className="px-4 py-16 text-center text-gray-500">
   <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
   <p className="mt-2 text-sm">Loading…</p>
   </td>
   </tr>
   ) : items.length === 0 ? (
   <tr>
-  <td colSpan={7} className="px-4 py-14 text-center text-gray-500">
+  <td colSpan={colCount} className="px-4 py-14 text-center text-gray-500">
   <p className="font-medium">No items to show</p>
-  <p className="text-sm mt-1">Add serial products from purchases to update prices here.</p>
+  <p className="text-sm mt-1">
+  {isNonSerial
+   ? "Add non-IMEI products (accessories etc.) from purchases to update prices here."
+   : "Add serial products from purchases to update prices here."}
+  </p>
   </td>
   </tr>
   ) : (
@@ -368,6 +468,14 @@ export function ProductsRateTable({
   return (
   <tr key={item.variantKey} className="hover:bg-orange-50/50 transition-colors">
    <td className={`${tdClass} break-words`}>{item.name}</td>
+   {isNonSerial ? (
+   <>
+   <td className={tdClass}>{item.category || "—"}</td>
+   <td className={`${tdClass} break-all`}>{item.barcode || "—"}</td>
+   <td className={tdClass}>{item.quantity ?? 0}</td>
+   </>
+   ) : (
+   <>
    <td className={tdClass}>{item.grade || "—"}</td>
    <td className={tdClass}>{item.brand || "—"}</td>
    <td className={tdClass}>{item.brandModel || "—"}</td>
@@ -379,6 +487,8 @@ export function ProductsRateTable({
    : `${item.serialCount} items`
    : "—"}
    </td>
+   </>
+   )}
    <td className={tdClass}>
    <input
    type="number"

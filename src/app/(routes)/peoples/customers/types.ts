@@ -26,6 +26,10 @@ export interface Customer {
  useInRepairs?: boolean;
  /** Optional pricing group for customer-group pricing. When set, POS uses group price for products that have one. */
  pricingGroupId?: string | null;
+ /** Whether the customer may buy on credit. Missing = allowed. */
+ creditAllowed?: boolean;
+ /** Maximum outstanding balance on account. 0 / missing = no limit. */
+ creditLimit?: number;
  /** System walk-in customer — hide 360 or show read-only. */
  isWalkIn?: boolean;
  /** B2B customer portal enabled. */
@@ -50,6 +54,10 @@ export interface CustomerFormData {
  pricingGroupId?: string | null;
  /** Opening balance / balance brought forward (import or API). Creates a ledger entry so it shows in accounts. */
  balance?: number;
+ /** Whether the customer may buy on credit. */
+ creditAllowed?: boolean;
+ /** Maximum outstanding balance on account. 0 = no limit. */
+ creditLimit?: number;
 }
 
 export interface CustomerFilters {

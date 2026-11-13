@@ -9,8 +9,13 @@ import { useStockList } from "../../stock/stock-1/hooks/useStockList";
 import { StockListTree } from "../../stock/stock-1/components/StockListTree";
 import { StockListSidebar } from "../../stock/stock-1/components/StockListSidebar";
 import { ProductsPageHeader } from "./components/ProductsPageHeader";
-import { ProductsStockTable, ProductsRateTable, groupRowsByVariant } from "./components";
-import { downloadRateListExcel, downloadRateListPdf } from "@/lib/productsExport";
+import { ProductsStockTable, ProductsRateTable, groupRowsByVariant, groupNonSerialRows } from "./components";
+import {
+ downloadRateListExcel,
+ downloadRateListPdf,
+ downloadNonSerialRateListExcel,
+ downloadNonSerialRateListPdf,
+} from "@/lib/productsExport";
 import { ProductHistoryModal } from "../product-history/ProductHistoryModal";
 import { usePermissionsContext } from "@/contexts/PermissionsContext";
 import { Pagination } from "../../stock/view/components/Pagination";
@@ -118,7 +123,25 @@ export default function ProductsPage() {
  const [rateListRows, setRateListRows] = useState<typeof filteredRows>([]);
  const [rateListLoading, setRateListLoading] = useState(false);
  const [rateListSearch, setRateListSearch] = useState("");
+ /** Rate list shows either IMEI (serial) items or non-IMEI (non-serial) items. */
+ const [rateListType, setRateListTypeState] = useState<"serial" | "non-serial">(() =>
+ searchParams.get("type") === "non-serial" || searchParams.get("rateType") === "non-serial" ? "non-serial" : "serial"
+ );
+ const setRateListType = useCallback(
+ (type: "serial" | "non-serial") => {
+ setRateListTypeState(type);
+ setRateListRows([]);
+ const params = new URLSearchParams(Array.from(searchParams.entries()));
+ if (type === "non-serial") params.set("rateType", "non-serial");
+ else params.delete("rateType");
+ const qs = params.toString();
+ router.replace(`${pathname}${qs ? `?${qs}` : ""}`);
+ },
+ [searchParams, router, pathname]
+ );
+ const rateListRequestRef = useRef(0);
  const fetchRateListRows = useCallback(async () => {
+ const requestId = ++rateListRequestRef.current;
  setRateListLoading(true);
  try {
  const res = await stockViewApi.getStockViewRows({
@@ -126,19 +149,21 @@ export default function ProductsPage() {
  limit: 10000,
  excludeSold: statusFilter === "available",
  statusFilter,
- productType: "serial",
+ productType: rateListType,
  });
+ // Ignore a slower response from before the IMEI / non-IMEI switch.
+ if (requestId !== rateListRequestRef.current) return;
  if (res.success && Array.isArray(res.data)) {
  setRateListRows(res.data);
  } else {
  setRateListRows([]);
  }
  } catch {
- setRateListRows([]);
+ if (requestId === rateListRequestRef.current) setRateListRows([]);
  } finally {
- setRateListLoading(false);
+ if (requestId === rateListRequestRef.current) setRateListLoading(false);
  }
- }, [statusFilter]);
+ }, [statusFilter, rateListType]);
  useEffect(() => {
  if (activeTab === "rate-list") fetchRateListRows();
  }, [activeTab, fetchRateListRows]);
@@ -267,12 +292,17 @@ export default function ProductsPage() {
  else setProductTypeFilter("all");
  }, [searchParams, setProductTypeFilter]);
 
- // On non-serial view, Stock list and Rate list tabs are hidden (serial-only); switch to Products if needed
+ // On non-serial view, the Stock list tab is hidden (serial-only); switch to Products if needed.
+ // The Rate list stays available and shows non-IMEI items.
  useEffect(() => {
- if (productTypeFilter === "non-serial" && (activeTab === "stock-list" || activeTab === "rate-list")) {
+ if (productTypeFilter === "non-serial" && activeTab === "stock-list") {
  setActiveTab("products");
  }
  }, [productTypeFilter, activeTab, setActiveTab]);
+ useEffect(() => {
+ if (productTypeFilter === "non-serial") setRateListTypeState("non-serial");
+ else if (productTypeFilter === "serial") setRateListTypeState("serial");
+ }, [productTypeFilter]);
 
  // When landing with ?tab=sold (or switching to it), keep stock status filter aligned with the active tab
  useEffect(() => {
@@ -280,26 +310,34 @@ export default function ProductsPage() {
  else if (activeTab === "products") setStatusFilter("available");
  }, [activeTab, setStatusFilter]);
 
- const rateListItems = useMemo(() => groupRowsByVariant(filteredRateListRows), [filteredRateListRows]);
+ const rateListItems = useMemo(
+ () =>
+ rateListType === "non-serial"
+  ? groupNonSerialRows(filteredRateListRows)
+  : groupRowsByVariant(filteredRateListRows),
+ [filteredRateListRows, rateListType]
+ );
 
  const [isExportingRateList, setIsExportingRateList] = useState(false);
  const exportRateListAsExcel = useCallback(() => {
  setIsExportingRateList(true);
  try {
- downloadRateListExcel(rateListItems);
+ if (rateListType === "non-serial") downloadNonSerialRateListExcel(rateListItems);
+ else downloadRateListExcel(rateListItems);
  } finally {
  setIsExportingRateList(false);
  }
- }, [rateListItems]);
+ }, [rateListItems, rateListType]);
 
  const exportRateListAsPdf = useCallback(() => {
  setIsExportingRateList(true);
  try {
- downloadRateListPdf(rateListItems);
+ if (rateListType === "non-serial") downloadNonSerialRateListPdf(rateListItems);
+ else downloadRateListPdf(rateListItems);
  } finally {
  setIsExportingRateList(false);
  }
- }, [rateListItems]);
+ }, [rateListItems, rateListType]);
 
  // Updates one purchase item sale price (no refetch here — Rate list refetches once after all itemRefs are updated).
  const handleRateListSalePriceChange = useCallback(
@@ -346,7 +384,6 @@ export default function ProductsPage() {
   Sold
   </button>
   {productTypeFilter !== "non-serial" && (
-  <>
   <button
   type="button"
   onClick={() => setActiveTab("stock-list")}
@@ -359,6 +396,7 @@ export default function ProductsPage() {
   <List className="h-4 w-4" />
   Stock list
   </button>
+  )}
   <button
   type="button"
   onClick={() => setActiveTab("rate-list")}
@@ -371,8 +409,6 @@ export default function ProductsPage() {
   <DollarSign className="h-4 w-4" />
   Rate list
   </button>
-  </>
-  )}
  </div>
  {/* View: All | Serial | Non-serial — only when on generic products page (no ?type= in URL) */}
  {(activeTab === "products" || activeTab === "sold") && productTypeFilter === "all" && (
@@ -628,8 +664,31 @@ export default function ProductsPage() {
   </div>
   <div className="min-w-0">
   <h2 className="text-lg font-semibold text-gray-900">Rate list</h2>
-  <p className="text-xs text-gray-500 mt-0.5">Update sale prices by SKU — serial items grouped by purchase line</p>
+  <p className="text-xs text-gray-500 mt-0.5">
+  {rateListType === "non-serial"
+   ? "Update sale prices for items without IMEI (accessories etc.) — grouped by barcode / name"
+   : "Update sale prices by SKU — IMEI items grouped by variant"}
+  </p>
   </div>
+  </div>
+  <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5" role="tablist" aria-label="Rate list item type">
+  {([
+  ["serial", "IMEI items"],
+  ["non-serial", "Non-IMEI items"],
+  ] as const).map(([type, label]) => (
+  <button
+   key={type}
+   type="button"
+   role="tab"
+   aria-selected={rateListType === type}
+   onClick={() => rateListType !== type && setRateListType(type)}
+   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+   rateListType === type ? "bg-orange-500 text-white" : "text-gray-600 hover:bg-gray-50"
+   }`}
+  >
+   {label}
+  </button>
+  ))}
   </div>
   <div className="flex flex-wrap items-center gap-2">
   <div className="relative">
@@ -696,6 +755,7 @@ export default function ProductsPage() {
   <ProductsRateTable
   rows={filteredRateListRows}
   isLoading={rateListLoading}
+  itemType={rateListType}
   onSalePriceChange={handleRateListSalePriceChange}
   refetch={async () => {
   await refetchStockView();

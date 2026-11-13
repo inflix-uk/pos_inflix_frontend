@@ -4,6 +4,7 @@ import { X, Loader2 } from "lucide-react";
 import { Customer, CustomerFormData } from "../types";
 import { customerApi } from "../service";
 import { pricingGroupApi, type PricingGroup } from "../service/pricingGroupApi";
+import { CustomerCreditFields } from "./CustomerCreditFields";
 
 const CURRENCIES = [
  { code: "GBP", label: "£ GBP" },
@@ -24,6 +25,8 @@ const emptyForm = (): CustomerFormData => ({
  isActive: true,
  useInRepairs: true,
  pricingGroupId: null,
+ creditAllowed: true,
+ creditLimit: 0,
 });
 
 function customerToFormData(c: Customer): CustomerFormData {
@@ -47,6 +50,8 @@ function customerToFormData(c: Customer): CustomerFormData {
  isActive: c.isActive,
  useInRepairs: c.useInRepairs !== false,
  pricingGroupId: c.pricingGroupId ?? null,
+ creditAllowed: c.creditAllowed !== false,
+ creditLimit: Math.max(0, Number(c.creditLimit) || 0),
  };
 }
 
@@ -354,6 +359,14 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ open, cust
   />
   </div>
   </div>
+
+  <CustomerCreditFields
+  idPrefix="edit-customer"
+  creditAllowed={formData.creditAllowed}
+  creditLimit={formData.creditLimit}
+  currentBalance={stats?.balance != null ? Number(stats.balance) : undefined}
+  onChange={(next) => setFormData({ ...formData, ...next })}
+  />
 
   {accountType === "supplier" && (
   <p className="text-xs text-gray-500">

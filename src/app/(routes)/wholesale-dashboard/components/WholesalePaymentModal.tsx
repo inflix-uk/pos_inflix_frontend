@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { X, Banknote, CreditCard, Wallet, Landmark, Printer, Mail, Receipt, CheckCircle, Download, Loader2, MessageCircle } from "lucide-react";
+import { X, Banknote, CreditCard, Wallet, Landmark, Printer, Mail, Receipt, CheckCircle, Download, Loader2, MessageCircle, AlertTriangle } from "lucide-react";
 import {
  downloadInvoiceA4,
  getInvoiceA4PdfBase64,
@@ -113,6 +113,19 @@ interface WholesalePaymentModalProps {
  retailMode?: boolean;
  /** Success step heading (e.g. "Invoice created"). */
  completedTitle?: string;
+ /**
+  * The customer's credit settings (new sales only). When set, a sale that would leave money owing
+  * is blocked with a warning if credit is not allowed, or if it would take the balance over the limit.
+  */
+ creditPolicy?: CustomerCreditPolicy | null;
+}
+
+export interface CustomerCreditPolicy {
+ creditAllowed: boolean;
+ /** 0 = no limit */
+ creditLimit: number;
+ /** Current account balance (positive = customer owes). */
+ currentBalance: number;
 }
 
 export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
@@ -136,6 +149,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  onMessage,
  retailMode = false,
  completedTitle = "Order created",
+ creditPolicy = null,
 }) => {
  const { formatMoney } = useAppCurrency();
  const [discount, setDiscount] = useState("");
@@ -316,6 +330,38 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  ? (PAYMENT_METHODS as readonly { id: MethodId; label: string; icon: React.ElementType }[]).filter((m) => m.id !== "credit")
  : PAYMENT_METHODS;
 
+ // Customer credit rules — mirrors the backend check (utils/customerCreditPolicy.js).
+ // The account balance moves by (sale total − discount − cash/card/bank received).
+ const creditIssue = (() => {
+ if (retailMode || !creditPolicy) return null;
+ const increase = Math.round((total - discountNum - paidNow - receivedTotal) * 100) / 100;
+ if (increase <= 0.01) return null;
+ const currentBalance = Math.round((Number(creditPolicy.currentBalance) || 0) * 100) / 100;
+ const newBalance = Math.round((currentBalance + increase) * 100) / 100;
+ if (newBalance <= 0.01) return null; // covered by store credit already on the account
+ if (!creditPolicy.creditAllowed) {
+  return {
+  kind: "not-allowed" as const,
+  message: `${customerName || "This customer"} is not allowed credit. Take full payment — ${formatMoney(
+   Math.min(increase, newBalance)
+  )} is still unpaid.`,
+  };
+ }
+ const limit = Math.max(0, Number(creditPolicy.creditLimit) || 0);
+ if (limit > 0 && newBalance > limit + 0.01) {
+  const available = Math.max(0, Math.round((limit - Math.max(0, currentBalance)) * 100) / 100);
+  return {
+  kind: "limit" as const,
+  message: `Credit limit is ${formatMoney(limit)}. This sale would take the balance to ${formatMoney(
+   newBalance
+  )}. Available credit: ${formatMoney(available)} — take at least ${formatMoney(
+   Math.round((newBalance - limit) * 100) / 100
+  )} more.`,
+  };
+ }
+ return null;
+ })();
+
  /** Saved payments are invoice totals: add back money received earlier that the fields left out. */
  const withReceived = (p: { cash: number; card: number; credit: number; bank: number }) =>
  receivedTotal > 0
@@ -385,6 +431,10 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  handleRefund();
  return;
  }
+ }
+ if (creditIssue) {
+ setError(creditIssue.message);
+ return;
  }
  // Wholesale: cash/card/bank overpayment is kept and becomes customer store credit on the backend.
  guardedComplete(buildDetails());
@@ -930,6 +980,11 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
    />
    <Icon className={retailMode ? "h-4 w-4" : "h-5 w-5"} />
    <span className={retailMode ? "text-xs font-semibold" : "font-medium"}>{label}</span>
+   {id === "credit" && creditPolicy && !creditPolicy.creditAllowed && (
+   <span className="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-700">
+   Not allowed
+   </span>
+   )}
   </label>
   ))}
   </div>
@@ -960,6 +1015,21 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
    placeholder="0.00"
    className={`w-full ${retailMode ? "px-3 py-1.5 text-sm rounded-md" : "px-4 py-3 rounded-xl"} border border-gray-300 focus:ring-2 focus:ring-blue-500`}
   />
+  </div>
+  )}
+  {creditPolicy && !retailMode && creditPolicy.creditAllowed && creditPolicy.creditLimit > 0 && (
+  <p className="text-xs text-gray-600">
+  Credit limit: <strong className="tabular-nums">{formatMoney(creditPolicy.creditLimit)}</strong>
+  {" · "}Current balance: <strong className="tabular-nums">{formatMoney(creditPolicy.currentBalance)}</strong>
+  </p>
+  )}
+  {creditIssue && (
+  <div role="alert" className="flex items-start gap-2 rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+  <AlertTriangle className="h-5 w-5 shrink-0 text-red-500" aria-hidden />
+  <div>
+   <p className="font-semibold">{creditIssue.kind === "not-allowed" ? "Credit not allowed" : "Credit limit exceeded"}</p>
+   <p className="mt-0.5">{creditIssue.message}</p>
+  </div>
   </div>
   )}
   {toPayRounded > 0 && !retailMode && (
@@ -1068,7 +1138,8 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   <button
   type="button"
   onClick={handleCreateSales}
-  disabled={submitting || (retailMode && remaining > 0.01)}
+  disabled={submitting || (retailMode && remaining > 0.01) || Boolean(creditIssue)}
+  title={creditIssue ? creditIssue.message : undefined}
   className={`flex-1 ${retailMode ? "min-h-[40px] py-2 text-sm rounded-md" : "min-h-[52px] py-3 rounded-xl"} bg-blue-600 text-white font-semibold hover:bg-blue-700 active:bg-blue-800 touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed`}
   >
   {submitting
