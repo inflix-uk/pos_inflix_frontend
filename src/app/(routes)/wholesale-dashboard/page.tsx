@@ -28,6 +28,7 @@ import {
  CustomerContextStrip,
 } from "./components";
 import { useOrderWriter } from "./components/OrderWriterContext";
+import type { CustomerCreditPolicy } from "./components/WholesalePaymentModal";
 import { useInvoiceDate, invoiceDateToOccurredAt } from "./components/InvoiceDateContext";
 import { emitInventoryEvent } from "@/lib/inventoryEvents";
 import { openCashDrawer } from "@/services/printService";
@@ -211,6 +212,8 @@ const Page = () => {
  const [bulkDrawerOpen, setBulkDrawerOpen] = useState(false);
  const [selectedCustomer, setSelectedCustomerState] = useState<AccountForSale | null>(null);
  const [previousBalanceForModal, setPreviousBalanceForModal] = useState<number | null>(null);
+ /** Selected customer's credit settings, loaded fresh when the payment modal opens (new sales only). */
+ const [creditPolicyForModal, setCreditPolicyForModal] = useState<CustomerCreditPolicy | null>(null);
  /** Settings > General: when off, a sale never adds the account's balance or spends its credit. */
  const [accountBalanceAtCheckout, setAccountBalanceAtCheckout] = useState(true);
  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
@@ -858,6 +861,38 @@ const Page = () => {
  cancelled = true;
  };
  }, [paymentModalOpen, selectedCustomer?._id, accountBalanceAtCheckout]);
+
+ // Customer credit settings ("allow credit" + maximum credit) for the checkout warning.
+ // Editing an existing invoice is not checked (the backend only enforces on new sales).
+ useEffect(() => {
+ if (!paymentModalOpen || !selectedCustomer?._id || editInvoiceId || isWalkInAccount(selectedCustomer)) {
+ setCreditPolicyForModal(null);
+ return;
+ }
+ let cancelled = false;
+ customerApi
+ .getById(selectedCustomer._id)
+ .then((res) => {
+ if (cancelled) return;
+ const c = res?.success ? (res.data as { balance?: number; creditAllowed?: boolean; creditLimit?: number } | undefined) : undefined;
+ if (!c) {
+  setCreditPolicyForModal(null);
+  return;
+ }
+ setCreditPolicyForModal({
+  creditAllowed: c.creditAllowed !== false,
+  creditLimit: Math.max(0, Number(c.creditLimit) || 0),
+  currentBalance: Number(c.balance) || 0,
+ });
+ })
+ .catch(() => {
+ if (!cancelled) setCreditPolicyForModal(null);
+ });
+ return () => {
+ cancelled = true;
+ };
+ // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only when the modal opens or the customer changes
+ }, [paymentModalOpen, selectedCustomer?._id, editInvoiceId]);
 
  const cartItemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
 
@@ -1683,6 +1718,7 @@ const Page = () => {
    : 0)
   : 0
  }
+ creditPolicy={creditPolicyForModal}
  showInvoiceStep={showInvoiceStep}
  onDone={() => {
   setShowInvoiceStep(false);

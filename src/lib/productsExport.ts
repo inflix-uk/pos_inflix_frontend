@@ -573,3 +573,197 @@ export function downloadRateListPdf(items: RateListExportItem[], filenamePrefix 
 
   doc.save(`${filenamePrefix}-${datestamp()}.pdf`);
 }
+
+/* ── Non-IMEI rate list ─────────────────────────── */
+
+/** One non-IMEI (non-serial) rate list line: a product grouped by barcode / name. */
+export interface NonSerialRateListExportItem {
+  name: string;
+  category: string;
+  barcode?: string;
+  salePrice: number;
+  currency: string;
+  quantity?: number;
+}
+
+const NON_SERIAL_RATE_LIST_COLUMNS = ["Name", "Barcode / SKU", "Rate", "In stock"] as const;
+
+function buildNonSerialRateListSections(items: NonSerialRateListExportItem[]) {
+  const categories = new Map<string, NonSerialRateListExportItem[]>();
+  for (const item of items) {
+    const category = (item.category || "").trim() || NO_CATEGORY;
+    if (!categories.has(category)) categories.set(category, []);
+    categories.get(category)!.push(item);
+  }
+  return [...categories.keys()]
+    .sort((a, b) => (a === NO_CATEGORY ? 1 : 0) - (b === NO_CATEGORY ? 1 : 0) || naturalCompare(a, b))
+    .map((category) => {
+      const lines = categories.get(category)!.sort((a, b) => naturalCompare(a.name, b.name));
+      return {
+        category,
+        quantity: lines.reduce((s, l) => s + (Number(l.quantity) || 0), 0),
+        lines,
+      };
+    });
+}
+
+export function downloadNonSerialRateListExcel(
+  items: NonSerialRateListExportItem[],
+  filenamePrefix = "rate-list-non-imei"
+) {
+  const sections = buildNonSerialRateListSections(items);
+  const total = sections.reduce((s, c) => s + c.quantity, 0);
+  const width = NON_SERIAL_RATE_LIST_COLUMNS.length;
+  const aoa: (string | number)[][] = [
+    ["Rate List — Non-IMEI items"],
+    [`Generated: ${datestamp()}  |  ${items.length} products  |  ${total} units`],
+    [],
+  ];
+  const merges: XLSX.Range[] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: width - 1 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: width - 1 } },
+  ];
+  for (const section of sections) {
+    aoa.push([`${section.category.toUpperCase()}  (${section.quantity} units)`]);
+    merges.push({ s: { r: aoa.length - 1, c: 0 }, e: { r: aoa.length - 1, c: width - 1 } });
+    aoa.push([...NON_SERIAL_RATE_LIST_COLUMNS]);
+    for (const line of section.lines) {
+      aoa.push([
+        dashIfEmpty((line.name || "").trim()),
+        dashIfEmpty((line.barcode || "").trim()),
+        Number(line.salePrice) || 0,
+        Number(line.quantity) || 0,
+      ]);
+    }
+    aoa.push([]);
+  }
+  if (sections.length === 0) aoa.push(["No items to export."]);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!merges"] = merges;
+  ws["!cols"] = NON_SERIAL_RATE_LIST_COLUMNS.map((h, c) => {
+    let max = h.length;
+    for (const row of aoa) {
+      if (row.length < width) continue;
+      const len = String(row[c] ?? "").length;
+      if (len > max) max = len;
+    }
+    return { wch: Math.min(max + 2, 50) };
+  });
+  const rateCol = NON_SERIAL_RATE_LIST_COLUMNS.indexOf("Rate");
+  const currency = (items.find((i) => i.currency)?.currency || "GBP").trim().toUpperCase();
+  const symbol = currency === "GBP" ? "£" : `${currency} `;
+  aoa.forEach((row, r) => {
+    if (row.length !== width || typeof row[rateCol] !== "number") return;
+    const cell = ws[XLSX.utils.encode_cell({ r, c: rateCol })];
+    if (cell) cell.z = `"${symbol}"#,##0.00`;
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Rate List (Non-IMEI)");
+  const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([buf], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  triggerDownload(blob, `${filenamePrefix}-${datestamp()}.xlsx`);
+}
+
+export function downloadNonSerialRateListPdf(
+  items: NonSerialRateListExportItem[],
+  filenamePrefix = "rate-list-non-imei"
+) {
+  const sections = buildNonSerialRateListSections(items);
+  const total = sections.reduce((s, c) => s + c.quantity, 0);
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  const bottom = pageH - 12;
+  let y = 16;
+
+  const cols = [
+    { header: "Name", w: 92, right: false },
+    { header: "Barcode / SKU", w: 46, right: false },
+    { header: "Rate", w: 24, right: true },
+    { header: "In stock", w: 20, right: true },
+  ];
+  const tableW = cols.reduce((s, c) => s + c.w, 0);
+  const rowH = 5.5;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.text("Rate List — Non-IMEI items", margin, y);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(`Generated: ${datestamp()}  |  ${total} units`, pageW - margin, y, { align: "right" });
+  y += 9;
+
+  const drawRow = (cells: string[]) => {
+    let x = margin;
+    cols.forEach((col, c) => {
+      const text = doc.splitTextToSize(cells[c], col.w - 3)[0] || cells[c];
+      if (col.right) doc.text(text, x + col.w - 1.5, y + 3.7, { align: "right" });
+      else doc.text(text, x + 1.5, y + 3.7);
+      x += col.w;
+    });
+    y += rowH;
+  };
+  const drawCategory = (label: string) => {
+    doc.setFillColor(249, 115, 22);
+    doc.rect(margin, y, tableW, 7, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.text(label, margin + 2, y + 4.9);
+    doc.setTextColor(0, 0, 0);
+    y += 8;
+  };
+  const drawTableHeader = () => {
+    doc.setFillColor(243, 244, 246);
+    doc.rect(margin, y, tableW, rowH, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(75, 85, 99);
+    drawRow(cols.map((c) => c.header));
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+  };
+
+  for (const section of sections) {
+    if (y + 8 + rowH * 2 > bottom) {
+      doc.addPage();
+      y = 16;
+    }
+    const label = `${section.category.toUpperCase()}   (${section.quantity} units)`;
+    drawCategory(label);
+    drawTableHeader();
+    section.lines.forEach((line, i) => {
+      if (y + rowH > bottom) {
+        doc.addPage();
+        y = 16;
+        drawCategory(`${label} (continued)`);
+        drawTableHeader();
+      }
+      if (i % 2 === 1) {
+        doc.setFillColor(255, 247, 237);
+        doc.rect(margin, y, tableW, rowH, "F");
+      }
+      drawRow([
+        dashIfEmpty((line.name || "").trim()),
+        dashIfEmpty((line.barcode || "").trim()),
+        formatRate(Number(line.salePrice) || 0, line.currency),
+        String(Number(line.quantity) || 0),
+      ]);
+    });
+    y += 5;
+  }
+
+  if (sections.length === 0) {
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(120, 120, 120);
+    doc.text("No items to export.", margin, y + 6);
+  }
+
+  doc.save(`${filenamePrefix}-${datestamp()}.pdf`);
+}

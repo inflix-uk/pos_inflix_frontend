@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { CustomerFormData } from "../types";
 import { pricingGroupApi, type PricingGroup } from "../service/pricingGroupApi";
+import { CustomerCreditFields } from "./CustomerCreditFields";
 
 interface AddCustomerModalProps { open: boolean; onClose: () => void; onAdd: (data: CustomerFormData) => void; isLoading: boolean; }
 
@@ -19,6 +20,8 @@ const initialForm: CustomerFormData = {
  isActive: true,
  useInRepairs: true,
  pricingGroupId: null,
+ creditAllowed: true,
+ creditLimit: 0,
 };
 
 export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ open, onClose, onAdd, isLoading }) => {
@@ -77,6 +80,12 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ open, onClos
   {pricingGroups.map((g) => (<option key={g._id} value={g._id}>{g.name}</option>))}
   </select>
   </div>
+  <CustomerCreditFields
+  idPrefix="add-customer"
+  creditAllowed={formData.creditAllowed}
+  creditLimit={formData.creditLimit}
+  onChange={(next) => setFormData({ ...formData, ...next })}
+  />
   <div className="flex items-center gap-2"><input type="checkbox" id="isActive" checked={formData.isActive} onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })} className="rounded border-gray-300 text-orange-500 focus:ring-orange-500" /><label htmlFor="isActive" className="text-sm text-gray-700">Active</label></div>
   <div className="flex items-center gap-2"><input type="checkbox" id="useInRepairs" checked={formData.useInRepairs !== false} onChange={(e) => setFormData({ ...formData, useInRepairs: e.target.checked })} className="rounded border-gray-300 text-orange-500 focus:ring-orange-500" /><label htmlFor="useInRepairs" className="text-sm text-gray-700">Show in repair tickets</label></div>
   <div className="flex justify-end gap-3 pt-4">

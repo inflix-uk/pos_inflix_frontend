@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { X } from "lucide-react";
 import type { AccountFormData } from "../types";
+import { CustomerCreditFields } from "../../peoples/customers/components/CustomerCreditFields";
 
 const CURRENCIES = [
  { code: "GBP", label: "£ GBP" },
@@ -24,6 +25,8 @@ interface AddAccountModalProps {
  vatNumber?: string;
  currency?: string;
  isActive: boolean;
+ creditAllowed?: boolean;
+ creditLimit?: number;
  }) => void;
  onCreateSupplier: (data: {
  name: string;
@@ -56,6 +59,8 @@ const initialForm: AccountFormData = {
  postcode: "",
  email: "",
  isActive: true,
+ creditAllowed: true,
+ creditLimit: 0,
 };
 
 export const AddAccountModal: React.FC<AddAccountModalProps> = ({
@@ -88,6 +93,8 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
  vatNumber: formData.vatNumber || undefined,
  currency: formData.currency || undefined,
  isActive: formData.isActive,
+ creditAllowed: formData.creditAllowed,
+ creditLimit: formData.creditAllowed ? formData.creditLimit : 0,
  });
  } else {
  onCreateSupplier({
@@ -283,6 +290,15 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
   />
   </div>
   </div>
+
+  {formData.accountType === "customer" && (
+  <CustomerCreditFields
+  idPrefix="new-account"
+  creditAllowed={formData.creditAllowed}
+  creditLimit={formData.creditLimit}
+  onChange={(next) => setFormData({ ...formData, ...next })}
+  />
+  )}
 
   <div className="flex items-center gap-2">
   <input

@@ -21,6 +21,10 @@ export interface AccountFormData {
  postcode: string;
  email: string;
  isActive: boolean;
+ /** Customer only: may buy on credit. */
+ creditAllowed: boolean;
+ /** Customer only: maximum outstanding balance. 0 = no limit. */
+ creditLimit: number;
 }
 
 export interface Message {

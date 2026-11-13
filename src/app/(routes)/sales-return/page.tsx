@@ -5,13 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
  Search,
  ChevronDown,
- Plus,
  Eye,
  Edit,
  Trash2,
  ChevronLeft,
  ChevronRight,
  RotateCcw,
+ ScanLine,
  User,
  X,
 } from "lucide-react";
@@ -22,7 +22,8 @@ import DeleteSalesReturnModal from "../../components/sales-return/DeleteSalesRet
 import EditSalesReturnModal from "../../components/sales-return/EditSalesReturnModal";
 import { salesReturnApi } from "./service";
 import { customerApi } from "../peoples/customers/service";
-import { salesApi } from "../sales-dashboard/service/salesApi";
+import { QuickReturnScanModal } from "./components/QuickReturnScanModal";
+import { findReturnTarget, looksLikeSerial, returnStartUrl } from "./utils/findReturnTarget";
 
 const formatMoney = (n: number) =>
  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2 }).format(n);
@@ -48,6 +49,8 @@ const Page = () => {
  const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<string>("All");
  const [searchTerm, setSearchTerm] = useState<string>("");
  const [showAddModal, setShowAddModal] = useState(false);
+ /** "New return" — scan IMEI / invoice once and go straight to the return screen. */
+ const [showScanModal, setShowScanModal] = useState(false);
  const [showDeleteModal, setShowDeleteModal] = useState(false);
  const [showEditModal, setShowEditModal] = useState(false);
  const [showViewModal, setShowViewModal] = useState(false);
@@ -113,34 +116,20 @@ const Page = () => {
  fetchList();
  return;
  }
- // If it looks like an invoice number, try to open that sale
- if (/^INV-/i.test(term)) {
- try {
- const res = await salesApi.getSales({ search: term, limit: 1 });
- const list = res.data ?? [];
- if (list.length > 0 && list[0]._id) {
-  router.push(`/sales-online-orders/edit/${list[0]._id}?startReturn=1`);
-  return;
- }
- showMessage("error", "No invoice found with that number.");
- } catch {
- showMessage("error", "Could not find invoice. Check the number and try again.");
- }
+ // Scanned IMEI / serial or an invoice number: go straight to the return screen for that sale.
+ // A scanned IMEI is carried along and added to the return basket — no second scan needed.
+ if (/^INV-/i.test(term) || looksLikeSerial(term)) {
+ const target = await findReturnTarget(term);
+ if (target) {
+ router.push(returnStartUrl(target));
  return;
  }
- // If it looks like a serial/IMEI (e.g. long numeric), try to find the sale that sold it and open edit sale
- const looksLikeSerial = /^\d{8,}$/.test(term) || (term.length >= 8 && /^[A-Za-z0-9]+$/.test(term));
- if (looksLikeSerial) {
- try {
- const res = await salesApi.getFindBySerial(term);
- const saleId = res?.data?.saleId;
- if (saleId) {
-  router.push(`/sales-online-orders/edit/${saleId}?startReturn=1`);
-  return;
- }
- } catch {
- showMessage("error", "No sale found for this serial/IMEI. It may not be sold or may already be returned.");
- }
+ showMessage(
+ "error",
+ /^INV-/i.test(term)
+  ? "No invoice found with that number."
+  : "No sale found for this serial/IMEI. It may not be sold or may already be returned."
+ );
  return;
  }
  fetchList();
@@ -276,13 +265,14 @@ const Page = () => {
   </div>
   </div>
   <button
-  onClick={() => setShowAddModal(true)}
+  onClick={() => setShowScanModal(true)}
   className="inline-flex items-center gap-1.5 @[640px]:gap-2 px-3 @[640px]:px-5 py-1.5 @[640px]:py-2.5 text-xs @[640px]:text-sm font-semibold text-white bg-orange-500 rounded-lg @[640px]:rounded-xl hover:bg-orange-600 shadow-sm transition-colors"
+  title="Scan the IMEI or enter the invoice number to start a return"
   >
-  <Plus size={16} className="@[640px]:hidden" />
-  <Plus size={18} className="hidden @[640px]:inline" />
-  <span className="hidden @[420px]:inline">Add Sales Return</span>
-  <span className="@[420px]:hidden">Add</span>
+  <ScanLine size={16} className="@[640px]:hidden" />
+  <ScanLine size={18} className="hidden @[640px]:inline" />
+  <span className="hidden @[420px]:inline">New return (scan IMEI)</span>
+  <span className="@[420px]:hidden">Return</span>
   </button>
  </div>
 
@@ -489,14 +479,14 @@ const Page = () => {
    <td colSpan={12} className="px-6 py-16 text-center">
    <RotateCcw className="h-12 w-12 text-gray-300 mx-auto mb-3" />
    <p className="text-gray-500 font-medium">No sales returns yet</p>
-   <p className="text-gray-400 text-sm mt-1">Click “Add Sales Return” to create one.</p>
+   <p className="text-gray-400 text-sm mt-1">Scan the IMEI of the item being returned to start one.</p>
    <button
    type="button"
-   onClick={() => setShowAddModal(true)}
+   onClick={() => setShowScanModal(true)}
    className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-orange-500 rounded-xl hover:bg-orange-600"
    >
-   <Plus size={18} />
-   Add Sales Return
+   <ScanLine size={18} />
+   New return (scan IMEI)
    </button>
    </td>
   </tr>
@@ -713,6 +703,14 @@ const Page = () => {
  )}
 
  {/* Modals */}
+ <QuickReturnScanModal
+ open={showScanModal}
+ onClose={() => setShowScanModal(false)}
+ onManualReturn={() => {
+  setShowScanModal(false);
+  setShowAddModal(true);
+ }}
+ />
  <AddSalesReturnModal
  open={showAddModal}
  onClose={() => setShowAddModal(false)}

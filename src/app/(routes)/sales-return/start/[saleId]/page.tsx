@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
  ArrowLeft,
@@ -20,6 +20,7 @@ import type { SaleRecord } from "../../../sales-dashboard/service/salesApi";
 import { salesReturnApi } from "../../service";
 import { getPaymentAccounts } from "../../../money-transfer/service/paymentAccountApi";
 import { emitInventoryEvent } from "@/lib/inventoryEvents";
+import { returnStartUrl } from "../../utils/findReturnTarget";
 
 const formatMoney = (n: number) =>
  new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2 }).format(n);
@@ -94,12 +95,21 @@ export default function StartReturnPage() {
  const params = useParams();
  const router = useRouter();
  const saleId = params?.saleId as string;
+ const searchParams = useSearchParams();
+ /** IMEI / serial scanned on the Sales Return page — added to the basket automatically (no second scan). */
+ const initialSerial = (searchParams.get("serial") || "").trim();
+ const initialSerialAppliedRef = useRef(false);
+ const scanInputRef = useRef<HTMLInputElement>(null);
 
  const [sale, setSale] = useState<SaleRecord | null>(null);
  const [returnLines, setReturnLines] = useState<ReturnLine[]>([]);
  const [loading, setLoading] = useState(true);
  const [error, setError] = useState<string | null>(null);
- const [activeTab, setActiveTab] = useState<"select" | "scan">("select");
+ // Scanning is the quickest way to build a return, so it is the default view.
+ const [activeTab, setActiveTab] = useState<"select" | "scan">("scan");
+ const [scanNotice, setScanNotice] = useState<string | null>(null);
+ /** Scanned serial belongs to another invoice — offer to open that one instead. */
+ const [otherInvoice, setOtherInvoice] = useState<{ saleId: string; reference: string; serial: string } | null>(null);
  const [basket, setBasket] = useState<BasketItem[]>([]);
  const [qtyInputs, setQtyInputs] = useState<Record<number, number>>({});
  const [scanValue, setScanValue] = useState("");
@@ -220,12 +230,29 @@ export default function StartReturnPage() {
  });
  };
 
+ const serialKey = (s: string) => s.trim().toUpperCase();
+
+ // Arrived from a scan on the Sales Return page: put that IMEI in the basket straight away.
+ useEffect(() => {
+ if (!initialSerial || initialSerialAppliedRef.current || loading || !sale) return;
+ initialSerialAppliedRef.current = true;
+ const line = returnLines.find((l) => l.returnableSerials.some((s) => serialKey(s) === serialKey(initialSerial)));
+ if (line && line.qtyReturnable >= 1) {
+ const exact = line.returnableSerials.find((s) => serialKey(s) === serialKey(initialSerial)) || initialSerial;
+ addToBasketFromSelect(line, 1, [exact]);
+ setScanNotice(`Added ${exact} to the return basket. Scan another item or choose how to settle the return.`);
+ } else {
+ setScanError(`${initialSerial} is not returnable on this invoice (already returned or not on this sale).`);
+ }
+ }, [initialSerial, loading, sale, returnLines]);
+
  const handleScanSubmit = async (e: React.FormEvent) => {
  e.preventDefault();
  const serial = scanValue.trim();
  if (!serial) return;
  setScanError(null);
- const serialKey = (s: string) => s.trim().toUpperCase();
+ setScanNotice(null);
+ setOtherInvoice(null);
  const alreadyInBasket = basket.some((b) => b.serials?.some((s) => serialKey(s) === serialKey(serial)));
  if (alreadyInBasket) {
  setScanError("This serial is already in the return basket.");
@@ -235,7 +262,8 @@ export default function StartReturnPage() {
  const res = await salesApi.getFindBySerial(serial);
  const { saleId: foundSaleId, lineIndex, line, serial: foundSerial } = res.data;
  if (foundSaleId !== saleId) {
- setScanError(`Serial is from invoice ${res.data.reference}. Open that invoice to return it.`);
+ setScanError(`This item was sold on invoice ${res.data.reference}, not ${reference}.`);
+ setOtherInvoice({ saleId: foundSaleId, reference: res.data.reference, serial: foundSerial || serial });
  return;
  }
  const rl = returnLines.find((l) => l.lineIndex === lineIndex) ?? {
@@ -256,11 +284,15 @@ export default function StartReturnPage() {
  }
  addToBasketFromSelect(rl, 1, [foundSerial]);
  setScanValue("");
+ setScanNotice(`Added ${foundSerial} to the return basket.`);
+ scanInputRef.current?.focus();
  } catch {
  const bySku = returnLines.find((l) => l.sku === serial || l.sku.toUpperCase() === serial.toUpperCase());
  if (bySku && bySku.qtyReturnable >= 1) {
  addToBasketFromSelect(bySku, 1);
  setScanValue("");
+ setScanNotice(`Added ${bySku.name} to the return basket.`);
+ scanInputRef.current?.focus();
  } else {
  setScanError("Serial not sold / already returned. Or scan a SKU from this invoice.");
  }
@@ -525,9 +557,10 @@ export default function StartReturnPage() {
   <p className="text-sm text-gray-600 mb-3">Scan serial number or barcode to add the item to the return basket.</p>
   <form onSubmit={handleScanSubmit} className="flex gap-2">
    <input
+   ref={scanInputRef}
    type="text"
    value={scanValue}
-   onChange={(e) => { setScanValue(e.target.value); setScanError(null); }}
+   onChange={(e) => { setScanValue(e.target.value); setScanError(null); setScanNotice(null); }}
    placeholder="Scan or type serial / SKU"
    className="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
    autoFocus
@@ -539,7 +572,19 @@ export default function StartReturnPage() {
    Add
    </button>
   </form>
+  {scanNotice && !scanError && <p className="mt-2 text-sm text-green-700">{scanNotice}</p>}
   {scanError && <p className="mt-2 text-sm text-red-600">{scanError}</p>}
+  {otherInvoice && (
+   <button
+   type="button"
+   onClick={() => router.push(returnStartUrl(otherInvoice))}
+   className="mt-2 inline-flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-100"
+   >
+   <RotateCcw size={16} />
+   Start return on {otherInvoice.reference} instead
+   {basket.length > 0 ? " (this basket will be cleared)" : ""}
+   </button>
+  )}
   </div>
   )}
   </div>
