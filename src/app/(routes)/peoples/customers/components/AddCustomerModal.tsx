@@ -20,7 +20,7 @@ const initialForm: CustomerFormData = {
  isActive: true,
  useInRepairs: true,
  pricingGroupId: null,
- creditAllowed: true,
+ creditAllowed: false,
  creditLimit: 0,
 };
 
