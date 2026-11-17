@@ -59,7 +59,7 @@ const initialForm: AccountFormData = {
  postcode: "",
  email: "",
  isActive: true,
- creditAllowed: true,
+ creditAllowed: false,
  creditLimit: 0,
 };
 
