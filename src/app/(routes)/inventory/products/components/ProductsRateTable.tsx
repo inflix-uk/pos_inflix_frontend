@@ -73,13 +73,14 @@ export interface RateListItem {
 /**
  * Non-serial (no IMEI) grouping key: barcode when present, otherwise category + name.
  * Prefixed so it can never collide with a serial variant key.
+ * Must match backend utils/variantKeyUtils.js buildNonSerialKey (used for group pricing at sale time):
+ * trim, collapse inner whitespace, uppercase.
  */
 export function nonSerialKey(row: StockViewRow): string {
- const barcode = (row.barcode || "").trim();
- if (barcode) return `NS:BC:${barcode.toUpperCase()}`;
- const name = (row.name || "").trim();
- const category = (row.category || "").trim();
- return `NS:NM:${category.toUpperCase()}|${name.toUpperCase()}`;
+ const clean = (s?: string | null) => String(s ?? "").trim().split(/\s+/).filter(Boolean).join(" ").toUpperCase();
+ const barcode = clean(row.barcode);
+ if (barcode) return `NS:BC:${barcode}`;
+ return `NS:NM:${clean(row.category)}|${clean(row.name)}`;
 }
 
 /**

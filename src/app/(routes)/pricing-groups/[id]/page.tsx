@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Loader2, Users, List, Plus, X, DollarSign, RefreshCw } from "lucide-react";
@@ -29,6 +29,9 @@ export default function PricingGroupDetailPage() {
  const [rateCategory, setRateCategory] = useState("");
  const [rateBrand, setRateBrand] = useState("");
  const [rateCapacity, setRateCapacity] = useState("");
+ /** IMEI (serial) items or non-IMEI (accessories etc.) items. */
+ const [rateType, setRateType] = useState<"serial" | "non-serial">("serial");
+ const rateRequestRef = useRef(0);
  const [rateFilterOptions, setRateFilterOptions] = useState<{
  categories: string[];
  brands: string[];
@@ -73,6 +76,7 @@ export default function PricingGroupDetailPage() {
  setRateBrand(overrides.brand ?? rateBrand);
  setRateCapacity(overrides.capacity ?? rateCapacity);
  }
+ const requestId = ++rateRequestRef.current;
  setRateListLoading(true);
  try {
  const [rowsRes, variantPriceRes] = await Promise.all([
@@ -81,14 +85,16 @@ export default function PricingGroupDetailPage() {
   limit: 10000,
   excludeSold: true,
   statusFilter: "available",
-  productType: "serial",
+  productType: rateType,
   search: search.trim() || undefined,
   category: category || undefined,
   brand: brand || undefined,
-  capacity: capacity || undefined,
+  capacity: rateType === "serial" ? capacity || undefined : undefined,
  }),
  pricingGroupsApi.getVariantPricesForGroup(id),
  ]);
+ // Ignore a slower response from before an IMEI / non-IMEI switch.
+ if (requestId !== rateRequestRef.current) return;
 
  const rows: StockViewRow[] = rowsRes.success && Array.isArray(rowsRes.data) ? rowsRes.data : [];
  setRateListRows(rows);
@@ -99,9 +105,16 @@ export default function PricingGroupDetailPage() {
  const variantToPrice: Record<string, number> = variantPriceRes.success && variantPriceRes.data ? { ...variantPriceRes.data } : {};
  setGroupPricesByVariantKey(variantToPrice);
  } finally {
- setRateListLoading(false);
+ if (requestId === rateRequestRef.current) setRateListLoading(false);
  }
- }, [id, rateSearch, rateCategory, rateBrand, rateCapacity]);
+ }, [id, rateSearch, rateCategory, rateBrand, rateCapacity, rateType]);
+
+ const switchRateType = (type: "serial" | "non-serial") => {
+ if (type === rateType) return;
+ setRateListRows([]);
+ setRateCapacity("");
+ setRateType(type);
+ };
 
  useEffect(() => {
  if (tab === "rate-list" && id) loadRateList();
@@ -266,10 +279,34 @@ export default function PricingGroupDetailPage() {
   </div>
   <div>
    <h2 className="text-lg font-semibold text-gray-900">Rate list</h2>
-   <p className="text-xs text-gray-500 mt-0.5">Update sale prices by SKU — serial items grouped by purchase line. Edits save as this group&apos;s custom price only.</p>
+   <p className="text-xs text-gray-500 mt-0.5">
+   {rateType === "non-serial"
+    ? "Update sale prices for items without IMEI (accessories etc.) — grouped by barcode / name."
+    : "Update sale prices by SKU — IMEI items grouped by variant."}{" "}
+   Edits save as this group&apos;s custom price only.
+   </p>
   </div>
   </div>
   <div className="flex items-center gap-2">
+  <div role="tablist" aria-label="Item type" className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+   {([
+   ["serial", "IMEI items"],
+   ["non-serial", "Non-IMEI items"],
+   ] as const).map(([type, label]) => (
+   <button
+    key={type}
+    type="button"
+    role="tab"
+    aria-selected={rateType === type}
+    onClick={() => switchRateType(type)}
+    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+    rateType === type ? "bg-orange-500 text-white" : "text-gray-600 hover:bg-gray-50"
+    }`}
+   >
+    {label}
+   </button>
+   ))}
+  </div>
   <button
    type="button"
    onClick={() => loadRateList()}
@@ -310,6 +347,7 @@ export default function PricingGroupDetailPage() {
    <option key={b} value={b}>{b}</option>
   ))}
   </select>
+  {rateType === "serial" && (
   <select
   value={rateCapacity}
   onChange={(e) => setRateCapacity(e.target.value)}
@@ -320,6 +358,7 @@ export default function PricingGroupDetailPage() {
    <option key={c} value={c}>{c}</option>
   ))}
   </select>
+  )}
   <button
   type="button"
   onClick={() => loadRateList()}
@@ -343,6 +382,7 @@ export default function PricingGroupDetailPage() {
   <ProductsRateTable
   rows={rateListRows}
   isLoading={rateListLoading}
+  itemType={rateType}
   groupMode
   groupPricesByVariantKey={groupPricesByVariantKey}
   onVariantGroupPriceChange={handleVariantGroupPriceChange}
@@ -350,7 +390,7 @@ export default function PricingGroupDetailPage() {
   />
   </div>
   <p className="px-5 py-3 text-xs text-gray-500 border-t border-gray-200">
-  Same items as Inventory → Serial Products → Rate list. Edit price to set this group&apos;s custom price; leave blank or clear to fall back to default.
+  Same items as Inventory → Rate list ({rateType === "non-serial" ? "non-IMEI" : "IMEI"}). Edit price to set this group&apos;s custom price; leave blank or clear to fall back to default.
   </p>
   </div>
  )}
