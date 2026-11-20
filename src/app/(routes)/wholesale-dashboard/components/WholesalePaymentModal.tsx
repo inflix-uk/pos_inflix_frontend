@@ -326,10 +326,9 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  const enteredTotal = paidNow + (retailMode ? 0 : parseAmount(amounts.credit));
  const remaining = Math.max(0, toPayRounded - paidNow);
  const overpayment = paidNow > toPayRounded + 0.01 ? Math.round((paidNow - toPayRounded) * 100) / 100 : 0;
- /** Customer is not allowed credit: the Credit option is hidden and full payment is required. */
+ /** Customer is not allowed credit: Credit stays visible but is marked "Not allowed" and can't be picked. */
  const creditBlocked = !retailMode && Boolean(creditPolicy) && creditPolicy?.creditAllowed === false;
- const paymentMethodsToShow =
- retailMode || creditBlocked
+ const paymentMethodsToShow = retailMode
  ? (PAYMENT_METHODS as readonly { id: MethodId; label: string; icon: React.ElementType }[]).filter((m) => m.id !== "credit")
  : PAYMENT_METHODS;
 
@@ -973,25 +972,39 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
    </p>
   )}
   <div className={retailMode ? "grid grid-cols-3 gap-1.5" : "flex flex-wrap gap-2"}>
-  {paymentMethodsToShow.map(({ id, label, icon: Icon }) => (
+  {paymentMethodsToShow.map(({ id, label, icon: Icon }) => {
+  const notAllowed = id === "credit" && creditBlocked;
+  return (
   <label
    key={id}
-   className={`${retailMode ? "flex items-center justify-center gap-1.5 px-2 py-1.5 min-h-[36px]" : "inline-flex items-center gap-2 px-4 py-2.5 min-h-[44px]"} rounded-lg border-2 cursor-pointer touch-manipulation ${
-   checkedMethods[id]
-   ? "border-blue-500 bg-blue-50 text-blue-700"
-   : "border-gray-200 hover:border-gray-300"
+   title={notAllowed ? "This customer is not allowed credit — take full payment" : undefined}
+   className={`${retailMode ? "flex items-center justify-center gap-1.5 px-2 py-1.5 min-h-[36px]" : "inline-flex items-center gap-2 px-4 py-2.5 min-h-[44px]"} rounded-lg border-2 touch-manipulation ${
+   notAllowed
+   ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+   : checkedMethods[id]
+   ? "border-blue-500 bg-blue-50 text-blue-700 cursor-pointer"
+   : "border-gray-200 hover:border-gray-300 cursor-pointer"
    }`}
   >
    <input
    type="checkbox"
-   checked={checkedMethods[id]}
-   onChange={() => toggleMethod(id)}
-   className={retailMode ? "sr-only" : "rounded border-gray-300 text-blue-500 focus:ring-blue-500"}
+   checked={notAllowed ? false : checkedMethods[id]}
+   disabled={notAllowed}
+   onChange={() => {
+    if (!notAllowed) toggleMethod(id);
+   }}
+   className={retailMode ? "sr-only" : "rounded border-gray-300 text-blue-500 focus:ring-blue-500 disabled:opacity-50"}
    />
    <Icon className={retailMode ? "h-4 w-4" : "h-5 w-5"} />
    <span className={retailMode ? "text-xs font-semibold" : "font-medium"}>{label}</span>
+   {notAllowed && (
+   <span className="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-700">
+    Not allowed
+   </span>
+   )}
   </label>
-  ))}
+  );
+  })}
   </div>
   </div>
 
