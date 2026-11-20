@@ -326,7 +326,10 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
  const enteredTotal = paidNow + (retailMode ? 0 : parseAmount(amounts.credit));
  const remaining = Math.max(0, toPayRounded - paidNow);
  const overpayment = paidNow > toPayRounded + 0.01 ? Math.round((paidNow - toPayRounded) * 100) / 100 : 0;
- const paymentMethodsToShow = retailMode
+ /** Customer is not allowed credit: the Credit option is hidden and full payment is required. */
+ const creditBlocked = !retailMode && Boolean(creditPolicy) && creditPolicy?.creditAllowed === false;
+ const paymentMethodsToShow =
+ retailMode || creditBlocked
  ? (PAYMENT_METHODS as readonly { id: MethodId; label: string; icon: React.ElementType }[]).filter((m) => m.id !== "credit")
  : PAYMENT_METHODS;
 
@@ -948,10 +951,17 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   {!retailMode && (
    <>
    <p className="text-sm font-medium text-gray-700 mb-2">Payment method</p>
+   {creditBlocked ? (
+   <p className="text-xs text-gray-500 mb-2">
+   <strong className="text-red-700">No credit for this customer — full payment required.</strong>{" "}
+   Overpayment is added as store credit on this account when you create the order.
+   </p>
+   ) : (
    <p className="text-xs text-gray-500 mb-2">
    Cash, Card and Bank are payments received. Underpayment is applied as Credit.
    Overpayment is added as store credit on this account when you create the order.
    </p>
+   )}
    </>
   )}
   {retailMode && (
@@ -980,11 +990,6 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
    />
    <Icon className={retailMode ? "h-4 w-4" : "h-5 w-5"} />
    <span className={retailMode ? "text-xs font-semibold" : "font-medium"}>{label}</span>
-   {id === "credit" && creditPolicy && !creditPolicy.creditAllowed && (
-   <span className="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-700">
-   Not allowed
-   </span>
-   )}
   </label>
   ))}
   </div>
@@ -1032,7 +1037,7 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   </div>
   </div>
   )}
-  {toPayRounded > 0 && !retailMode && (
+  {toPayRounded > 0 && !retailMode && !creditBlocked && (
   <div>
   <label className="block text-sm font-medium text-gray-700 mb-1">Credit (remainder, auto)</label>
   <div className="px-4 py-3 rounded-xl border-2 border-neutral-200 bg-neutral-50 text-neutral-800 font-semibold tabular-nums">
@@ -1064,9 +1069,15 @@ export const WholesalePaymentModal: React.FC<WholesalePaymentModalProps> = ({
   <span className="text-gray-600">
    Due: <strong className="tabular-nums text-blue-600">{formatMoney(toPayRounded)}</strong>
   </span>
-  {remaining > 0 && !retailMode && (
+  {remaining > 0 && !retailMode && !creditBlocked && (
    <span className="text-neutral-700 font-medium">
    Remainder on credit: <strong className="tabular-nums">{formatMoney(remaining)}</strong>
+   </span>
+  )}
+  {remaining > 0 && creditBlocked && (
+   <span className={creditIssue ? "text-red-700 font-medium" : "text-neutral-700 font-medium"}>
+   {creditIssue ? "Full payment required. Remaining: " : "Previous balance left on account: "}
+   <strong className="tabular-nums">{formatMoney(remaining)}</strong>
    </span>
   )}
   {remaining > 0 && retailMode && (

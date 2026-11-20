@@ -862,10 +862,11 @@ const Page = () => {
  };
  }, [paymentModalOpen, selectedCustomer?._id, accountBalanceAtCheckout]);
 
- // Customer credit settings ("allow credit" + maximum credit) for the checkout warning.
+ // Customer credit settings ("allow credit" + maximum credit) for checkout — Walk-in included,
+ // so turning credit off on Walk-in hides Credit there too.
  // Editing an existing invoice is not checked (the backend only enforces on new sales).
  useEffect(() => {
- if (!paymentModalOpen || !selectedCustomer?._id || editInvoiceId || isWalkInAccount(selectedCustomer)) {
+ if (!paymentModalOpen || !selectedCustomer?._id || editInvoiceId) {
  setCreditPolicyForModal(null);
  return;
  }
