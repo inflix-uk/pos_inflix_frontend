@@ -850,11 +850,15 @@ export const useSalesDashboard = (options?: {
   async (skuOrBarcode: string): Promise<boolean> => {
    const key = skuOrBarcode.trim().toLowerCase();
    if (!key) return false;
-   const product = posProducts.find((p) => {
-    const pSku = (p.sku ?? "").trim().toLowerCase();
-    const pBarcode = (p.barcode ?? "").trim().toLowerCase();
-    return pSku === key || pBarcode === key;
-   });
+   const product =
+    posProducts.find((p) => {
+     const pSku = (p.sku ?? "").trim().toLowerCase();
+     const pBarcode = (p.barcode ?? "").trim().toLowerCase();
+     return pSku === key || pBarcode === key;
+    }) ??
+    // Safety net: barcode typed into the Name field on the purchase (e.g. PUR-000040).
+    // Non-serial only, so a scanned IMEI never matches a phone by name.
+    posProducts.find((p) => !p.serialNumber && (p.name ?? "").trim().toLowerCase() === key);
    if (product) {
     addToCart(product);
     return true;

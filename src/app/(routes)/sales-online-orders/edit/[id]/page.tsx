@@ -482,9 +482,14 @@ export default function EditSalePage() {
  const addBySku = useCallback((sku: string): boolean => {
  const term = sku.trim().toLowerCase();
  if (!term) return false;
- const product = posProducts.find(
- (p) => p.sku.toLowerCase() === term || p.name.toLowerCase().includes(term)
- );
+ // Exact SKU / barcode first, then an item whose name IS the scanned code (barcode typed
+ // into Name on the purchase), then the old partial-name match.
+ const product =
+ posProducts.find(
+ (p) => p.sku.toLowerCase() === term || (p.barcode ?? "").trim().toLowerCase() === term
+ ) ??
+ posProducts.find((p) => (p.name ?? "").trim().toLowerCase() === term) ??
+ posProducts.find((p) => (p.name ?? "").toLowerCase().includes(term));
  if (!product) return false;
  addToCart(product, 1);
  return true;
